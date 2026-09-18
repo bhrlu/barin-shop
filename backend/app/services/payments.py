@@ -58,6 +58,9 @@ class PaymentVerify:
     status: str  # "paid" | "already_paid" | "failed"
     reference: str | None
     amount: int
+    # Returned so callers do not have to look the payment up again: `reference`
+    # stops being the authority once the row is finalized.
+    order_id: str | None = None
 
 
 def _base_url() -> str:
@@ -223,19 +226,25 @@ async def verify_and_finalize(session: AsyncSession, authority: str, ok: bool) -
 
     amount = int(pay["amount"])
 
+    order_id = str(pay["order_id"])
+
     if order["payment_status"] == "paid":
         await session.execute(
             text("UPDATE public.payments SET status = 'failed' WHERE id = :pid"),
             {"pid": str(pay["id"])},
         )
-        return PaymentVerify(status="already_paid", reference=None, amount=amount)
+        return PaymentVerify(
+            status="already_paid", reference=None, amount=amount, order_id=order_id
+        )
 
     if not ok:
         await session.execute(
             text("UPDATE public.payments SET status = 'failed' WHERE id = :pid"),
             {"pid": str(pay["id"])},
         )
-        return PaymentVerify(status="failed", reference=None, amount=amount)
+        return PaymentVerify(
+            status="failed", reference=None, amount=amount, order_id=order_id
+        )
 
     if _simulation_mode():
         reference = fake_reference(order["order_number"])
@@ -246,9 +255,16 @@ async def verify_and_finalize(session: AsyncSession, authority: str, ok: bool) -
                 text("UPDATE public.payments SET status = 'failed' WHERE id = :pid"),
                 {"pid": str(pay["id"])},
             )
-            return PaymentVerify(status="failed", reference=None, amount=amount)
+            return PaymentVerify(
+                status="failed", reference=None, amount=amount, order_id=order_id
+            )
         if verify.status == "already_paid":
-            return PaymentVerify(status="already_paid", reference=verify.reference, amount=amount)
+            return PaymentVerify(
+                status="already_paid",
+                reference=verify.reference,
+                amount=amount,
+                order_id=order_id,
+            )
         reference = verify.reference or fake_reference(order["order_number"])
 
     await session.execute(
@@ -264,7 +280,9 @@ async def verify_and_finalize(session: AsyncSession, authority: str, ok: bool) -
         ),
         {"pid": str(pay["id"]), "ref": reference},
     )
-    return PaymentVerify(status="paid", reference=reference, amount=amount)
+    return PaymentVerify(
+        status="paid", reference=reference, amount=amount, order_id=order_id
+    )
 
 
 def frontend_redirect(order_id: str, result: PaymentVerify) -> str:

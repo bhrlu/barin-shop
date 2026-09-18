@@ -63,26 +63,13 @@ async def zarinpal_callback(
         log.warning("payment callback failed: %s", exc)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, exc.message_fa) from exc
 
-    order_id = None
-    # find the order for the redirect target
-    from sqlalchemy import text
-
-    row = (
-        await session.execute(
-            text(
-                "SELECT order_id FROM public.payments WHERE reference = :authority "
-                "AND status IN ('succeeded','failed') ORDER BY created_at DESC LIMIT 1"
-            ),
-            {"authority": authority},
-        )
-    ).first()
-    if row is not None:
-        order_id = str(row[0])
-
-    if order_id is None:
+    # The order comes straight from the verify result: once the payment row is
+    # finalized its `reference` is the SND-... code, not the authority any more,
+    # so looking the payment up by authority here would always miss.
+    if result.order_id is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "سفارش پیدا نشد")
 
-    return RedirectResponse(url=frontend_redirect(order_id, result), status_code=303)
+    return RedirectResponse(url=frontend_redirect(result.order_id, result), status_code=303)
 
 
 @router.post("/verify", response_model=PaymentVerifyOut)
