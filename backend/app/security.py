@@ -1,27 +1,42 @@
-"""Password hashing (bcrypt via passlib) and JWT issuing/verification.
+"""Password hashing (bcrypt) and JWT issuing/verification.
 
 The backend is the sole identity provider: it issues HS256 access tokens with
 `sub` = user UUID, `email`, and `role` (admin|customer) claims.
+
+Uses the bcrypt library directly rather than passlib: passlib 1.7.4 has been
+unmaintained since 2020 and cannot even load bcrypt >= 4.1 (its backend probe
+passes a >72-byte secret, which newer bcrypt rejects instead of truncating).
+The hashes it produced are standard `$2b$` bcrypt, so existing ones still verify.
 """
 
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
+import bcrypt
 from jose import jwt
-from passlib.context import CryptContext
 
 from app.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# bcrypt only reads the first 72 bytes and (since 4.1) refuses longer input, while
+# the request schemas allow up to 128 characters. Truncate identically on hash and
+# verify so any password the schema accepts keeps working.
+_BCRYPT_MAX_BYTES = 72
+
+
+def _password_bytes(password: str) -> bytes:
+    return password.encode("utf-8")[:_BCRYPT_MAX_BYTES]
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(_password_bytes(password), bcrypt.gensalt()).decode("ascii")
 
 
 def verify_password(password: str, hashed: str) -> bool:
-    return pwd_context.verify(password, hashed)
+    try:
+        return bcrypt.checkpw(_password_bytes(password), hashed.encode("ascii"))
+    except ValueError:  # malformed hash stored in the database
+        return False
 
 
 def create_access_token(user_id: UUID, email: str, role: str) -> str:
