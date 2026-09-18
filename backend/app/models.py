@@ -1,0 +1,137 @@
+"""SQLAlchemy models mirroring the existing Supabase schema (+ new coupon tables).
+
+Only the columns this backend actually reads/writes are declared. Constraints
+(FKs, uniques, defaults) already live in the Supabase database, so no ForeignKey
+declarations are needed here — the app never runs DDL for these tables except the
+idempotent coupon DDL in app/db.py.
+"""
+
+from datetime import datetime
+from decimal import Decimal
+from typing import Any
+from uuid import UUID
+
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    Uuid,
+    func,
+    text,
+)
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+# --- products -----------------------------------------------------------------
+class Product(Base):
+    __tablename__ = "products"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str] = mapped_column(Text)
+    category: Mapped[str] = mapped_column(Text)
+    price: Mapped[int] = mapped_column(Integer)
+    old_price: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sizes: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    colors: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)
+    images: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    material: Mapped[str] = mapped_column(Text, default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    is_new: Mapped[bool] = mapped_column(Boolean, default=False)
+    stock: Mapped[int] = mapped_column(Integer, default=0)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# --- orders / order items / payments ------------------------------------------
+class Order(Base):
+    __tablename__ = "orders"
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid, primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    order_number: Mapped[str] = mapped_column(Text, unique=True)
+    user_id: Mapped[UUID] = mapped_column(Uuid)
+    status: Mapped[str] = mapped_column(Text, default="pending")
+    payment_status: Mapped[str] = mapped_column(Text, default="unpaid")
+    payment_method: Mapped[str] = mapped_column(Text, default="online")
+    subtotal: Mapped[int] = mapped_column(Integer, default=0)
+    discount: Mapped[int] = mapped_column(Integer, default=0)
+    shipping: Mapped[int] = mapped_column(Integer, default=0)
+    total: Mapped[int] = mapped_column(Integer, default=0)
+    shipping_address: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class OrderItem(Base):
+    __tablename__ = "order_items"
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid, primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    order_id: Mapped[UUID] = mapped_column(Uuid)
+    product_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    name: Mapped[str] = mapped_column(Text)
+    price: Mapped[int] = mapped_column(Integer)
+    size: Mapped[str | None] = mapped_column(Text, nullable=True)
+    color: Mapped[str | None] = mapped_column(Text, nullable=True)
+    image: Mapped[str | None] = mapped_column(Text, nullable=True)
+    quantity: Mapped[int] = mapped_column(Integer, default=1)
+
+
+class Payment(Base):
+    __tablename__ = "payments"
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid, primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    order_id: Mapped[UUID] = mapped_column(Uuid)
+    user_id: Mapped[UUID] = mapped_column(Uuid)
+    amount: Mapped[int] = mapped_column(Integer)
+    method: Mapped[str] = mapped_column(Text, default="online")
+    status: Mapped[str] = mapped_column(Text, default="pending")
+    reference: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# --- coupons (new tables, created by startup DDL) -------------------------------
+class Coupon(Base):
+    __tablename__ = "coupons"
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid, primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    code: Mapped[str] = mapped_column(Text, unique=True)
+    percent_off: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    amount_off: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    min_subtotal: Mapped[int] = mapped_column(Integer, default=0)
+    max_uses: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_uses_per_user: Mapped[int] = mapped_column(Integer, default=1)
+    used_count: Mapped[int] = mapped_column(Integer, default=0)
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class CouponRedemption(Base):
+    __tablename__ = "coupon_redemptions"
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid, primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    coupon_id: Mapped[UUID] = mapped_column(Uuid)
+    order_id: Mapped[UUID] = mapped_column(Uuid)
+    user_id: Mapped[UUID] = mapped_column(Uuid)
+    amount: Mapped[Decimal] = mapped_column(Numeric)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
