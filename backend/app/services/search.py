@@ -35,7 +35,7 @@ async def search_products(
                 WHERE active
                   AND (name ILIKE :pat OR description ILIKE :pat
                        OR material ILIKE :pat OR category ILIKE :pat)
-                  AND (:category IS NULL OR category = :category)
+                  AND (CAST(:category AS text) IS NULL OR category = :category)
                 ORDER BY name_hit DESC, cat_hit DESC, is_new DESC, created_at DESC
                 LIMIT :limit OFFSET :offset
                 """

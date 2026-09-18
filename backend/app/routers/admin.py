@@ -16,7 +16,7 @@ async def stats(user: AdminUser, session: DbSession) -> dict:
     revenue, pending, order_count = (
         await session.execute(
             text(
-                "SELECT COALESCE(SUM(total), 0) FILTER (WHERE status <> 'cancelled'), "
+                "SELECT COALESCE(SUM(total) FILTER (WHERE status <> 'cancelled'), 0), "
                 "       COALESCE(SUM(1) FILTER (WHERE status = 'pending'), 0), "
                 "       COUNT(*) FROM public.orders"
             )

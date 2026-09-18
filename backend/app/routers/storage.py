@@ -10,6 +10,7 @@ URLs never hit this router — the frontend resolves those locally.
 
 import logging
 import uuid
+from datetime import timedelta
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
@@ -42,6 +43,13 @@ class SignedUrlOut(BaseModel):
 
 
 def _client():
+    """Client used only to presign URLs.
+
+    Presigning is pure local signing with no network call, so it points at the
+    browser-reachable host rather than the in-cluster one. The host is part of
+    what gets signed, so signing for `minio:9000` while the browser sends
+    `localhost:9000` would be rejected with SignatureDoesNotMatch.
+    """
     try:
         from minio import Minio
     except ImportError as exc:  # pragma: no cover
@@ -49,10 +57,11 @@ def _client():
             status.HTTP_503_SERVICE_UNAVAILABLE, "Object storage not configured"
         ) from exc
     return Minio(
-        settings.minio_endpoint,
+        settings.minio_public_host,
         access_key=settings.minio_access_key,
         secret_key=settings.minio_secret_key,
         secure=settings.minio_secure,
+        region=settings.minio_region,
     )
 
 
@@ -65,7 +74,10 @@ async def create_upload_url(body: UploadUrlIn, user: AdminUser) -> UploadUrlOut:
     path = f"uploads/{uuid.uuid4()}.{ext}"
     client = _client()
     try:
-        url = client.presigned_put_object(settings.minio_bucket, path, expires=3600)
+        # minio-py requires a timedelta here — an int raises AttributeError.
+        url = client.presigned_put_object(
+            settings.minio_bucket, path, expires=timedelta(hours=1)
+        )
     except Exception as exc:
         log.exception("presign failed")
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "خطا در ساخت لینک آپلود") from exc
@@ -87,7 +99,9 @@ async def sign_paths(body: SignRequestIn, user: CurrentUser) -> list[SignedUrlOu
             out.append(SignedUrlOut(path=path, url=None))
             continue
         try:
-            url = client.presigned_get_object(settings.minio_bucket, path, expires=7 * 24 * 3600)
+            url = client.presigned_get_object(
+                settings.minio_bucket, path, expires=timedelta(days=7)
+            )
         except Exception:
             out.append(SignedUrlOut(path=path, url=None))
             continue

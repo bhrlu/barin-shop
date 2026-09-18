@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     minio_secure: bool = False
     # Public base the browser uses for signed GET URLs (defaults to minio_endpoint)
     minio_public_endpoint: str = ""
+    # Set explicitly so presigning never needs a GetBucketLocation round-trip
+    # (the presign client points at the public host, which is not reachable
+    # from inside the container). MinIO's default region is us-east-1.
+    minio_region: str = "us-east-1"
 
     # Payment gateway (Zarinpal)
     zarinpal_merchant_id: str = "00000000-0000-0000-0000-000000000000"
