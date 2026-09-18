@@ -113,9 +113,10 @@ docker compose -f infra/docker-compose.yml --env-file infra/.env up --build
 
 ## What is NOT done / open
 
-- **Bug — `DATABASE_URL` scheme.** `backend/.env.example` and the compose default use
-  `postgresql://…`, but the async engine needs `postgresql+asyncpg://…`; the plain form
-  fails with `ModuleNotFoundError: psycopg2`. Fixed in a separate follow-up commit.
+- **Bug — `DATABASE_URL` scheme (FIXED).** `backend/.env.example` and the compose
+  default used `postgresql://…`, but the async engine needs `postgresql+asyncpg://…`;
+  the plain form fails with `ModuleNotFoundError: psycopg2`. Fixed in the follow-up
+  commit `fix(config): use the async driver in DATABASE_URL examples`.
 - **Frontend migration is 0% wired.** `src/lib/api.ts` has no importer; login, catalog,
   cart, orders, favorites, admin all still call Supabase. `F1.2`–`F1.7` remain open.
 - **End-to-end run not executed.** No live Postgres/MinIO, no login → order → payment

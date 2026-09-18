@@ -69,7 +69,7 @@ services:
       postgres:
         condition: service_healthy
     environment: &backend_env
-      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-sande}:${POSTGRES_PASSWORD:-sande}@postgres:5432/${POSTGRES_DB:-postgres}}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-sande}:${POSTGRES_PASSWORD:-sande}@postgres:5432/${POSTGRES_DB:-postgres}}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in infra/.env}
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-sande}

@@ -40,9 +40,10 @@ Legend: `[ ]` todo · `[x]` done (audit file required) · audit links in `plan/a
 
 ## Milestone B3 — Pay down debt from the sole-service rewrite
 
-- [ ] **B3.1 Fix `DATABASE_URL` examples** — `postgresql://` → `postgresql+asyncpg://`
+- [x] **B3.1 Fix `DATABASE_URL` examples** — `postgresql://` → `postgresql+asyncpg://`
   in `backend/.env.example`, `infra/.env.example`, `infra/docker-compose.yml`
-  (startup currently fails with `ModuleNotFoundError: psycopg2`)
+  (startup failed with `ModuleNotFoundError: psycopg2`)
+  → audit: [2026-09-19-sole-backend-no-supabase.md](audit/2026-09-19-sole-backend-no-supabase.md)
 - [ ] **B3.2 Refresh `backend/README.md`** — remove the Supabase auth story, document the
   new routers, MinIO, and the bootstrap admin
 - [ ] **B3.3 Refresh `infra/README.md`** — drop `01-auth-shim.sql` and "Supabase stays
