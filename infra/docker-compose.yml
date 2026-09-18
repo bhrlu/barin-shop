@@ -1,0 +1,138 @@
+# SÂNDÉ — local dev stack (no Supabase)
+#
+# The FastAPI backend is the sole backend: own JWT auth, Postgres data,
+# MinIO object storage. The frontend talks only to the backend.
+#
+# Copy infra/.env.example to infra/.env before first run.
+
+name: sandeh
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sande}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sande}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sande} -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-sande}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-sande-secret}
+    ports:
+      - "${MINIO_PORT:-9000}:9000"     # S3 API
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"  # web console
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot: creates the public-read `product-images` bucket.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-sande}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-sande-secret}
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 \"$$MINIO_ROOT_USER\" \"$$MINIO_ROOT_PASSWORD\"; do sleep 1; done;
+      mc mb --ignore-existing local/product-images;
+      mc anonymous set download local/product-images;
+      echo 'minio ready: bucket product-images (public read)'"
+
+  # One-shot: bootstrap admin/customer users + starter coupons.
+  db-init:
+    build:
+      context: ..
+      dockerfile: infra/backend.Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment: &backend_env
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-sande}:${POSTGRES_PASSWORD:-sande}@postgres:5432/${POSTGRES_DB:-postgres}}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in infra/.env}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-sande}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-sande-secret}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@sande.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin1234}
+    command: >
+      /bin/sh -c "
+      python -m app.seed_auth &&
+      python -m app.seed_coupons"
+    restart: "no"
+
+  backend:
+    build:
+      context: ..
+      dockerfile: infra/backend.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      <<: *backend_env
+      ZARINPAL_MERCHANT_ID: ${ZARINPAL_MERCHANT_ID:-00000000-0000-0000-0000-000000000000}
+      ZARINPAL_SANDBOX: ${ZARINPAL_SANDBOX:-true}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:${BACKEND_PORT:-8000}}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:${FRONTEND_PORT:-5173}}
+      SHIPPING_FLAT_FEE: ${SHIPPING_FLAT_FEE:-89000}
+      FREE_SHIPPING_THRESHOLD: ${FREE_SHIPPING_THRESHOLD:-2000000}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      # hot reload: local source shadows the pip-installed copy
+      - ../backend/app:/srv/app
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: infra/frontend.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      # Browser → backend API base (Vite injects import.meta.env at dev time)
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:${BACKEND_PORT:-8000}}
+      VITE_BACKEND_URL: ${VITE_BACKEND_URL:-http://localhost:${BACKEND_PORT:-8000}}
+      # MinIO as the browser reaches it (for image URLs)
+      VITE_MINIO_URL: ${VITE_MINIO_URL:-http://localhost:${MINIO_PORT:-9000}}
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ../vogue-vintage-vibes:/app
+      # keep the image's node_modules instead of the host's
+      - frontend_node_modules:/app/node_modules
+
+volumes:
+  pgdata:
+  miniodata:
+  frontend_node_modules:
