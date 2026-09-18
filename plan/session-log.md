@@ -176,3 +176,54 @@ can be reviewed, and report on what the previous session actually did.
   that repo's history is also intact on `origin` (`github.com/bhrlu/vogue-vintage-vibes`,
   local `main` was in sync).
 - Commits are split by logical change so each diff is reviewable on its own.
+
+## Session 5 — 2026-09-19
+
+**Scope chosen by user:** "now up the front end and backend in docker" — actually
+run the Session-2 stack (which had never been started end to end).
+
+### ✅ What was done
+
+1. **Brought the whole stack up:** postgres + minio healthy, `minio-init` and
+   `db-init` exit 0, backend healthy, frontend serving on :5173. Created the
+   gitignored `infra/.env`; checked ports first (an unrelated project owns
+   5433/8001/9002x/8080, so ours are free).
+2. **Fixed the MinIO images:** MinIO stopped publishing free Docker Hub images in
+   Oct 2025, so `minio/mc` *and* `minio/minio` both 404 (`pull access denied`).
+   Moved to `quay.io/minio/minio` and dropped the `mc` image — the server image
+   already ships `/usr/bin/mc`.
+3. **Fixed 7 more runtime bugs** the stack exposed, all in the untested Session-3
+   code: coupon seeding ran before the tables existed; **password hashing was
+   entirely broken** (passlib 1.7.4 cannot load bcrypt ≥ 4.1 → every
+   signup/login/seed raised `ValueError`); the coupon DDL still pointed at the
+   deleted `auth.users`; `/search` and `/admin/stats` both 500ed on SQL issues;
+   MinIO presigning used an int instead of a `timedelta` and signed for the
+   in-cluster host; and the **payment callback always 404ed after a successful
+   payment**, so orders never became paid. Details and root causes:
+   `plan/audit/2026-09-19-docker-stack-up-and-runtime-fixes.md`.
+4. **Verified the full purchase path end to end** (login → catalog → search →
+   stock check → checkout with SANDE10 → payment → callback → paid order), plus
+   admin views and the role guard (403 for customers on `/admin/*`), and a real
+   presigned upload/download against MinIO.
+
+### ❌ What was NOT done
+
+- The repeat payment callback still returns 400 instead of `already_paid` — it
+  needs the authority stored separately from `reference` (schema decision, left
+  open).
+- No test was added for any of the eight fixed bugs; the suite is still 19
+  pure-logic tests (B3.5).
+- Frontend still runs on Supabase — `src/lib/api.ts` remains unwired.
+- No production compose (no TLS/workers/production build); no push to a remote.
+
+### Decisions
+
+- MinIO comes from `quay.io` (the only registry still publishing it); the
+  version is frozen at the last release, which is acceptable for a dev stack.
+- `passlib` was dropped rather than pinned back, since it is unmaintained and its
+  `$2b$` output is format-compatible with the `bcrypt` library used instead.
+- Payment presigning signs for the browser-reachable host with an explicit
+  region, so no in-container round-trip is needed.
+
+> ℹ️ Verification created local dev data on purpose: 2 orders (one paid, one
+> pending), `tshirt-1` stock 25 → 23, and one test object in the MinIO bucket.

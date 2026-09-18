@@ -50,6 +50,17 @@ Legend: `[ ]` todo · `[x]` done (audit file required) · audit links in `plan/a
   hosted"; document the sole-backend stack
 - [ ] **B3.4 Clean stale Supabase wording in code** — `app/db.py` docstring/comments,
   `app/models.py` if applicable
+- [x] **B3.6 Stack actually runs in Docker** — MinIO images moved to `quay.io`
+  (Docker Hub publishing stopped Oct 2025), `minio-init` reuses the bundled `mc`,
+  and the 7 runtime bugs it exposed are fixed (password hashing was fully broken;
+  coupon seeding order; `auth.users` in the coupon DDL; `/search` param type;
+  `/admin/stats` FILTER placement; MinIO presign int-vs-timedelta + host/region;
+  payment callback always 404ing).
+  → audit: [2026-09-19-docker-stack-up-and-runtime-fixes.md](audit/2026-09-19-docker-stack-up-and-runtime-fixes.md)
+- [ ] **B3.7 Persist the payment authority** — a repeat Zarinpal callback returns
+  400 instead of `already_paid`, because `reference` is overwritten with the
+  `SND-…` code during verification. Needs an authority column (schema change
+  decision) or an equivalent lookup path.
 - [ ] **B3.5 Tests for the new routers** — auth (login/signup/me/roles), products CRUD +
   soft-delete, orders lifecycle, addresses, favorites, admin stats; needs a DB fixture
   (docker Postgres or testcontainers)
