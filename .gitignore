@@ -1,0 +1,41 @@
+# Root .gitignore — SÂNDÉ monorepo (backend/ + infra/ + plan/ + vogue-vintage-vibes/)
+
+# --- Secrets -----------------------------------------------------------------
+.env
+.env.local
+.env.*.local
+
+# --- Python ------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+
+# --- Node / Vite -------------------------------------------------------------
+node_modules/
+dist/
+dist-ssr/
+.output/
+.vinxi/
+.nitro/
+.wrangler/
+*.local
+
+# --- OS / editors ------------------------------------------------------------
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# --- Local data -----------------------------------------------------------------
+infra/volumes/
+
+# --- Archived nested git repo (see plan/session-log.md, Session 4) ------------
+# Safe to delete once you trust the root history:
+#   rm -rf vogue-vintage-vibes/.git.orphan-backup
+.git.orphan-backup/
