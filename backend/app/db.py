@@ -24,8 +24,10 @@ SessionLocal = async_sessionmaker(engine, expire_on_commit=False, autoflush=Fals
 
 
 # --- Coupon tables DDL (idempotent) -----------------------------------------
-# New tables the Supabase schema does not have yet. They intentionally mirror the
-# Supabase conventions (uuid pk via gen_random_uuid, timestamptz defaults).
+# The coupon tables are the one part of the schema the API owns itself; the rest
+# comes from the migrations. Created on startup so a fresh database works with no
+# manual step. Kept idempotent because `seed_coupons` runs this too, and the
+# compose db-init job can run before the API has ever booted.
 COUPON_DDL = [
     """
     CREATE TABLE IF NOT EXISTS public.coupons (
@@ -48,7 +50,7 @@ COUPON_DDL = [
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       coupon_id UUID NOT NULL REFERENCES public.coupons(id) ON DELETE CASCADE,
       order_id UUID NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
-      user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+      user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
       amount INTEGER NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       UNIQUE (coupon_id, order_id)

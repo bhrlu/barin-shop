@@ -2,17 +2,22 @@
 
 Run from backend/:
     python -m app.seed_coupons
-Requires DATABASE_URL (+ SUPABASE_JWT_SECRET not needed here).
+Requires DATABASE_URL only.
+
+The coupon tables are created by the API at startup, which has not necessarily
+happened yet when seeding (the compose db-init job runs first), so this script
+runs the same idempotent DDL itself.
 """
 
 import asyncio
 
 from sqlalchemy import text
 
-from app.db import engine
+from app.db import engine, startup_ddl
 
 
 async def main() -> None:
+    await startup_ddl()
     stmts = [
         text(
             "INSERT INTO public.coupons (code, percent_off, min_subtotal, max_uses_per_user) "
