@@ -227,3 +227,101 @@ run the Session-2 stack (which had never been started end to end).
 
 > ℹ️ Verification created local dev data on purpose: 2 orders (one paid, one
 > pending), `tshirt-1` stock 25 → 23, and one test object in the MinIO bucket.
+
+## Session 6 — 2026-09-19
+
+**Scope chosen by user:** (1) create a seed from the data in Supabase on the
+frontend side; (2) then connect the frontend to the backend. Via multiple-choice,
+the user picked **products + demo data** for the seed and a **full switch** for
+the frontend, with the explicit instruction to keep a **researchable, resumable
+todo list** updated after each API connection so a new session can continue.
+
+### ✅ What was done
+
+1. **Backend seeds** — `app/seed_products.py` (the 20 catalog products from the
+   Supabase migration / `src/data/products.ts`, idempotent) and `app/seed_demo.py`
+   (demo addresses, favorites and two orders for `customer@sande.local`), both
+   wired into the compose `db-init` job before `seed_coupons`.
+2. **Two backend endpoints** the frontend needed: `PATCH /auth/me` (profile save)
+   and `GET /payments/mine` (customer payment history). 34 → 35 paths.
+3. **Full frontend cut-over** — `src/lib/api.ts` is now the single data layer;
+   auth/session, catalog + MinIO image signing, cart coupons, checkout, payment,
+   cancel, account (orders/addresses/favorites/payments/profile) and admin
+   (stats/orders/products/users) all call the FastAPI backend. The Supabase and
+   Lovable integration folders and the two Supabase server-function files were
+   **deleted**.
+4. **Resumable tracker** — `plan/frontend-tasks.md` F1 rewritten as a per-file
+   checklist with `[x]`/`[ ]` state and open decisions (A1), so this can be
+   picked up in a later session.
+5. **Verified** — backend: `ruff` clean, `pytest` 19 passed, OpenAPI 35 paths.
+   Frontend (deps installed locally with npm): `tsc --noEmit` → 0 errors; ESLint
+   on the changed set → only pre-existing warnings. Audit:
+   `plan/audit/2026-09-19-seed-and-frontend-switch.md`.
+
+### ❌ What was NOT done
+
+- **No end-to-end run** — the stack was not started; no login → catalog →
+  checkout → payment walk-through against the live backend.
+- **Real Zarinpal redirect** not wired (payment page uses the backend's simulated
+  gateway); **Google/OAuth login removed** (no backend OAuth).
+- F1.5 search bar, F1.6 live stock, F1.7 admin stock still open.
+- Repo-wide `eslint .` still fails on pre-existing prettier issues in untouched
+  files (`account.favorites.tsx`, `admin.tsx`, and others) — left out to keep the
+  diff scoped.
+- `@supabase/supabase-js` remains in `package.json` (unused) to avoid churning
+  the lockfile; `backend/README.md`/`infra/README.md` remain stale (B3.2/B3.3).
+
+### Decisions
+
+- **Full switch, not dual-run:** the browser talks to the backend directly; no
+  TanStack server functions remain. This deletes the Supabase auth bridge rather
+  than keeping two auth systems in sync.
+- **Coupons:** only the applied *code* travels from cart → checkout (in
+  `sessionStorage`); the discount is always recomputed server-side by
+  `POST /checkout`.
+- **Payment:** reuse the backend's simulated gateway endpoints
+  (`payment-session` / `payment-complete`) to preserve the existing UX; the real
+  Zarinpal flow is parked as decision A1.
+- **Seed source:** the products are transcribed from the frontend's Supabase
+  migration into a backend seed so a database not created by compose initdb still
+  gets the catalog.
+
+## Session 7 — 2026-09-19
+
+**Scope chosen by user:** bring the Docker stack up and run the full
+login → catalog → checkout → payment flow against the backend, fixing whatever
+breaks.
+
+### ✅ What was done
+
+1. **Stack rebuilt and seeded** — `docker compose up -d --build` recreated
+   `db-init` (running the new seed chain: `seed_auth → seed_products → seed_demo
+   → seed_coupons`) plus `backend`/`frontend`; postgres/minio stayed up. Backend
+   healthy, frontend ready on :5173.
+2. **Fixed a real checkout bug:** coupon/stock errors raised
+   `HTTPException(code, message, detail={...})` — two `detail`s → `TypeError` →
+   **500**.
+   `routers/checkout.py` and `routers/payments.py` now pass one `detail` object
+   (`{message, code, issues}`), so those paths return proper 4xx with a message
+   the UI already understands.
+3. **Ran the whole flow green** (signup, catalog 20, coupon validate, checkout
+   math 710,000, stock conflict 409, payment session + complete → paid,
+   profile patch, payments/mine, admin 403 for customers, admin views, presigned
+   upload → sign → GET). Also verified the frontend serves the new code, injects
+   `VITE_API_URL`, transforms the changed modules, and passes CORS.
+   Audit: [2026-09-19-e2e-flow-docker.md](audit/2026-09-19-e2e-flow-docker.md).
+
+### ❌ What was NOT done
+
+- **No headless-browser click-through** — the flow was driven through the same
+  HTTP endpoints the UI calls, not a real browser session.
+- **No regression test** for the `HTTPException` bug (needs the B3.5 DB fixture).
+- Real Zarinpal redirect still parked (A1).
+
+### Decisions
+
+- Error `detail` is now a **structured object** (`message`, `code`, `issues`)
+  for checkout/payment failures; `src/lib/api.ts` was already built to read it,
+  so no frontend change was needed.
+- The verification deliberately created dev data (two extra test customers,
+  several orders, one MinIO object) — acceptable on the local dev stack.

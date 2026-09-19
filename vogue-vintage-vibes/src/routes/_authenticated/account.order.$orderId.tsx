@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Check, CreditCard, Package, Truck, ClipboardList } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { formatToman, toFa } from "@/lib/format";
 import { ORDER_STATUS, PAYMENT_STATUS } from "@/lib/orders";
 import { CancelOrderButton } from "@/components/CancelOrderButton";
@@ -30,15 +30,7 @@ function OrderStatusPage() {
   const { orderId } = Route.useParams();
   const { data, isLoading } = useQuery({
     queryKey: ["order-status", orderId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("orders")
-        .select("*, order_items(*)")
-        .eq("id", orderId)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => api.order(orderId),
   });
 
   if (isLoading) return <p className="text-sm text-muted-foreground">در حال بارگذاری…</p>;
@@ -80,15 +72,16 @@ function OrderStatusPage() {
       </header>
 
       <section className="rounded-3xl border border-border bg-sand/40 p-6 sm:p-8">
-        {cancelled ? (
-          <p className="text-sm text-terracotta">این سفارش لغو شده است.</p>
-        ) : null}
+        {cancelled ? <p className="text-sm text-terracotta">این سفارش لغو شده است.</p> : null}
         <ol className="mt-2 grid gap-6 sm:grid-cols-4">
           {STEPS.map((step, index) => {
             const done = !cancelled && doneMap[step.key];
             const active = !cancelled && index === currentIndex;
             return (
-              <li key={step.key} className="relative flex items-start gap-3 sm:flex-col sm:items-center sm:text-center">
+              <li
+                key={step.key}
+                className="relative flex items-start gap-3 sm:flex-col sm:items-center sm:text-center"
+              >
                 <span
                   className={`flex size-11 shrink-0 items-center justify-center rounded-full border transition-colors ${
                     done
@@ -124,7 +117,8 @@ function OrderStatusPage() {
         <div className="rounded-3xl border border-border p-5 text-sm">
           <h3 className="text-base">وضعیت</h3>
           <p className="mt-3 text-muted-foreground">
-            سفارش: <span className="text-foreground">{ORDER_STATUS[data.status] ?? data.status}</span>
+            سفارش:{" "}
+            <span className="text-foreground">{ORDER_STATUS[data.status] ?? data.status}</span>
           </p>
           <p className="mt-1 text-muted-foreground">
             پرداخت:{" "}
@@ -151,9 +145,11 @@ function OrderStatusPage() {
         <div className="rounded-3xl border border-border p-5 text-sm">
           <h3 className="text-base">اقلام</h3>
           <ul className="mt-3 space-y-3">
-            {data.order_items.map((item) => (
+            {data.items.map((item) => (
               <li key={item.id} className="flex items-center gap-3">
-                {item.image && <img src={item.image} alt="" className="size-14 rounded-xl object-cover" />}
+                {item.image && (
+                  <img src={item.image} alt="" className="size-14 rounded-xl object-cover" />
+                )}
                 <span className="flex-1">
                   {item.name}
                   <span className="block text-xs text-muted-foreground">

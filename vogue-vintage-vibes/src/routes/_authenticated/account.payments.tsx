@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { formatToman, toFa } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/account/payments")({
@@ -16,14 +16,7 @@ const statusLabel: Record<string, string> = {
 function PaymentsTab() {
   const { data } = useQuery({
     queryKey: ["my-payments"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("payments")
-        .select("*, orders(order_number)")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => api.myPayments(),
   });
 
   if (!data?.length)
@@ -36,11 +29,14 @@ function PaymentsTab() {
   return (
     <ul className="divide-y divide-border rounded-3xl border border-border">
       {data.map((payment) => (
-        <li key={payment.id} className="flex flex-wrap items-center justify-between gap-3 p-5 text-sm">
+        <li
+          key={payment.id}
+          className="flex flex-wrap items-center justify-between gap-3 p-5 text-sm"
+        >
           <div>
             <p dir="ltr">{payment.reference}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              سفارش #{toFa(payment.orders?.order_number ?? "-")} ·{" "}
+              سفارش #{toFa(payment.order_number ?? "-")} ·{" "}
               {toFa(new Date(payment.created_at).toLocaleDateString("fa-IR"))}
             </p>
           </div>

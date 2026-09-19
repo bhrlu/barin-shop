@@ -13,7 +13,13 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from app.auth import CurrentUser, DbSession
-from app.schemas import SignInRequest, SignUpRequest, TokenOut, UserInfoOut
+from app.schemas import (
+    ProfileUpdateIn,
+    SignInRequest,
+    SignUpRequest,
+    TokenOut,
+    UserInfoOut,
+)
 from app.security import create_access_token, hash_password, verify_password
 from app.services.roles import resolve_role
 
@@ -89,6 +95,30 @@ async def login(body: SignInRequest, session: DbSession) -> TokenOut:
     if row is None or not verify_password(body.password, row[1]):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "ایمیل یا رمز عبور اشتباه است")
     return await _issue_token(session, row[0], email)
+
+
+@router.patch("/me", response_model=UserInfoOut)
+async def update_me(
+    body: ProfileUpdateIn, user: CurrentUser, session: DbSession
+) -> UserInfoOut:
+    """Update the signed-in customer's profile (used by the account page)."""
+    sets: list[str] = []
+    params: dict = {"uid": str(user.id)}
+    if body.full_name is not None:
+        sets.append("full_name = :full_name")
+        params["full_name"] = body.full_name
+    if body.phone is not None:
+        sets.append("phone = :phone")
+        params["phone"] = body.phone
+    if body.avatar_url is not None:
+        sets.append("avatar_url = :avatar_url")
+        params["avatar_url"] = body.avatar_url
+    if sets:
+        await session.execute(
+            text(f"UPDATE public.profiles SET {', '.join(sets)} WHERE id = :uid"), params
+        )
+        await session.commit()
+    return await me(user, session)
 
 
 @router.get("/me", response_model=UserInfoOut)

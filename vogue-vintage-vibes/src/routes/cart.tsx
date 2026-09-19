@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
 import { useCatalog } from "@/lib/catalog";
 import { formatToman, toFa } from "@/lib/format";
 import { useCart } from "@/lib/cart";
@@ -33,13 +34,19 @@ function CartPage() {
   const shipping = subtotal === 0 || subtotal >= FREE_SHIPPING_FROM ? 0 : SHIPPING;
   const total = Math.max(0, subtotal - discount) + shipping;
 
-  const applyCode = () => {
-    if (code.trim().toUpperCase() === "SANDE10") {
-      setDiscount(Math.round(subtotal * 0.1));
-      toast.success("کد تخفیف ۱۰٪ اعمال شد");
-    } else {
+  const applyCode = async () => {
+    const trimmed = code.trim();
+    if (!trimmed) return;
+    try {
+      const result = await api.validateCoupon(trimmed, subtotal);
+      setDiscount(result.discount);
+      // checkout sends the code (never the amount) so the discount is recomputed server-side
+      window.sessionStorage.setItem("sandeh-coupon", result.code);
+      toast.success("کد تخفیف اعمال شد");
+    } catch (error) {
       setDiscount(0);
-      toast.error("کد تخفیف معتبر نیست");
+      window.sessionStorage.removeItem("sandeh-coupon");
+      toast.error(error instanceof Error ? error.message : "کد تخفیف معتبر نیست");
     }
   };
 

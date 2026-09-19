@@ -44,6 +44,12 @@ class UserInfoOut(BaseModel):
     created_at: str | None = None
 
 
+class ProfileUpdateIn(BaseModel):
+    full_name: str | None = Field(default=None, max_length=120)
+    phone: str | None = Field(default=None, max_length=20)
+    avatar_url: str | None = Field(default=None, max_length=500)
+
+
 class CartLine(BaseModel):
     product_id: str = Field(min_length=1)
     size: str = Field(min_length=1)
@@ -184,6 +190,10 @@ class ProductColor(BaseModel):
     hex: str
 
 
+Availability = Literal["in_stock", "coming_soon", "preorder"]
+Badge = Literal["sale", "coming_soon", "preorder", "new", "exclusive"]
+
+
 class ProductBase(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     category: str = Field(min_length=1, max_length=40)
@@ -197,6 +207,12 @@ class ProductBase(BaseModel):
     is_new: bool = True
     stock: int = Field(default=0, ge=0)
     active: bool = True
+    # merchandising / availability
+    tags: list[str] = Field(default_factory=list)
+    badge: Badge | None = None
+    availability: Availability = "in_stock"
+    available_at: str | None = None
+    low_stock_threshold: int = Field(default=5, ge=0)
 
 
 class ProductIn(ProductBase):
@@ -216,12 +232,105 @@ class ProductUpdateIn(BaseModel):
     is_new: bool | None = None
     stock: int | None = Field(default=None, ge=0)
     active: bool | None = None
+    tags: list[str] | None = None
+    badge: Badge | None = None
+    availability: Availability | None = None
+    available_at: str | None = None
+    low_stock_threshold: int | None = Field(default=None, ge=0)
 
 
 class ProductOut(ProductBase):
     id: str
     created_at: str | None = None
     updated_at: str | None = None
+    avg_rating: float | None = None
+    review_count: int = 0
+
+
+# --- product variants --------------------------------------------------------------
+
+
+class ProductVariantIn(BaseModel):
+    size: str = Field(min_length=1, max_length=40)
+    color: str = Field(min_length=1, max_length=60)
+    sku: str | None = Field(default=None, max_length=80)
+    stock: int = Field(default=0, ge=0)
+    active: bool = True
+
+
+class ProductVariantUpdateIn(BaseModel):
+    size: str | None = Field(default=None, min_length=1, max_length=40)
+    color: str | None = Field(default=None, min_length=1, max_length=60)
+    sku: str | None = Field(default=None, max_length=80)
+    stock: int | None = Field(default=None, ge=0)
+    active: bool | None = None
+
+
+class ProductVariantOut(BaseModel):
+    id: UUID
+    product_id: str
+    size: str
+    color: str
+    sku: str | None
+    stock: int
+    active: bool
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+# --- reviews & ratings --------------------------------------------------------------
+
+
+class ReviewIn(BaseModel):
+    rating: int = Field(ge=1, le=5)
+    title: str = Field(default="", max_length=120)
+    body: str = Field(default="", max_length=2000)
+
+
+class ReviewReplyIn(BaseModel):
+    seller_reply: str = Field(min_length=1, max_length=2000)
+
+
+class ReviewModerateIn(BaseModel):
+    status: Literal["published", "hidden"]
+
+
+class ReviewOut(BaseModel):
+    id: UUID
+    product_id: str
+    user_id: UUID
+    rating: int
+    title: str
+    body: str
+    status: str
+    seller_reply: str | None = None
+    seller_replied_at: str | None = None
+    created_at: str | None = None
+    author_name: str | None = None
+
+
+class ReviewListOut(BaseModel):
+    product_id: str
+    average: float | None
+    count: int
+    distribution: dict[int, int]
+    reviews: list[ReviewOut]
+
+
+# --- search history -----------------------------------------------------------------
+
+
+class SearchSuggestion(BaseModel):
+    id: str | None
+    label: str
+    kind: Literal["product", "category", "tag", "query"]
+    image: str | None = None
+
+
+class SearchHistoryOut(BaseModel):
+    id: UUID
+    query: str
+    created_at: str | None = None
 
 
 # --- addresses --------------------------------------------------------------------

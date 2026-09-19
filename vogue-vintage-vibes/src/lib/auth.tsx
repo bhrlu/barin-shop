@@ -1,79 +1,115 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import { api, getToken, setToken, type UserInfo } from "@/lib/api";
+
+type Profile = {
+  full_name: string | null;
+  phone: string | null;
+  avatar_url: string | null;
+};
 
 type AuthValue = {
-  user: User | null;
-  session: Session | null;
+  user: UserInfo | null;
   loading: boolean;
   isAdmin: boolean;
-  profile: { full_name: string | null; phone: string | null; avatar_url: string | null } | null;
+  profile: Profile | null;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (input: {
+    email: string;
+    password: string;
+    full_name?: string;
+    phone?: string;
+  }) => Promise<void>;
+  signOut: () => void;
+  refresh: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthValue>({
   user: null,
-  session: null,
   loading: true,
   isAdmin: false,
   profile: null,
+  signIn: async () => {},
+  signUp: async () => {},
+  signOut: () => {},
+  refresh: async () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
-  const queryClient = useQueryClient();
+
+  const refresh = useCallback(async () => {
+    if (!getToken()) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+    try {
+      setUser(await api.me());
+    } catch {
+      // expired/invalid token — drop it and fall back to signed-out
+      setToken(null);
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
-      setSession(next);
-      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
-        queryClient.invalidateQueries({ queryKey: ["me"] });
-      }
-    });
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
-    return () => sub.subscription.unsubscribe();
-  }, [queryClient]);
+    void refresh();
+  }, [refresh]);
 
-  const userId = session?.user.id ?? null;
+  const signIn = useCallback(async (email: string, password: string) => {
+    const result = await api.signIn({ email, password });
+    setToken(result.access_token);
+    setUser(result.user);
+  }, []);
 
-  const { data } = useQuery({
-    queryKey: ["me", userId],
-    enabled: !!userId,
-    queryFn: async () => {
-      const [profile, roles] = await Promise.all([
-        supabase.from("profiles").select("full_name, phone, avatar_url").eq("id", userId!).maybeSingle(),
-        supabase.from("user_roles").select("role").eq("user_id", userId!),
-      ]);
-      return {
-        profile: profile.data ?? null,
-        isAdmin: (roles.data ?? []).some((r) => r.role === "admin"),
-      };
+  const signUp = useCallback(
+    async (input: { email: string; password: string; full_name?: string; phone?: string }) => {
+      const result = await api.signUp(input);
+      setToken(result.access_token);
+      setUser(result.user);
     },
-  });
-
-  return (
-    <AuthContext.Provider
-      value={{
-        user: session?.user ?? null,
-        session,
-        loading,
-        isAdmin: data?.isAdmin ?? false,
-        profile: data?.profile ?? null,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+    [],
   );
+
+  const signOut = useCallback(() => {
+    setToken(null);
+    setUser(null);
+  }, []);
+
+  const value = useMemo<AuthValue>(
+    () => ({
+      user,
+      loading,
+      isAdmin: user?.role === "admin",
+      profile: user
+        ? { full_name: user.full_name, phone: user.phone, avatar_url: user.avatar_url }
+        : null,
+      signIn,
+      signUp,
+      signOut,
+      refresh,
+    }),
+    [user, loading, signIn, signUp, signOut, refresh],
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
   return useContext(AuthContext);
 }
 
-export async function signOutEverywhere() {
-  await supabase.auth.signOut();
+export function signOutEverywhere() {
+  setToken(null);
 }

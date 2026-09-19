@@ -37,9 +37,8 @@ async def checkout(body: CheckoutRequest, user: CurrentUser, session: DbSession)
             else status.HTTP_422_UNPROCESSABLE_ENTITY
         )
         raise HTTPException(
-            status_code,
-            exc.message_fa,
-            detail={"code": exc.code, "issues": exc.issues},
+            status_code=status_code,
+            detail={"message": exc.message_fa, "code": exc.code, "issues": exc.issues},
         ) from exc
 
     return OrderCreated(

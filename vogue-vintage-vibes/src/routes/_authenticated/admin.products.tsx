@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useCatalog, type AdminProduct } from "@/lib/catalog";
 import { categories, categoryTitle } from "@/data/products";
 import { formatToman, toFa } from "@/lib/format";
@@ -48,7 +48,7 @@ const emptyForm: FormState = {
   active: true,
 };
 
-function toForm(product: AdminProduct & { rawImages?: string[] }): FormState {
+function toForm(product: AdminProduct): FormState {
   return {
     id: product.id,
     name: product.name,
@@ -57,7 +57,7 @@ function toForm(product: AdminProduct & { rawImages?: string[] }): FormState {
     old_price: product.oldPrice ? String(product.oldPrice) : "",
     sizes: product.sizes.join(", "),
     colors: product.colors.map((c) => `${c.name} ${c.hex}`).join(", "),
-    images: product.rawImages ?? [],
+    images: product.rawImages,
     material: product.material,
     description: product.description,
     stock: String(product.stock),
@@ -72,7 +72,10 @@ function parsePayload(form: FormState) {
     category: form.category,
     price: Number(form.price),
     old_price: form.old_price ? Number(form.old_price) : null,
-    sizes: form.sizes.split(",").map((s) => s.trim()).filter(Boolean),
+    sizes: form.sizes
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
     colors: form.colors
       .split(",")
       .map((chunk) => chunk.trim())
@@ -102,11 +105,9 @@ function AdminProducts() {
     mutationFn: async (state: FormState) => {
       const payload = parsePayload(state);
       if (state.id) {
-        const { error } = await supabase.from("products").update(payload as never).eq("id", state.id);
-        if (error) throw error;
+        await api.updateProduct(state.id, payload);
       } else {
-        const { error } = await supabase.from("products").insert({ ...payload, id: crypto.randomUUID() });
-        if (error) throw error;
+        await api.createProduct(payload);
       }
     },
     onSuccess: () => {
@@ -118,10 +119,7 @@ function AdminProducts() {
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("products").delete().eq("id", id);
-      if (error) throw error;
-    },
+    mutationFn: (id: string) => api.deleteProduct(id),
     onSuccess: () => {
       invalidate();
       toast.success("محصول حذف شد");
@@ -148,7 +146,11 @@ function AdminProducts() {
         >
           <div className="md:col-span-2 flex items-center justify-between">
             <h3 className="text-lg">{form.id ? "ویرایش محصول" : "افزودن محصول"}</h3>
-            <button type="button" onClick={() => setForm(null)} className="text-xs text-muted-foreground">
+            <button
+              type="button"
+              onClick={() => setForm(null)}
+              className="text-xs text-muted-foreground"
+            >
               بستن
             </button>
           </div>

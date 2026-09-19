@@ -3,8 +3,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/lib/auth";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,28 +23,16 @@ const empty = {
 };
 
 function AddressesTab() {
-  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [form, setForm] = useState(empty);
 
   const { data } = useQuery({
     queryKey: ["addresses"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("addresses")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => api.addresses(),
   });
 
   const create = useMutation({
-    mutationFn: async () => {
-      if (!user) throw new Error("no user");
-      const { error } = await supabase.from("addresses").insert({ ...form, user_id: user.id });
-      if (error) throw error;
-    },
+    mutationFn: async () => api.createAddress({ ...form, is_default: false }),
     onSuccess: () => {
       setForm(empty);
       queryClient.invalidateQueries({ queryKey: ["addresses"] });
@@ -55,10 +42,7 @@ function AddressesTab() {
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("addresses").delete().eq("id", id);
-      if (error) throw error;
-    },
+    mutationFn: async (id: string) => api.deleteAddress(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["addresses"] }),
   });
 

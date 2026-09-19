@@ -1,8 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,8 +12,7 @@ export const Route = createFileRoute("/_authenticated/account/")({
 });
 
 function ProfileTab() {
-  const { user, profile } = useAuth();
-  const queryClient = useQueryClient();
+  const { user, profile, refresh } = useAuth();
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false);
@@ -28,16 +26,15 @@ function ProfileTab() {
     event.preventDefault();
     if (!user) return;
     setBusy(true);
-    const { error } = await supabase
-      .from("profiles")
-      .upsert({ id: user.id, full_name: fullName, phone });
-    setBusy(false);
-    if (error) {
+    try {
+      await api.updateMe({ full_name: fullName, phone });
+      await refresh();
+      toast.success("پروفایل ذخیره شد");
+    } catch {
       toast.error("ذخیره نشد");
-      return;
+    } finally {
+      setBusy(false);
     }
-    queryClient.invalidateQueries({ queryKey: ["me"] });
-    toast.success("پروفایل ذخیره شد");
   };
 
   return (

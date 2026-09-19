@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { formatToman, toFa } from "@/lib/format";
 import { ORDER_STATUS, PAYMENT_STATUS } from "@/lib/orders";
 import { CancelOrderButton } from "@/components/CancelOrderButton";
@@ -12,14 +12,7 @@ export const Route = createFileRoute("/_authenticated/account/orders")({
 function OrdersTab() {
   const { data, isLoading } = useQuery({
     queryKey: ["my-orders"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("orders")
-        .select("*, order_items(*)")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => api.orders(),
   });
 
   if (isLoading) return <p className="text-sm text-muted-foreground">در حال بارگذاری…</p>;
@@ -54,7 +47,7 @@ function OrdersTab() {
             </div>
           </div>
           <ul className="mt-4 space-y-3 border-t border-border pt-4">
-            {order.order_items.map((item) => (
+            {order.items.map((item) => (
               <li key={item.id} className="flex items-center gap-3 text-sm">
                 {item.image && (
                   <img src={item.image} alt="" className="size-14 rounded-xl object-cover" />
@@ -72,25 +65,25 @@ function OrdersTab() {
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm">مبلغ نهایی: {formatToman(order.total)} تومان</p>
             <div className="flex flex-wrap items-center gap-2">
-            <Link
-              to="/account/order/$orderId"
-              params={{ orderId: order.id }}
-              className="rounded-full border border-border px-5 py-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
-            >
-              وضعیت سفارش
-            </Link>
-            {order.payment_status !== "paid" && order.status !== "cancelled" && (
               <Link
-                to="/payment/$orderId"
+                to="/account/order/$orderId"
                 params={{ orderId: order.id }}
-                className="border border-foreground px-5 py-2 text-xs tracking-widest transition-colors hover:bg-foreground hover:text-background"
+                className="rounded-full border border-border px-5 py-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
               >
-                پرداخت سفارش
+                وضعیت سفارش
               </Link>
-            )}
-            {!["shipped", "delivered", "cancelled"].includes(order.status) && (
-              <CancelOrderButton orderId={order.id} />
-            )}
+              {order.payment_status !== "paid" && order.status !== "cancelled" && (
+                <Link
+                  to="/payment/$orderId"
+                  params={{ orderId: order.id }}
+                  className="border border-foreground px-5 py-2 text-xs tracking-widest transition-colors hover:bg-foreground hover:text-background"
+                >
+                  پرداخت سفارش
+                </Link>
+              )}
+              {!["shipped", "delivered", "cancelled"].includes(order.status) && (
+                <CancelOrderButton orderId={order.id} />
+              )}
             </div>
           </div>
         </li>

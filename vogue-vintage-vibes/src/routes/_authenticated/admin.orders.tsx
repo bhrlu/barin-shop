@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { formatToman, toFa } from "@/lib/format";
 import { ORDER_STATUS, PAYMENT_STATUS } from "@/lib/orders";
 
@@ -13,21 +13,14 @@ function AdminOrders() {
   const queryClient = useQueryClient();
   const { data } = useQuery({
     queryKey: ["admin-orders"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("orders")
-        .select("*, order_items(*)")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => api.adminOrders(),
   });
 
   const update = useMutation({
-    mutationFn: async (input: { id: string; patch: Record<string, string> }) => {
-      const { error } = await supabase.from("orders").update(input.patch as never).eq("id", input.id);
-      if (error) throw error;
-    },
+    mutationFn: async (input: {
+      id: string;
+      patch: { status?: string; payment_status?: string };
+    }) => api.patchOrder(input.id, input.patch),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
       queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
@@ -51,9 +44,7 @@ function AdminOrders() {
           <li key={order.id} className="rounded-3xl border border-border p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-sm">
-                  سفارش #{toFa(order.order_number)}
-                </p>
+                <p className="text-sm">سفارش #{toFa(order.order_number)}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {toFa(new Date(order.created_at).toLocaleDateString("fa-IR"))} ·{" "}
                   {formatToman(Number(order.total))} تومان
@@ -62,7 +53,9 @@ function AdminOrders() {
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <select
                   value={order.status}
-                  onChange={(e) => update.mutate({ id: order.id, patch: { status: e.target.value } })}
+                  onChange={(e) =>
+                    update.mutate({ id: order.id, patch: { status: e.target.value } })
+                  }
                   className="h-9 rounded-md border border-input bg-background px-2"
                 >
                   {Object.entries(ORDER_STATUS).map(([value, label]) => (
@@ -89,13 +82,13 @@ function AdminOrders() {
 
             {address && (
               <p className="mt-3 text-xs text-muted-foreground">
-                {address["receiver"]} · {address["phone"]} · {address["province"]}، {address["city"]} —{" "}
-                {address["line"]}
+                {address["receiver"]} · {address["phone"]} · {address["province"]}،{" "}
+                {address["city"]} — {address["line"]}
               </p>
             )}
 
             <ul className="mt-4 space-y-2 border-t border-border pt-4 text-sm">
-              {order.order_items.map((item) => (
+              {order.items.map((item) => (
                 <li key={item.id} className="flex items-center justify-between gap-3">
                   <span>
                     {item.name}{" "}

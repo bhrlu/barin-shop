@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Star, Trash2, Upload } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { PRODUCT_BUCKET, resolveImageUrls } from "@/lib/catalog";
+import { api } from "@/lib/api";
+import { resolveImageUrls } from "@/lib/catalog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -53,12 +53,7 @@ export function ProductImageManager({ value, onChange }: Props) {
           toast.error(`${file.name} بزرگ‌تر از ۵ مگابایت است`);
           continue;
         }
-        const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
-        const path = `uploads/${crypto.randomUUID()}.${extension}`;
-        const { error } = await supabase.storage
-          .from(PRODUCT_BUCKET)
-          .upload(path, file, { contentType: file.type, upsert: false });
-        if (error) throw error;
+        const path = await api.uploadImage(file);
         added.push(path);
       }
       if (added.length) {
@@ -81,12 +76,7 @@ export function ProductImageManager({ value, onChange }: Props) {
             key={`${reference}-${index}`}
             className="relative w-28 overflow-hidden rounded-2xl border border-border bg-background"
           >
-            <img
-              src={previews[index]}
-              alt=""
-              className="h-32 w-full object-cover"
-              loading="lazy"
-            />
+            <img src={previews[index]} alt="" className="h-32 w-full object-cover" loading="lazy" />
             {index === 0 && (
               <span className="absolute top-1 right-1 flex items-center gap-1 rounded-full bg-terracotta px-2 py-0.5 text-[10px] text-background">
                 <Star className="size-3" /> اصلی
@@ -166,8 +156,7 @@ export function ProductImageManager({ value, onChange }: Props) {
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        اولین تصویر، تصویر اصلی محصول است. تصویر دوم روی کارت محصول با حرکت موس نمایش داده
-        می‌شود.
+        اولین تصویر، تصویر اصلی محصول است. تصویر دوم روی کارت محصول با حرکت موس نمایش داده می‌شود.
       </p>
     </div>
   );

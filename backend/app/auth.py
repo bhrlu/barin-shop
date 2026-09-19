@@ -75,6 +75,30 @@ async def require_admin(
     return user
 
 
+async def get_optional_user(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> AuthUser | None:
+    """Resolve the caller when a valid token is present; anonymous otherwise.
+
+    Used by endpoints that work for everyone but personalise for signed-in users
+    (e.g. saving search history).
+    """
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        return None
+    try:
+        payload = decode_access_token(credentials.credentials)
+        sub = payload.get("sub")
+        if not sub:
+            return None
+        user_id = UUID(sub)
+        role = await _resolve_role(session, user_id, payload.get("role"))
+    except (JWTError, ValueError):
+        return None
+    return AuthUser(user_id=user_id, email=payload.get("email"), role=role)
+
+
 CurrentUser = Annotated[AuthUser, Depends(get_current_user)]
 AdminUser = Annotated[AuthUser, Depends(require_admin)]
+OptionalUser = Annotated[AuthUser | None, Depends(get_optional_user)]
 DbSession = Annotated[AsyncSession, Depends(get_session)]

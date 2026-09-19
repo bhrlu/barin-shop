@@ -1,8 +1,8 @@
-"""Admin endpoints: dashboard stats, user list, refund requests list."""
+"""Admin endpoints: dashboard stats, users, refunds, inventory."""
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from sqlalchemy import text
 
 from app.auth import AdminUser, DbSession
@@ -108,6 +108,100 @@ async def all_orders(user: AdminUser, session: DbSession) -> list[dict]:
         )
     ).mappings().all()
     return [_order_row(r) for r in rows]
+
+
+@router.get("/inventory")
+async def inventory_summary(user: AdminUser, session: DbSession) -> dict:
+    """Stock health across the catalog: counts, units and inventory value."""
+    row = (
+        await session.execute(
+            text(
+                "SELECT COUNT(*) AS total_products, "
+                "  COALESCE(SUM(stock), 0) AS total_units, "
+                "  COALESCE(SUM(price * stock), 0) AS inventory_value, "
+                "  COALESCE(SUM(1) FILTER (WHERE stock <= 0), 0) AS out_of_stock, "
+                "  COALESCE(SUM(1) FILTER (WHERE stock > 0 AND stock <= low_stock_threshold), 0) "
+                "    AS low_stock "
+                "FROM public.products WHERE active"
+            )
+        )
+    ).mappings().first()
+    variant_row = (
+        await session.execute(
+            text(
+                "SELECT COUNT(*) AS total_variants, "
+                "  COALESCE(SUM(1) FILTER (WHERE stock <= 0), 0) AS out_of_stock "
+                "FROM public.product_variants WHERE active"
+            )
+        )
+    ).mappings().first()
+    return {
+        "totalProducts": int(row["total_products"]),
+        "totalUnits": int(row["total_units"]),
+        "inventoryValue": int(row["inventory_value"]),
+        "outOfStock": int(row["out_of_stock"]),
+        "lowStock": int(row["low_stock"]),
+        "totalVariants": int(variant_row["total_variants"]),
+        "variantsOutOfStock": int(variant_row["out_of_stock"]),
+    }
+
+
+@router.get("/inventory/low-stock")
+async def low_stock(
+    user: AdminUser,
+    session: DbSession,
+    threshold: int | None = Query(default=None, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> dict:
+    """Products at or below their low-stock threshold, plus deactivated variants.
+
+    `threshold` overrides each product's own `low_stock_threshold`.
+    """
+    products = (
+        await session.execute(
+            text(
+                "SELECT id, name, category, stock, low_stock_threshold "
+                "FROM public.products "
+                "WHERE active AND stock <= COALESCE(:threshold, low_stock_threshold) "
+                "ORDER BY stock ASC, name LIMIT :limit"
+            ),
+            {"threshold": threshold, "limit": limit},
+        )
+    ).mappings().all()
+    variants = (
+        await session.execute(
+            text(
+                "SELECT v.id, v.product_id, p.name AS product_name, v.size, v.color, v.stock "
+                "FROM public.product_variants v JOIN public.products p ON p.id = v.product_id "
+                "WHERE v.active AND v.stock <= COALESCE(:threshold, p.low_stock_threshold) "
+                "ORDER BY v.stock ASC LIMIT :limit"
+            ),
+            {"threshold": threshold, "limit": limit},
+        )
+    ).mappings().all()
+    return {
+        "products": [
+            {
+                "id": r["id"],
+                "name": r["name"],
+                "category": r["category"],
+                "stock": int(r["stock"]),
+                "low_stock_threshold": int(r["low_stock_threshold"]),
+            }
+            for r in products
+        ],
+        "variants": [
+            {
+                "id": str(r["id"]),
+                "product_id": r["product_id"],
+                "product_name": r["product_name"],
+                "size": r["size"],
+                "color": r["color"],
+                "stock": int(r["stock"]),
+            }
+            for r in variants
+        ],
+    }
 
 
 @router.get("/payments")

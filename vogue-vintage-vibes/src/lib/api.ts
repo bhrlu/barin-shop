@@ -3,12 +3,12 @@
  *
  * Replaces @/integrations/supabase/*: JWT stored in localStorage, typed fetch
  * helpers for every endpoint the frontend uses. The browser talks to the
- * backend directly at VITE_API_URL (SSR fallback: BACKEND_URL process env).
+ * backend directly at VITE_API_URL (SSR fallback: VITE_BACKEND_URL process env).
  */
 
 const API_URL =
-  (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_URL) ||
-  (typeof process !== "undefined" ? process.env?.VITE_BACKEND_URL : "") ||
+  (typeof import.meta !== "undefined" && import.meta.env?.["VITE_API_URL"]) ||
+  (typeof process !== "undefined" ? process.env?.["VITE_BACKEND_URL"] : "") ||
   "http://localhost:8000";
 
 const TOKEN_KEY = "sande.access_token";
@@ -26,22 +26,43 @@ export function setToken(token: string | null) {
 
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  detail: unknown;
+  constructor(status: number, message: string, detail?: unknown) {
     super(message);
     this.status = status;
+    this.detail = detail;
   }
 }
 
+function messageFrom(detail: unknown, fallback: string): string {
+  if (typeof detail === "string") return detail;
+  if (detail && typeof detail === "object" && "message" in detail) {
+    const message = (detail as { message: unknown }).message;
+    if (typeof message === "string") return message;
+  }
+  if (detail != null) {
+    try {
+      return JSON.stringify(detail);
+    } catch {
+      /* ignore */
+    }
+  }
+  return fallback;
+}
+
 async function request<T>(path: string, init?: RequestInit & { json?: unknown }): Promise<T> {
-  const headers = new Headers(init?.headers);
+  const { json, body: rawBody, ...rest } = init ?? {};
+  const headers = new Headers(rest.headers);
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  let body = init?.body;
-  if (init?.json !== undefined) {
+  let body = rawBody;
+  if (json !== undefined) {
     headers.set("Content-Type", "application/json");
-    body = JSON.stringify(init.json);
+    body = JSON.stringify(json);
   }
-  const res = await fetch(`${API_URL}${path}`, { ...init, headers, body });
+  const finalInit: RequestInit = { ...rest, headers };
+  if (body !== undefined) finalInit.body = body;
+  const res = await fetch(`${API_URL}${path}`, finalInit);
   if (res.status === 204) return undefined as T;
   let data: unknown = null;
   const text = await res.text();
@@ -53,16 +74,11 @@ async function request<T>(path: string, init?: RequestInit & { json?: unknown })
     }
   }
   if (!res.ok) {
-    const message =
-      (data && typeof data === "object" && "detail" in data &&
-        typeof (data as { detail: unknown }).detail === "string"
-        ? (data as { detail: string }).detail
-        : null) ??
-      (data && typeof data === "object" && "detail" in data
-        ? JSON.stringify((data as { detail: unknown }).detail)
-        : null) ??
-      `خطای سرور (${res.status})`;
-    throw new ApiError(res.status, message);
+    const detail =
+      data && typeof data === "object" && "detail" in data
+        ? (data as { detail: unknown }).detail
+        : data;
+    throw new ApiError(res.status, messageFrom(detail, `خطای سرور (${res.status})`), detail);
   }
   return data as T;
 }
@@ -158,6 +174,15 @@ export type PaymentRecord = {
 
 export type CheckoutLine = { product_id: string; size: string; color: string; quantity: number };
 
+export type CheckoutAddress = {
+  full_name: string;
+  phone: string;
+  city: string;
+  line: string;
+  postal_code?: string | null;
+  note?: string | null;
+};
+
 export type CheckoutResult = {
   order_id: string;
   order_number: string;
@@ -177,7 +202,57 @@ export type CouponValidation = {
   expires_at: string | null;
 };
 
-export type StockIssue = { product_id: string; reason: string; available: number | null };
+export type StockIssue = {
+  product_id: string;
+  reason: "not_found" | "inactive" | "insufficient_stock";
+  available: number | null;
+};
+
+export type AdminStats = {
+  revenue: number;
+  orderCount: number;
+  pending: number;
+  productCount: number;
+  outOfStock: number;
+  userCount: number;
+  latest: {
+    id: string;
+    order_number: string;
+    status: string;
+    total: number;
+    created_at: string;
+  }[];
+};
+
+export type AdminUser = {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+  phone: string | null;
+  created_at: string;
+  roles: string[];
+  order_count: number;
+  spent: number;
+};
+
+export type RefundRequest = {
+  id: string;
+  order_id: string;
+  order_number: string;
+  amount: number;
+  reason: string;
+  status: string;
+  admin_note: string | null;
+  created_at: string;
+};
+
+export type PaymentSession = {
+  order_id: string;
+  order_number: string;
+  total: number;
+  payment_status: string;
+  tracking_code: string;
+};
 
 // ---------------------------------------------------------------------------
 // Endpoints
@@ -190,6 +265,11 @@ export const api = {
   signIn: (body: { email: string; password: string }) =>
     request<TokenResponse>("/auth/login", { method: "POST", json: body }),
   me: () => request<UserInfo>("/auth/me"),
+  updateMe: (body: {
+    full_name?: string | null;
+    phone?: string | null;
+    avatar_url?: string | null;
+  }) => request<UserInfo>("/auth/me", { method: "PATCH", json: body }),
 
   // --- catalog ---
   products: (params?: { category?: string; include_inactive?: boolean }) => {
@@ -200,13 +280,34 @@ export const api = {
     return request<Product[]>(`/products${suffix}`);
   },
   product: (id: string) => request<Product>(`/products/${id}`),
+  createProduct: (body: ProductWrite) =>
+    request<Product>("/products", { method: "POST", json: body }),
+  updateProduct: (id: string, body: Partial<ProductWrite>) =>
+    request<Product>(`/products/${id}`, { method: "PATCH", json: body }),
+  deleteProduct: (id: string) => request<void>(`/products/${id}`, { method: "DELETE" }),
+
+  // --- cart / checkout ---
+  validateCoupon: (code: string, subtotal: number) =>
+    request<CouponValidation>("/coupons/validate", {
+      method: "POST",
+      json: { code, subtotal },
+    }),
+  checkout: (body: {
+    lines: CheckoutLine[];
+    address: CheckoutAddress;
+    coupon_code?: string | null;
+  }) => request<CheckoutResult>("/checkout", { method: "POST", json: body }),
+  stockCheck: (lines: CheckoutLine[]) =>
+    request<{ ok: boolean; subtotal: number; issues: StockIssue[] }>("/stock/check", {
+      method: "POST",
+      json: { lines },
+    }),
 
   // --- addresses ---
   addresses: () => request<Address[]>("/addresses"),
   createAddress: (body: Omit<Address, "id" | "created_at">) =>
     request<Address>("/addresses", { method: "POST", json: body }),
-  deleteAddress: (id: string) =>
-    request<void>(`/addresses/${id}`, { method: "DELETE" }),
+  deleteAddress: (id: string) => request<void>(`/addresses/${id}`, { method: "DELETE" }),
 
   // --- favorites ---
   favorites: () => request<string[]>("/favorites"),
@@ -219,14 +320,15 @@ export const api = {
   orders: () => request<Order[]>("/orders"),
   order: (id: string) => request<Order>(`/orders/${id}`),
   cancelOrder: (id: string) =>
-    request<{ ok: boolean; order_number: string; refund_eligible: boolean }>(`/orders/${id}/cancel`, {
-      method: "POST",
-    }),
+    request<{ ok: boolean; order_number: string; refund_eligible: boolean }>(
+      `/orders/${id}/cancel`,
+      { method: "POST" },
+    ),
   requestRefund: (id: string, reason: string) =>
-    request<{ id: string; status: string }>(`/orders/${id}/refunds`, {
-      method: "POST",
-      json: { reason },
-    }),
+    request<{ id: string; order_id: string; amount: number; status: string }>(
+      `/orders/${id}/refunds`,
+      { method: "POST", json: { reason } },
+    ),
   resolveRefund: (requestId: string, status: string, admin_note?: string) =>
     request<{ ok: boolean }>(`/refunds/${requestId}`, {
       method: "PATCH",
@@ -234,62 +336,29 @@ export const api = {
     }),
   patchOrder: (id: string, patch: { status?: string; payment_status?: string }) =>
     request<Order>(`/orders/${id}`, { method: "PATCH", json: patch }),
-  paymentSession: (id: string) =>
-    request<{
-      order_id: string;
-      order_number: string;
-      total: number;
-      payment_status: string;
-      tracking_code: string;
-    }>(`/orders/${id}/payment-session`),
+  paymentSession: (id: string) => request<PaymentSession>(`/orders/${id}/payment-session`),
   paymentComplete: (id: string, outcome: "success" | "failure") =>
     request<{ ok: boolean; order_number: string; reference: string | null }>(
       `/orders/${id}/payment-complete`,
       { method: "POST", json: { outcome } },
     ),
-  myPayments: () => request<PaymentRecord[]>("/admin/payments").catch(() => request<PaymentRecord[]>("/orders")).then(() => [] as PaymentRecord[]),
+
+  // --- payments ---
+  myPayments: () => request<PaymentRecord[]>("/payments/mine"),
 
   // --- admin ---
-  adminStats: () =>
-    request<{
-      revenue: number;
-      orderCount: number;
-      pending: number;
-      productCount: number;
-      outOfStock: number;
-      userCount: number;
-      latest: { id: string; order_number: string; status: string; total: number; created_at: string }[];
-    }>("/admin/stats"),
-  adminUsers: () =>
-    request<
-      {
-        id: string;
-        email: string | null;
-        full_name: string | null;
-        phone: string | null;
-        created_at: string;
-        roles: string[];
-        order_count: number;
-        spent: number;
-      }[]
-    >("/admin/users"),
+  adminStats: () => request<AdminStats>("/admin/stats"),
+  adminUsers: () => request<AdminUser[]>("/admin/users"),
   adminOrders: () => request<Order[]>("/admin/orders"),
   adminPayments: () => request<PaymentRecord[]>("/admin/payments"),
-  adminRefunds: () =>
-    request<
-      {
-        id: string;
-        order_id: string;
-        order_number: string;
-        amount: number;
-        reason: string;
-        status: string;
-        admin_note: string | null;
-        created_at: string;
-      }[]
-    >("/admin/refunds"),
+  adminRefunds: () => request<RefundRequest[]>("/admin/refunds"),
 
   // --- storage (MinIO) ---
+  signStorage: (paths: string[]) =>
+    request<{ path: string; url: string | null }[]>("/storage/sign", {
+      method: "POST",
+      json: { paths },
+    }),
   uploadImage: async (file: File) => {
     const presign = await request<{ path: string; upload_url: string }>("/storage/upload-url", {
       method: "POST",
@@ -306,9 +375,35 @@ export const api = {
 
   // --- search ---
   search: (q: string, limit = 20) =>
-    request<{ query: string; total: number; hits: { id: string; name: string; price: number }[] }>(
-      `/search?q=${encodeURIComponent(q)}&limit=${limit}`,
-    ),
+    request<{
+      query: string;
+      total: number;
+      hits: {
+        id: string;
+        name: string;
+        category: string;
+        price: number;
+        old_price: number | null;
+        image: string | null;
+        stock: number;
+        is_new: boolean;
+      }[];
+    }>(`/search?q=${encodeURIComponent(q)}&limit=${limit}`),
+};
+
+export type ProductWrite = {
+  name: string;
+  category: string;
+  price: number;
+  old_price: number | null;
+  sizes: string[];
+  colors: ProductColor[];
+  images: string[];
+  material: string;
+  description: string;
+  is_new: boolean;
+  stock: number;
+  active: boolean;
 };
 
 export { API_URL };

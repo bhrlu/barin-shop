@@ -1,14 +1,16 @@
 import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-router";
 import { Heart, LogOut, MapPin, Package, User, Wallet } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/_authenticated/account")({
   head: () => ({
     meta: [
       { title: "حساب کاربری — ساندِه" },
-      { name: "description", content: "پروفایل، سفارش‌ها، آدرس‌ها، پرداخت‌ها و علاقه‌مندی‌های شما." },
+      {
+        name: "description",
+        content: "پروفایل، سفارش‌ها، آدرس‌ها، پرداخت‌ها و علاقه‌مندی‌های شما.",
+      },
       { property: "og:title", content: "حساب کاربری — ساندِه" },
       { property: "og:description", content: "مدیریت پروفایل و سفارش‌های شما در ساندِه." },
       { name: "robots", content: "noindex" },
@@ -26,14 +28,14 @@ const tabs = [
 ] as const;
 
 function AccountLayout() {
-  const { profile, user, isAdmin } = useAuth();
+  const { profile, user, isAdmin, signOut } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const signOut = async () => {
+  const handleSignOut = async () => {
     await queryClient.cancelQueries();
     queryClient.clear();
-    await supabase.auth.signOut();
+    signOut();
     navigate({ to: "/auth", replace: true });
   };
 
@@ -55,7 +57,7 @@ function AccountLayout() {
           )}
           <button
             type="button"
-            onClick={signOut}
+            onClick={handleSignOut}
             className="flex items-center gap-1 rounded-full border border-border px-4 py-2 text-xs text-muted-foreground hover:text-foreground"
           >
             <LogOut className="size-3.5" /> خروج

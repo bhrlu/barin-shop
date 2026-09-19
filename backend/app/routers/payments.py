@@ -9,6 +9,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import RedirectResponse
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import CurrentUser, DbSession
@@ -27,6 +28,23 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/payments", tags=["payments"])
 
 
+@router.get("/mine")
+async def my_payments(user: CurrentUser, session: DbSession) -> list[dict]:
+    """The caller's own payment history, newest first (account → payments tab)."""
+    rows = (
+        await session.execute(
+            text(
+                "SELECT pm.id, pm.order_id, pm.amount, pm.method, pm.status, pm.reference, "
+                "pm.created_at, o.order_number "
+                "FROM public.payments pm JOIN public.orders o ON o.id = pm.order_id "
+                "WHERE pm.user_id = :uid ORDER BY pm.created_at DESC"
+            ),
+            {"uid": str(user.id)},
+        )
+    ).mappings().all()
+    return [dict(r) for r in rows]
+
+
 @router.post("/start", response_model=PaymentStartOut)
 async def start(body: PaymentRequest, user: CurrentUser, session: DbSession) -> PaymentStartOut:
     try:
@@ -38,7 +56,9 @@ async def start(body: PaymentRequest, user: CurrentUser, session: DbSession) -> 
             http_code = status.HTTP_409_CONFLICT
         else:
             http_code = status.HTTP_502_BAD_GATEWAY
-        raise HTTPException(http_code, exc.message_fa, detail={"code": exc.code}) from exc
+        raise HTTPException(
+            http_code, detail={"message": exc.message_fa, "code": exc.code}
+        ) from exc
     return PaymentStartOut(
         authority=started.authority,
         redirect_url=started.redirect_url,
@@ -84,7 +104,9 @@ async def manual_verify(
             http_code = status.HTTP_404_NOT_FOUND
         else:
             http_code = status.HTTP_502_BAD_GATEWAY
-        raise HTTPException(http_code, exc.message_fa, detail={"code": exc.code}) from exc
+        raise HTTPException(
+            http_code, detail={"message": exc.message_fa, "code": exc.code}
+        ) from exc
     return PaymentVerifyOut(
         status=result.status, reference=result.reference, amount=result.amount
     )

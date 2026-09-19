@@ -1,14 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { cancelOrder } from "@/lib/order-actions.functions";
+import { api } from "@/lib/api";
 
 export function CancelOrderButton({ orderId }: { orderId: string }) {
   const queryClient = useQueryClient();
-  const cancelFn = useServerFn(cancelOrder);
 
   const mutation = useMutation({
-    mutationFn: () => cancelFn({ data: { orderId } }),
+    mutationFn: () => api.cancelOrder(orderId),
     onSuccess: () => {
       toast.success("سفارش لغو شد");
       queryClient.invalidateQueries({ queryKey: ["my-orders"] });

@@ -60,9 +60,98 @@ COUPON_DDL = [
 ]
 
 
+# --- Catalog DDL (idempotent) ------------------------------------------------
+# Product-catalog features the API owns on top of the base `products` table:
+# merchandising columns, per-variant stock, reviews, search history and
+# recently-viewed. Kept idempotent so a fresh database and an already-seeded one
+# both converge with no manual migration step.
+CATALOG_DDL = [
+    # merchandising / availability columns on products
+    "ALTER TABLE public.products ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}'",
+    "ALTER TABLE public.products ADD COLUMN IF NOT EXISTS badge TEXT",
+    (
+        "ALTER TABLE public.products ADD COLUMN IF NOT EXISTS availability TEXT "
+        "NOT NULL DEFAULT 'in_stock'"
+    ),
+    "ALTER TABLE public.products ADD COLUMN IF NOT EXISTS available_at TIMESTAMPTZ",
+    (
+        "ALTER TABLE public.products ADD COLUMN IF NOT EXISTS low_stock_threshold INTEGER "
+        "NOT NULL DEFAULT 5"
+    ),
+    # per-variant (size × color) stock
+    """
+    CREATE TABLE IF NOT EXISTS public.product_variants (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      product_id TEXT NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+      size TEXT NOT NULL,
+      color TEXT NOT NULL,
+      sku TEXT,
+      stock INTEGER NOT NULL DEFAULT 0,
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (product_id, size, color)
+    )
+    """,
+    (
+        "CREATE INDEX IF NOT EXISTS product_variants_product_idx "
+        "ON public.product_variants(product_id)"
+    ),
+    # reviews + ratings (+ seller reply)
+    """
+    CREATE TABLE IF NOT EXISTS public.product_reviews (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      product_id TEXT NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+      user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+      rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+      title TEXT NOT NULL DEFAULT '',
+      body TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'published',
+      seller_reply TEXT,
+      seller_replied_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (product_id, user_id)
+    )
+    """,
+    (
+        "CREATE INDEX IF NOT EXISTS product_reviews_product_idx "
+        "ON public.product_reviews(product_id, created_at DESC)"
+    ),
+    # search history (autocomplete recency)
+    """
+    CREATE TABLE IF NOT EXISTS public.search_history (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+      query TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+    """,
+    (
+        "CREATE INDEX IF NOT EXISTS search_history_user_idx "
+        "ON public.search_history(user_id, created_at DESC)"
+    ),
+    # recently viewed
+    """
+    CREATE TABLE IF NOT EXISTS public.recently_viewed (
+      user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+      product_id TEXT NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+      viewed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, product_id)
+    )
+    """,
+    (
+        "CREATE INDEX IF NOT EXISTS recently_viewed_user_idx "
+        "ON public.recently_viewed(user_id, viewed_at DESC)"
+    ),
+]
+
+
 async def startup_ddl() -> None:
     async with engine.begin() as conn:
         for stmt in COUPON_DDL:
+            await conn.execute(text(stmt))
+        for stmt in CATALOG_DDL:
             await conn.execute(text(stmt))
 
 

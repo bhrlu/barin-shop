@@ -1,10 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
 import { CheckCircle2, Loader2, ShieldCheck, XCircle } from "lucide-react";
-import { completePayment, getPaymentSession } from "@/lib/payment.functions";
+import { api } from "@/lib/api";
 import { formatToman, toFa } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 
@@ -24,21 +23,19 @@ export const Route = createFileRoute("/_authenticated/payment/$orderId")({
 function PaymentPage() {
   const { orderId } = Route.useParams();
   const navigate = useNavigate();
-  const session = useServerFn(getPaymentSession);
-  const complete = useServerFn(completePayment);
   const [busy, setBusy] = useState<"success" | "failure" | null>(null);
   const [result, setResult] = useState<{ ok: boolean; reference: string | null } | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["payment-session", orderId],
-    queryFn: () => session({ data: { orderId } }),
+    queryFn: () => api.paymentSession(orderId),
     retry: false,
   });
 
   async function pay(outcome: "success" | "failure") {
     setBusy(outcome);
     try {
-      const res = await complete({ data: { orderId, outcome } });
+      const res = await api.paymentComplete(orderId, outcome);
       setResult({ ok: res.ok, reference: res.reference });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "خطا در ارتباط با درگاه");
@@ -74,7 +71,7 @@ function PaymentPage() {
         )}
         <h1 className="mt-6 text-3xl">{result.ok ? "پرداخت موفق" : "پرداخت ناموفق"}</h1>
         <p className="mt-3 text-sm leading-7 text-muted-foreground">
-          شماره سفارش: {toFa(data.orderNumber)}
+          شماره سفارش: {toFa(data.order_number)}
           {result.reference && (
             <>
               <br />
@@ -105,7 +102,7 @@ function PaymentPage() {
       </div>
     );
 
-  if (data.paymentStatus === "paid")
+  if (data.payment_status === "paid")
     return (
       <div className="mx-auto max-w-md px-4 py-24 text-center">
         <CheckCircle2 className="mx-auto size-12 text-terracotta" />
@@ -127,11 +124,11 @@ function PaymentPage() {
         <dl className="mt-6 space-y-3 border-y border-border py-5 text-sm">
           <div className="flex justify-between">
             <dt className="text-muted-foreground">شماره سفارش</dt>
-            <dd>#{toFa(data.orderNumber)}</dd>
+            <dd>#{toFa(data.order_number)}</dd>
           </div>
           <div className="flex justify-between">
             <dt className="text-muted-foreground">کد پیگیری</dt>
-            <dd className="font-mono text-xs">{data.trackingCode}</dd>
+            <dd className="font-mono text-xs">{data.tracking_code}</dd>
           </div>
           <div className="flex justify-between text-base">
             <dt>مبلغ قابل پرداخت</dt>
@@ -163,8 +160,8 @@ function PaymentPage() {
           </button>
         </div>
         <p className="mt-6 text-xs leading-6 text-muted-foreground">
-          درگاه بانکی واقعی متصل نشده است؛ این صفحه رفتار درگاه را شبیه‌سازی می‌کند و نتیجه‌ی
-          پرداخت روی سفارش شما ثبت می‌شود.
+          درگاه بانکی واقعی متصل نشده است؛ این صفحه رفتار درگاه را شبیه‌سازی می‌کند و نتیجه‌ی پرداخت
+          روی سفارش شما ثبت می‌شود.
         </p>
       </div>
     </div>

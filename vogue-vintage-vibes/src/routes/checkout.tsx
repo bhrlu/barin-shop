@@ -2,10 +2,10 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ShieldCheck } from "lucide-react";
+import { api, ApiError, type StockIssue } from "@/lib/api";
 import { formatToman, toFa } from "@/lib/format";
 import { useCart } from "@/lib/cart";
 import { useAuth } from "@/lib/auth";
-import { placeOrder } from "@/lib/orders";
 import { useCatalog } from "@/lib/catalog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,28 +64,49 @@ function CheckoutPage() {
             const data = new FormData(event.currentTarget as HTMLFormElement);
             setBusy(true);
             try {
-              const order = await placeOrder({
-                userId: user.id,
-                lines,
-                products: lines.map((line) => byId(line.productId)),
-                subtotal,
-                discount: 0,
-                shipping,
-                paymentMethod: "online",
+              const couponCode = window.sessionStorage.getItem("sandeh-coupon");
+              const order = await api.checkout({
+                lines: lines.map((line) => ({
+                  product_id: line.productId,
+                  size: line.size,
+                  color: line.color,
+                  quantity: line.quantity,
+                })),
+                coupon_code: couponCode,
                 address: {
-                  receiver: `${data.get("firstName")} ${data.get("lastName")}`,
+                  full_name: `${data.get("firstName")} ${data.get("lastName")}`,
                   phone: String(data.get("phone") ?? ""),
-                  province: String(data.get("city") ?? ""),
                   city: String(data.get("city") ?? ""),
-                  postal_code: String(data.get("postal") ?? ""),
                   line: String(data.get("address") ?? ""),
+                  postal_code: String(data.get("postal") ?? ""),
+                  note: String(data.get("note") ?? "") || null,
                 },
-                note: String(data.get("note") ?? "") || undefined,
               });
+              window.sessionStorage.removeItem("sandeh-coupon");
               clear();
-              navigate({ to: "/payment/$orderId", params: { orderId: order.id } });
+              navigate({ to: "/payment/$orderId", params: { orderId: order.order_id } });
             } catch (error) {
-              toast.error(error instanceof Error ? error.message : "ثبت سفارش ناموفق بود");
+              const detail = error instanceof ApiError ? error.detail : null;
+              const issues =
+                detail &&
+                typeof detail === "object" &&
+                "code" in detail &&
+                (detail as { code?: string }).code === "stock_conflict" &&
+                "issues" in detail
+                  ? ((detail as { issues?: StockIssue[] }).issues ?? [])
+                  : [];
+              if (issues.length) {
+                const message = issues
+                  .map((issue) => {
+                    const product = byId(issue.product_id);
+                    const name = product?.name ?? issue.product_id;
+                    return `${name} (موجودی: ${issue.available ?? 0})`;
+                  })
+                  .join("، ");
+                toast.error(`موجودی کافی نیست: ${message}`);
+              } else {
+                toast.error(error instanceof Error ? error.message : "ثبت سفارش ناموفق بود");
+              }
             } finally {
               setBusy(false);
             }
@@ -104,7 +125,13 @@ function CheckoutPage() {
           <div className="grid gap-5 sm:grid-cols-2">
             <div>
               <Label htmlFor="phone">شماره تماس</Label>
-              <Input id="phone" name="phone" required inputMode="tel" className="mt-2 rounded-none" />
+              <Input
+                id="phone"
+                name="phone"
+                required
+                inputMode="tel"
+                className="mt-2 rounded-none"
+              />
             </div>
             <div>
               <Label htmlFor="city">شهر</Label>
@@ -118,7 +145,13 @@ function CheckoutPage() {
           <div className="grid gap-5 sm:grid-cols-2">
             <div>
               <Label htmlFor="postal">کد پستی</Label>
-              <Input id="postal" name="postal" required inputMode="numeric" className="mt-2 rounded-none" />
+              <Input
+                id="postal"
+                name="postal"
+                required
+                inputMode="numeric"
+                className="mt-2 rounded-none"
+              />
             </div>
             <div>
               <Label htmlFor="note">یادداشت سفارش (اختیاری)</Label>
@@ -144,8 +177,8 @@ function CheckoutPage() {
           )}
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
             <ShieldCheck className="size-4 shrink-0 text-sage-deep" />
-            پس از ثبت سفارش به درگاه پرداخت آزمایشی منتقل می‌شوید؛ نتیجه‌ی پرداخت روی سفارش ثبت
-            و در حساب کاربری قابل پیگیری است.
+            پس از ثبت سفارش به درگاه پرداخت آزمایشی منتقل می‌شوید؛ نتیجه‌ی پرداخت روی سفارش ثبت و در
+            حساب کاربری قابل پیگیری است.
           </p>
         </form>
 

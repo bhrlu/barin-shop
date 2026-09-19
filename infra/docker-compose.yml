@@ -64,7 +64,7 @@ services:
         mc anonymous set download local/product-images
         echo 'minio ready: bucket product-images (public read)'
 
-  # One-shot: bootstrap admin/customer users + starter coupons.
+  # One-shot: bootstrap users + 20-product catalog + demo activity + coupons.
   db-init:
     build:
       context: ..
@@ -86,6 +86,8 @@ services:
     command: >
       /bin/sh -c "
       python -m app.seed_auth &&
+      python -m app.seed_products &&
+      python -m app.seed_demo &&
       python -m app.seed_coupons"
     restart: "no"
 

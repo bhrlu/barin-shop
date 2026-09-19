@@ -61,6 +61,12 @@ Legend: `[ ]` todo · `[x]` done (audit file required) · audit links in `plan/a
   400 instead of `already_paid`, because `reference` is overwritten with the
   `SND-…` code during verification. Needs an authority column (schema change
   decision) or an equivalent lookup path.
+- [x] **B3.8 Fix `HTTPException` with two `detail`s** — coupon/stock failures raised
+  `HTTPException(code, message, detail={...})`, so every checkout error returned a
+  **500** instead of a clean 4xx. `routers/checkout.py` and `routers/payments.py`
+  now pass one `detail` object (`{message, code, issues}`). Found during the first
+  end-to-end Docker run.
+  → audit: [2026-09-19-e2e-flow-docker.md](audit/2026-09-19-e2e-flow-docker.md)
 - [ ] **B3.5 Tests for the new routers** — auth (login/signup/me/roles), products CRUD +
   soft-delete, orders lifecycle, addresses, favorites, admin stats; needs a DB fixture
   (docker Postgres or testcontainers)

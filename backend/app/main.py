@@ -25,6 +25,7 @@ from app.routers import (
     orders,
     payments,
     products,
+    reviews,
     search,
     stock,
     storage,
@@ -62,6 +63,7 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(products.router)
+app.include_router(reviews.router)
 app.include_router(addresses.router)
 app.include_router(favorites.router)
 app.include_router(orders.router)

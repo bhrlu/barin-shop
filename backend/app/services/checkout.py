@@ -24,6 +24,7 @@ from app.services.coupons import (
     validate_coupon,
 )
 from app.services.pricing import quote
+from app.services.variants import load_variants, variant_stock
 
 log = logging.getLogger(__name__)
 
@@ -64,6 +65,13 @@ async def create_order(
     ).mappings().all()
     products = {row["id"]: row for row in rows}
 
+    # 1b) Lock any per-variant rows for these size×color combinations
+    variants = await load_variants(
+        session,
+        [(line["product_id"], line["size"], line["color"]) for line in lines],
+        for_update=True,
+    )
+
     # 2) Validate stock / activity / size; fill authoritative name/price/image
     issues: list[dict] = []
     for line in lines:
@@ -83,18 +91,27 @@ async def create_order(
                 }
             )
             continue
-        if p["stock"] < line["quantity"]:
+
+        variant = variants.get((line["product_id"], line["size"], line["color"]))
+        available, variant_ok = variant_stock(p, variant)
+        if not variant_ok:
+            issues.append(
+                {"product_id": line["product_id"], "reason": "inactive", "available": 0}
+            )
+            continue
+        if available < line["quantity"]:
             issues.append(
                 {
                     "product_id": line["product_id"],
                     "reason": "insufficient_stock",
-                    "available": int(p["stock"]),
+                    "available": available,
                 }
             )
             continue
         line["price"] = int(p["price"])
         line["name"] = p["name"]
         line["image"] = _line_image(p["images"])
+        line["variant_id"] = variant["id"] if variant else None
 
     if issues:
         raise CheckoutError("stock_conflict", "برخی اقلام موجودی کافی ندارند", issues)
@@ -174,7 +191,8 @@ async def create_order(
     if coupon is not None:
         await record_redemption(session, coupon, order_id, user_id, q.discount)
 
-    # 7) Stock decrement — guarded so it can never go negative
+    # 7) Stock decrement — guarded so it can never go negative. Variant rows
+    #    (when present) are decremented too, and the product aggregate stays in sync.
     for line in lines:
         updated = await session.execute(
             text(
@@ -196,6 +214,26 @@ async def create_order(
                     }
                 ],
             )
+        if line.get("variant_id"):
+            variant_updated = await session.execute(
+                text(
+                    "UPDATE public.product_variants SET stock = stock - :qty, "
+                    "updated_at = now() WHERE id = :vid AND stock >= :qty"
+                ),
+                {"vid": str(line["variant_id"]), "qty": line["quantity"]},
+            )
+            if variant_updated.rowcount != 1:
+                raise CheckoutError(
+                    "stock_conflict",
+                    "برخی اقلام موجودی کافی ندارند",
+                    [
+                        {
+                            "product_id": line["product_id"],
+                            "reason": "insufficient_stock",
+                            "available": None,
+                        }
+                    ],
+                )
 
     return {
         "order_id": str(order_id),

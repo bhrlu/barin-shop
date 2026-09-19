@@ -35,6 +35,9 @@ dist-ssr/
 # --- Local data -----------------------------------------------------------------
 infra/volumes/
 
+# --- Local tooling ---------------------------------------------------------------
+.freebuff/
+
 # --- Archived nested git repo (see plan/session-log.md, Session 4) ------------
 # Safe to delete once you trust the root history:
 #   rm -rf vogue-vintage-vibes/.git.orphan-backup

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { formatToman, toFa } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/admin/users")({
@@ -10,29 +10,7 @@ export const Route = createFileRoute("/_authenticated/admin/users")({
 function AdminUsers() {
   const { data } = useQuery({
     queryKey: ["admin-users"],
-    queryFn: async () => {
-      const [profiles, roles, orders] = await Promise.all([
-        supabase.from("profiles").select("*").order("created_at", { ascending: false }),
-        supabase.from("user_roles").select("user_id, role"),
-        supabase.from("orders").select("user_id, total, status"),
-      ]);
-      if (profiles.error) throw profiles.error;
-      const roleMap = new Map<string, string[]>();
-      for (const row of roles.data ?? []) {
-        roleMap.set(row.user_id, [...(roleMap.get(row.user_id) ?? []), row.role]);
-      }
-      return (profiles.data ?? []).map((profile) => {
-        const userOrders = (orders.data ?? []).filter((o) => o.user_id === profile.id);
-        return {
-          ...profile,
-          roles: roleMap.get(profile.id) ?? ["customer"],
-          orderCount: userOrders.length,
-          spent: userOrders
-            .filter((o) => o.status !== "cancelled")
-            .reduce((sum, o) => sum + Number(o.total), 0),
-        };
-      });
-    },
+    queryFn: () => api.adminUsers(),
   });
 
   if (!data?.length)
@@ -58,7 +36,7 @@ function AdminUsers() {
                 {role === "admin" ? "مدیر" : "مشتری"}
               </span>
             ))}
-            <span>{toFa(user.orderCount)} سفارش</span>
+            <span>{toFa(user.order_count)} سفارش</span>
             <span>{formatToman(user.spent)} تومان</span>
           </div>
         </li>

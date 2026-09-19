@@ -1,10 +1,15 @@
-"""Stock pre-check endpoint — validates cart lines before checkout."""
+"""Stock pre-check endpoint — validates cart lines before checkout.
+
+Per-variant (size × color) stock wins when a variant row exists; otherwise the
+product's aggregate stock applies. Shares `app.services.variants` with checkout.
+"""
 
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import text
 
 from app.auth import DbSession
 from app.schemas import StockCheckLine, StockCheckOut, StockIssue
+from app.services.variants import load_variants, variant_stock
 
 router = APIRouter(prefix="/stock", tags=["stock"])
 
@@ -27,6 +32,10 @@ async def check(body: list[StockCheckLine], session: DbSession) -> StockCheckOut
     ).mappings().all()
     products = {r["id"]: r for r in rows}
 
+    variants = await load_variants(
+        session, [(line.product_id, line.size, line.color) for line in body]
+    )
+
     issues: list[StockIssue] = []
     subtotal = 0
     for line in body:
@@ -46,12 +55,20 @@ async def check(body: list[StockCheckLine], session: DbSession) -> StockCheckOut
                 )
             )
             continue
-        if p["stock"] < line.quantity:
+
+        variant = variants.get((line.product_id, line.size, line.color))
+        available, variant_ok = variant_stock(p, variant)
+        if not variant_ok:
+            issues.append(
+                StockIssue(product_id=line.product_id, reason="inactive", available=0)
+            )
+            continue
+        if available < line.quantity:
             issues.append(
                 StockIssue(
                     product_id=line.product_id,
                     reason="insufficient_stock",
-                    available=int(p["stock"]),
+                    available=available,
                 )
             )
             continue

@@ -47,8 +47,72 @@ class Product(Base):
     is_new: Mapped[bool] = mapped_column(Boolean, default=False)
     stock: Mapped[int] = mapped_column(Integer, default=0)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # merchandising / availability (added by the idempotent catalog DDL)
+    tags: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    badge: Mapped[str | None] = mapped_column(Text, nullable=True)
+    availability: Mapped[str] = mapped_column(Text, default="in_stock")
+    available_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    low_stock_threshold: Mapped[int] = mapped_column(Integer, default=5)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# --- catalog extensions: variants / reviews / history --------------------------
+class ProductVariant(Base):
+    __tablename__ = "product_variants"
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid, primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    product_id: Mapped[str] = mapped_column(String)
+    size: Mapped[str] = mapped_column(Text)
+    color: Mapped[str] = mapped_column(Text)
+    sku: Mapped[str | None] = mapped_column(Text, nullable=True)
+    stock: Mapped[int] = mapped_column(Integer, default=0)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ProductReview(Base):
+    __tablename__ = "product_reviews"
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid, primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    product_id: Mapped[str] = mapped_column(String)
+    user_id: Mapped[UUID] = mapped_column(Uuid)
+    rating: Mapped[int] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(Text, default="")
+    body: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(Text, default="published")
+    seller_reply: Mapped[str | None] = mapped_column(Text, nullable=True)
+    seller_replied_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class SearchHistory(Base):
+    __tablename__ = "search_history"
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid, primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    user_id: Mapped[UUID] = mapped_column(Uuid)
+    query: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class RecentlyViewed(Base):
+    __tablename__ = "recently_viewed"
+
+    user_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    product_id: Mapped[str] = mapped_column(String, primary_key=True)
+    viewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 # --- orders / order items / payments ------------------------------------------

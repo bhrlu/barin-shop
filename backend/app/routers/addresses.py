@@ -18,6 +18,14 @@ _SELECT = (
 )
 
 
+def _row_to_out(row) -> AddressOut:
+    """AddressOut.created_at is typed `str`, so the DB's datetime must be
+    isoformatted — Pydantic v2 rejects a raw datetime for a str field (500)."""
+    d = dict(row)
+    d["created_at"] = d["created_at"].isoformat() if d.get("created_at") else None
+    return AddressOut(**d)
+
+
 @router.get("/addresses", response_model=list[AddressOut])
 async def list_addresses(user: CurrentUser, session: DbSession) -> list[AddressOut]:
     rows = (
@@ -25,7 +33,7 @@ async def list_addresses(user: CurrentUser, session: DbSession) -> list[AddressO
             text(_SELECT + " ORDER BY created_at DESC"), {"uid": str(user.id)}
         )
     ).mappings().all()
-    return [AddressOut(**dict(r)) for r in rows]
+    return [_row_to_out(r) for r in rows]
 
 
 @router.post("/addresses", response_model=AddressOut, status_code=status.HTTP_201_CREATED)
@@ -53,7 +61,7 @@ async def create_address(body: AddressIn, user: CurrentUser, session: DbSession)
         )
     ).mappings().first()
     await session.commit()
-    return AddressOut(**dict(row))
+    return _row_to_out(row)
 
 
 @router.delete("/addresses/{address_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { formatToman, toFa } from "@/lib/format";
 import { ORDER_STATUS } from "@/lib/orders";
 
@@ -11,28 +11,7 @@ export const Route = createFileRoute("/_authenticated/admin/")({
 function AdminDashboard() {
   const { data } = useQuery({
     queryKey: ["admin-stats"],
-    queryFn: async () => {
-      const [orders, products, users] = await Promise.all([
-        supabase.from("orders").select("total, status, created_at, order_number"),
-        supabase.from("products").select("id, active, stock"),
-        supabase.from("profiles").select("id"),
-      ]);
-      if (orders.error) throw orders.error;
-      const rows = orders.data ?? [];
-      return {
-        revenue: rows
-          .filter((o) => o.status !== "cancelled")
-          .reduce((sum, o) => sum + Number(o.total), 0),
-        orderCount: rows.length,
-        pending: rows.filter((o) => o.status === "pending").length,
-        productCount: (products.data ?? []).length,
-        outOfStock: (products.data ?? []).filter((p) => p.stock <= 0).length,
-        userCount: (users.data ?? []).length,
-        latest: [...rows]
-          .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
-          .slice(0, 5),
-      };
-    },
+    queryFn: () => api.adminStats(),
   });
 
   const cards = [
