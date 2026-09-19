@@ -380,3 +380,36 @@ markdown docs, and codify a rule to do so after every task.
   existing coupon-table mechanism, so existing volumes need no manual step.
 - **Variant stock is authoritative when present**, else the product aggregate is
   used — keeps legacy products working while enabling per-combination stock.
+
+## Session 9 — 2026-09-20
+
+**Scope (user request):** start **F3.0** — extend the frontend API client and
+`Product` type so the catalog backend's new fields/endpoints are usable.
+
+### ✅ What was done
+
+1. Extended the `Product` type (`tags`, `badge`, `availability`, `available_at`,
+   `low_stock_threshold`, `avg_rating`, `review_count`) and generalized
+   `api.products()` to the full `ProductListParams` filter/sort set (backward
+   compatible).
+2. Added client methods for related / recommendations / compare / recently
+   viewed / view tracking, variants, reviews, search suggestions + history, and
+   the admin inventory + review-moderation + variant-CRUD surface.
+3. Added the matching exported types.
+4. **Verified:** `tsc --noEmit` → 0 errors. Backend catalog endpoints confirmed
+   live earlier (50 OpenAPI paths, 59-route smoke 0 5xx).
+   Audit: `plan/audit/2026-09-20-frontend-f30-api-client.md`.
+
+### ❌ What was NOT done
+
+- **No UI wiring** — F3.1–F3.6 (search box, variant picker, reviews UI, compare,
+  admin screens) are untouched.
+- `src/data/products.ts` legacy `Product` type and `toProduct()` were not bridged
+  to the new fields (belongs with F3.2/F3.3).
+
+### Decisions
+
+- Keep the change **scoped to `src/lib/api.ts`** — F3.0 is the typed client
+  surface; UI concerns are separate tasks.
+- `api.products()` keeps accepting the old param shapes, so no existing caller
+  changed.

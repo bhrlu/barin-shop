@@ -105,20 +105,27 @@ The catalog/product **backend API is complete and smoke-verified** — see
 and `plan/feature-roadmap.md`. This milestone wires it into the UI. Nothing here
 needs new backend work except where explicitly noted.
 
-### F3.0 API client + types (blocking prerequisite)
+### F3.0 API client + types (blocking prerequisite) — DONE
 
-- [ ] Extend the `Product` type in `src/lib/api.ts` with `tags`, `badge`,
+→ audit: [2026-09-20-frontend-f30-api-client.md](audit/2026-09-20-frontend-f30-api-client.md)
+
+- [x] Extend the `Product` type in `src/lib/api.ts` with `tags`, `badge`,
   `availability`, `available_at`, `low_stock_threshold`, `avg_rating`,
   `review_count`
-- [ ] Extend `api.products()` params with `tag`, `badge`, `availability`,
+- [x] Extend `api.products()` params with `tag`, `badge`, `availability`,
   `on_sale`, `size`, `color`, `min_price`, `max_price`, `sort`
-- [ ] Add client methods for: `GET /products/{id}`, `/products/{id}/related`,
+- [x] Add client methods for: `GET /products/{id}`, `/products/{id}/related`,
   `/recommendations`, `/products/compare`, `/products/{id}/variants`,
   `/products/{id}/reviews` (GET/POST), `POST /products/{id}/view`,
   `GET /recently-viewed`, `GET /search/suggest`, `GET/DELETE /search/history`
-- [ ] Add admin client methods: `GET /admin/inventory`,
+- [x] Add admin client methods: `GET /admin/inventory`,
   `/admin/inventory/low-stock`, `GET /admin/reviews`, `PATCH /reviews/{id}`,
   variant CRUD (`POST /products/{id}/variants`, `PATCH/DELETE /variants/{id}`)
+- [x] Bucket + rating fields added to `Product`; new types exported:
+  `Availability`, `ProductBadge`, `ProductSort`, `ProductListParams`,
+  `ProductVariant(-Input)`, `Review`, `ReviewList`, `ReviewInput`,
+  `SearchSuggestion`, `SearchHistoryEntry`, `InventorySummary`,
+  `LowStockProduct`, `LowStockVariant`, `LowStockReport`
 
 ### F3.1 Search
 

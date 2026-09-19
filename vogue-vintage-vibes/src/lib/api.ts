@@ -101,6 +101,10 @@ export type TokenResponse = { access_token: string; token_type: string; user: Us
 
 export type ProductColor = { name: string; hex: string };
 
+export type Availability = "in_stock" | "coming_soon" | "preorder";
+export type ProductBadge = "sale" | "coming_soon" | "preorder" | "new" | "exclusive";
+export type ProductSort = "new" | "price_asc" | "price_desc" | "popular" | "rating";
+
 export type Product = {
   id: string;
   name: string;
@@ -115,8 +119,120 @@ export type Product = {
   is_new: boolean;
   stock: number;
   active: boolean;
+  tags: string[];
+  badge: ProductBadge | null;
+  availability: Availability;
+  available_at: string | null;
+  low_stock_threshold: number;
+  avg_rating: number | null;
+  review_count: number;
   created_at: string | null;
   updated_at: string | null;
+};
+
+export type ProductListParams = {
+  category?: string;
+  tag?: string;
+  badge?: ProductBadge;
+  availability?: Availability;
+  on_sale?: boolean;
+  size?: string;
+  color?: string;
+  min_price?: number;
+  max_price?: number;
+  sort?: ProductSort;
+  include_inactive?: boolean;
+};
+
+// --- catalog: variants / reviews / discovery -----------------------------------
+
+export type ProductVariant = {
+  id: string;
+  product_id: string;
+  size: string;
+  color: string;
+  sku: string | null;
+  stock: number;
+  active: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type ProductVariantInput = {
+  size: string;
+  color: string;
+  sku?: string | null;
+  stock?: number;
+  active?: boolean;
+};
+
+export type Review = {
+  id: string;
+  product_id: string;
+  user_id: string;
+  rating: number;
+  title: string;
+  body: string;
+  status: string;
+  seller_reply: string | null;
+  seller_replied_at: string | null;
+  created_at: string | null;
+  author_name: string | null;
+};
+
+export type ReviewList = {
+  product_id: string;
+  average: number | null;
+  count: number;
+  distribution: Record<string, number>;
+  reviews: Review[];
+};
+
+export type ReviewInput = { rating: number; title?: string; body?: string };
+
+export type SearchSuggestion = {
+  id: string | null;
+  label: string;
+  kind: "product" | "category" | "tag" | "query";
+  image: string | null;
+};
+
+export type SearchHistoryEntry = {
+  id: string;
+  query: string;
+  created_at: string | null;
+};
+
+export type InventorySummary = {
+  totalProducts: number;
+  totalUnits: number;
+  inventoryValue: number;
+  outOfStock: number;
+  lowStock: number;
+  totalVariants: number;
+  variantsOutOfStock: number;
+};
+
+export type LowStockProduct = {
+  id: string;
+  name: string;
+  category: string;
+  stock: number;
+  low_stock_threshold: number;
+};
+
+export type LowStockVariant = {
+  id: string;
+  product_id: string;
+  product_name: string;
+  size: string;
+  color: string;
+  stock: number;
+};
+
+export type LowStockReport = {
+  products: LowStockProduct[];
+  variants: LowStockVariant[];
 };
 
 export type Address = {
@@ -272,14 +388,39 @@ export const api = {
   }) => request<UserInfo>("/auth/me", { method: "PATCH", json: body }),
 
   // --- catalog ---
-  products: (params?: { category?: string; include_inactive?: boolean }) => {
+  products: (params: ProductListParams = {}) => {
     const qs = new URLSearchParams();
-    if (params?.category) qs.set("category", params.category);
-    if (params?.include_inactive) qs.set("include_inactive", "true");
+    if (params.category) qs.set("category", params.category);
+    if (params.tag) qs.set("tag", params.tag);
+    if (params.badge) qs.set("badge", params.badge);
+    if (params.availability) qs.set("availability", params.availability);
+    if (params.on_sale) qs.set("on_sale", "true");
+    if (params.size) qs.set("size", params.size);
+    if (params.color) qs.set("color", params.color);
+    if (params.min_price != null) qs.set("min_price", String(params.min_price));
+    if (params.max_price != null) qs.set("max_price", String(params.max_price));
+    if (params.sort) qs.set("sort", params.sort);
+    if (params.include_inactive) qs.set("include_inactive", "true");
     const suffix = qs.toString() ? `?${qs}` : "";
     return request<Product[]>(`/products${suffix}`);
   },
-  product: (id: string) => request<Product>(`/products/${id}`),
+  product: (id: string) => request<Product>(`/products/${encodeURIComponent(id)}`),
+  relatedProducts: (id: string, limit = 4) =>
+    request<Product[]>(`/products/${encodeURIComponent(id)}/related?limit=${limit}`),
+  recommendedProducts: (id: string, limit = 4) =>
+    request<Product[]>(`/products/${encodeURIComponent(id)}/recommendations?limit=${limit}`),
+  compareProducts: (ids: string[]) =>
+    request<Product[]>(`/products/compare?ids=${ids.map(encodeURIComponent).join(",")}`),
+  recordProductView: (id: string) =>
+    request<{ ok: boolean }>(`/products/${encodeURIComponent(id)}/view`, { method: "POST" }),
+  recentlyViewed: (limit = 10) => request<Product[]>(`/recently-viewed?limit=${limit}`),
+  productVariants: (id: string) =>
+    request<ProductVariant[]>(`/products/${encodeURIComponent(id)}/variants`),
+  productReviews: (id: string, limit = 20) =>
+    request<ReviewList>(`/products/${encodeURIComponent(id)}/reviews?limit=${limit}`),
+  createReview: (id: string, body: ReviewInput) =>
+    request<Review>(`/products/${encodeURIComponent(id)}/reviews`, { method: "POST", json: body }),
+  deleteReview: (reviewId: string) => request<void>(`/reviews/${reviewId}`, { method: "DELETE" }),
   createProduct: (body: ProductWrite) =>
     request<Product>("/products", { method: "POST", json: body }),
   updateProduct: (id: string, body: Partial<ProductWrite>) =>
@@ -389,6 +530,36 @@ export const api = {
         is_new: boolean;
       }[];
     }>(`/search?q=${encodeURIComponent(q)}&limit=${limit}`),
+  searchSuggest: (q: string, limit = 8) =>
+    request<SearchSuggestion[]>(`/search/suggest?q=${encodeURIComponent(q)}&limit=${limit}`),
+  searchHistory: (limit = 10) => request<SearchHistoryEntry[]>(`/search/history?limit=${limit}`),
+  clearSearchHistory: () => request<void>("/search/history", { method: "DELETE" }),
+  deleteSearchHistory: (id: string) =>
+    request<void>(`/search/history/${id}`, { method: "DELETE" }),
+
+  // --- admin: catalog & inventory ---
+  inventory: () => request<InventorySummary>("/admin/inventory"),
+  lowStock: (threshold?: number) =>
+    request<LowStockReport>(
+      threshold != null
+        ? `/admin/inventory/low-stock?threshold=${threshold}`
+        : "/admin/inventory/low-stock",
+    ),
+  adminReviews: (status?: "published" | "hidden") =>
+    request<Review[]>(status ? `/admin/reviews?status=${status}` : "/admin/reviews"),
+  moderateReview: (id: string, status: "published" | "hidden") =>
+    request<Review>(`/reviews/${id}`, { method: "PATCH", json: { status } }),
+  replyToReview: (id: string, seller_reply: string) =>
+    request<Review>(`/reviews/${id}`, { method: "PATCH", json: { seller_reply } }),
+  createVariant: (productId: string, body: ProductVariantInput) =>
+    request<ProductVariant>(`/products/${encodeURIComponent(productId)}/variants`, {
+      method: "POST",
+      json: body,
+    }),
+  updateVariant: (variantId: string, body: Partial<ProductVariantInput>) =>
+    request<ProductVariant>(`/variants/${variantId}`, { method: "PATCH", json: body }),
+  deleteVariant: (variantId: string) =>
+    request<void>(`/variants/${variantId}`, { method: "DELETE" }),
 };
 
 export type ProductWrite = {
