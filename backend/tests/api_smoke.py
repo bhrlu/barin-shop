@@ -14,7 +14,7 @@ from uuid import uuid4
 import httpx
 
 BASE = os.environ.get("SANDE_API_URL", "http://127.0.0.1:8000")
-results: list[tuple[str, str, int, str]] = []
+results: list[tuple[str, str, int | str, str]] = []
 
 
 def call(
@@ -40,6 +40,11 @@ def call(
     return r
 
 
+def check(name: str, ok: bool, detail: str = "") -> None:
+    """Record a logical assertion (empty result, missing kind…) in the same report."""
+    results.append(("ok" if ok else "FAIL", name, "-", detail))
+
+
 def login(email: str, password: str) -> str:
     r = httpx.post(BASE + "/auth/login", json={"email": email, "password": password}, timeout=15)
     r.raise_for_status()
@@ -59,6 +64,19 @@ def main() -> int:
     call("GET", f"/products/{pid}")
     call("GET", "/search?q=پیراهن")
     call("GET", "/search?q=tshirt&limit=5")
+
+    # tag matching: a tag query must return hits and tags must be suggested
+    hits = call("GET", "/search?q=کتان")
+    total = hits.json().get("total") if hits is not None and hits.status_code == 200 else None
+    check(
+        "GET /search?q=کتان → tag hits",
+        bool(total),
+        f"total={total}" if total is not None else "no JSON body",
+    )
+    sug = call("GET", "/search/suggest?q=کتان")
+    payload = sug.json() if sug is not None and sug.status_code == 200 else []
+    kinds = [s.get("kind") for s in payload] if isinstance(payload, list) else []
+    check("GET /search/suggest?q=کتان → tag kind", "tag" in kinds, f"kinds={kinds}")
 
     # --- auth ---
     call("GET", "/auth/me", customer)
@@ -195,7 +213,7 @@ def main() -> int:
         if flag == "FAIL":
             failures += 1
         print(f"{flag:6} {route:55} {status:<7} {body}")
-    print(f"\n{len(results)} routes, {failures} 5xx/failed")
+    print(f"\n{len(results)} routes/checks, {failures} failed")
     return 1 if failures else 0
 
 

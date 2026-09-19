@@ -23,7 +23,12 @@ plan/
     ├── 2026-09-20-catalog-backend-and-address-fix.md
     ├── 2026-09-20-agent-doc-rule.md
     ├── 2026-09-20-frontend-f30-api-client.md
-    └── 2026-09-20-frontend-catalog-type-bridge.md
+    ├── 2026-09-20-frontend-catalog-type-bridge.md
+    ├── 2026-09-20-frontend-f31-search.md
+    ├── 2026-09-20-backend-search-tags.md
+    ├── 2026-09-20-frontend-f32-product-page.md
+    ├── 2026-09-20-frontend-f33-shop-filters-compare.md
+    └── 2026-09-20-frontend-f34-recently-viewed.md
 ```
 
 Legend used across the task files: `[ ]` todo · `[~]` in progress · `[x]` done

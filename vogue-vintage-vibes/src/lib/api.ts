@@ -197,6 +197,19 @@ export type SearchSuggestion = {
   image: string | null;
 };
 
+export type SearchHit = {
+  id: string;
+  name: string;
+  category: string;
+  price: number;
+  old_price: number | null;
+  image: string | null;
+  stock: number;
+  is_new: boolean;
+};
+
+export type SearchResult = { query: string; total: number; hits: SearchHit[] };
+
 export type SearchHistoryEntry = {
   id: string;
   query: string;
@@ -516,26 +529,12 @@ export const api = {
 
   // --- search ---
   search: (q: string, limit = 20) =>
-    request<{
-      query: string;
-      total: number;
-      hits: {
-        id: string;
-        name: string;
-        category: string;
-        price: number;
-        old_price: number | null;
-        image: string | null;
-        stock: number;
-        is_new: boolean;
-      }[];
-    }>(`/search?q=${encodeURIComponent(q)}&limit=${limit}`),
+    request<SearchResult>(`/search?q=${encodeURIComponent(q)}&limit=${limit}`),
   searchSuggest: (q: string, limit = 8) =>
     request<SearchSuggestion[]>(`/search/suggest?q=${encodeURIComponent(q)}&limit=${limit}`),
   searchHistory: (limit = 10) => request<SearchHistoryEntry[]>(`/search/history?limit=${limit}`),
   clearSearchHistory: () => request<void>("/search/history", { method: "DELETE" }),
-  deleteSearchHistory: (id: string) =>
-    request<void>(`/search/history/${id}`, { method: "DELETE" }),
+  deleteSearchHistory: (id: string) => request<void>(`/search/history/${id}`, { method: "DELETE" }),
 
   // --- admin: catalog & inventory ---
   inventory: () => request<InventorySummary>("/admin/inventory"),

@@ -1,13 +1,27 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Minus, Plus, Truck, RefreshCcw } from "lucide-react";
+import { Minus, Plus, RefreshCcw, Truck } from "lucide-react";
+import type { ProductBadge, ProductVariant } from "@/lib/api";
+import { api } from "@/lib/api";
 import { categoryTitle } from "@/data/products";
-import { useCatalog } from "@/lib/catalog";
-import { formatToman, toFa } from "@/lib/format";
+import {
+  productQuery,
+  recommendationsQuery,
+  relatedQuery,
+  variantsQuery,
+  type AdminProduct,
+} from "@/lib/catalog";
+import { defaultColor, variantStockFor } from "@/lib/variants";
+import { formatFaDate, formatToman, toFa } from "@/lib/format";
+import { useAuth } from "@/lib/auth";
 import { useCart } from "@/lib/cart";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { ProductCard } from "@/components/ProductCard";
+import { ProductRail } from "@/components/product/ProductRail";
+import { ReviewsSection } from "@/components/product/ReviewsSection";
+import { VariantPicker } from "@/components/product/VariantPicker";
 import {
   Accordion,
   AccordionContent,
@@ -31,17 +45,22 @@ export const Route = createFileRoute("/product/$id")({
   component: ProductPage,
 });
 
+const BADGE_LABELS: Record<ProductBadge, string> = {
+  sale: "حراج",
+  new: "جدید",
+  exclusive: "ویژه",
+  coming_soon: "به‌زودی",
+  preorder: "پیش‌خرید",
+};
+
 function ProductPage() {
   const { id } = Route.useParams();
-  const { byId, products: allProducts, isLoading } = useCatalog();
-  const product = byId(id);
-  const { add } = useCart();
-  const [size, setSize] = useState<string | null>(null);
-  const [color, setColor] = useState<string | null>(null);
-  const [quantity, setQuantity] = useState(1);
-  const [active, setActive] = useState(0);
+  const product = useQuery(productQuery(id));
+  const variants = useQuery({ ...variantsQuery(id), enabled: product.isSuccess });
+  const related = useQuery({ ...relatedQuery(id, 4), enabled: product.isSuccess });
+  const recommended = useQuery({ ...recommendationsQuery(id, 8), enabled: product.isSuccess });
 
-  if (isLoading) {
+  if (product.isLoading) {
     return (
       <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
         <div className="grid gap-10 md:grid-cols-2">
@@ -56,7 +75,7 @@ function ProductPage() {
     );
   }
 
-  if (!product) {
+  if (product.isError || !product.data || !product.data.active) {
     return (
       <div className="mx-auto max-w-xl px-4 py-24 text-center sm:px-6">
         <h1 className="text-3xl">محصول یافت نشد</h1>
@@ -74,19 +93,105 @@ function ProductPage() {
     );
   }
 
-  const selectedColor = color ?? product.colors[0]?.name ?? "";
-  const related = allProducts
-    .filter((p) => p.category === product.category && p.id !== product.id)
-    .slice(0, 3);
+  const relatedIds = new Set((related.data ?? []).map((item) => item.id));
+  const alsoSuggested = (recommended.data ?? []).filter((item) => !relatedIds.has(item.id));
+
+  return (
+    <>
+      {/* key resets the gallery/selection state when the route param changes */}
+      <ProductDetail key={product.data.id} product={product.data} variants={variants.data ?? []} />
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <ProductRail title="محصولات مرتبط" eyebrow="هم‌خانواده" products={related.data ?? []} />
+        <ProductRail title="پیشنهاد برای شما" eyebrow="شاید بپسندید" products={alsoSuggested} />
+        <ReviewsSection
+          productId={product.data.id}
+          fallbackAverage={product.data.avgRating}
+          fallbackCount={product.data.reviewCount}
+        />
+      </div>
+    </>
+  );
+}
+
+function ProductDetail({
+  product,
+  variants,
+}: {
+  product: AdminProduct;
+  variants: ProductVariant[];
+}) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const { add } = useCart();
+  const [size, setSize] = useState<string | null>(null);
+  const [color, setColor] = useState<string | null>(null);
+  const [quantity, setQuantity] = useState(1);
+  const [active, setActive] = useState(0);
+
+  const selectedColor = color ?? defaultColor(product, variants);
+  const maxQuantity = 20;
+
+  // `POST /products/{id}/view` — signed-in only, once per product page visit.
+  // Invalidate the rail afterwards so «بازدیدهای اخیر» is correct even when the
+  // visitor navigates away before the request settles.
+  useEffect(() => {
+    if (!user) return;
+    void api
+      .recordProductView(product.id)
+      .then(() => queryClient.invalidateQueries({ queryKey: ["recently-viewed"] }))
+      .catch(() => {});
+  }, [user, product.id, queryClient]);
+
+  const combo = size ? variantStockFor(product, variants, size, selectedColor) : null;
+  const availability = product.availability ?? "in_stock";
+  const comingSoon = availability === "coming_soon";
+  const preorder = availability === "preorder";
+  const availableAt = formatFaDate(product.availableAt);
+  const badge = product.badge ?? (product.isNew ? "new" : null);
+  const discount =
+    product.oldPrice && product.oldPrice > product.price
+      ? Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100)
+      : null;
+
+  const purchasable = !comingSoon && !preorder && Boolean(combo) && !combo?.soldOut;
+  const stockForMax = combo && combo.available ? combo.stock : product.stock;
+  const quantityCeiling = Math.max(1, Math.min(maxQuantity, stockForMax || 1));
 
   const handleAdd = () => {
+    if (comingSoon || preorder) return;
     if (!size) {
       toast.error("لطفاً سایز را انتخاب کنید");
+      return;
+    }
+    if (!combo || combo.soldOut) {
+      toast.error("این ترکیب سایز و رنگ موجود نیست");
       return;
     }
     add({ productId: product.id, size, color: selectedColor, quantity });
     toast.success("به سبد خرید اضافه شد");
   };
+
+  const addLabel = comingSoon
+    ? "به‌زودی"
+    : preorder
+      ? "پیش‌خرید"
+      : !size
+        ? "انتخاب سایز"
+        : !purchasable
+          ? "ناموجود"
+          : "افزودن به سبد خرید";
+
+  const stockMessage = comingSoon
+    ? availableAt
+      ? `این محصول از ${availableAt} عرضه می‌شود.`
+      : "این محصول به‌زودی عرضه می‌شود."
+    : preorder
+      ? availableAt
+        ? `پیش‌خرید تا ${availableAt}؛ پس از عرضه ارسال می‌شود.`
+        : "این محصول پیش‌فروش است."
+      : combo && combo.stock <= product.lowStockThreshold && !combo.soldOut
+        ? `فقط ${toFa(combo.stock)} عدد در انبار`
+        : null;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
@@ -95,18 +200,14 @@ function ProductPage() {
           خانه
         </Link>
         <span className="mx-2">/</span>
-        <Link
-          to="/shop"
-          search={{ category: product.category }}
-          className="hover:text-foreground"
-        >
+        <Link to="/shop" search={{ category: product.category }} className="hover:text-foreground">
           {categoryTitle(product.category)}
         </Link>
       </nav>
 
       <div className="mt-6 grid gap-10 md:grid-cols-2">
         <div>
-          <div className="overflow-hidden bg-sand">
+          <div className="relative overflow-hidden bg-sand">
             <img
               src={product.images[active] ?? product.images[0]}
               alt={product.name}
@@ -114,22 +215,29 @@ function ProductPage() {
               height={1100}
               className="h-auto w-full object-cover"
             />
+            {badge && (
+              <span className="surface-warm absolute top-3 right-3 rounded-full px-3 py-1 text-[10px] tracking-[0.2em]">
+                {BADGE_LABELS[badge]}
+              </span>
+            )}
           </div>
-          <div className="mt-3 flex gap-3">
-            {product.images.map((image, index) => (
-              <button
-                key={index}
-                type="button"
-                onClick={() => setActive(index)}
-                className={`w-20 overflow-hidden border ${
-                  active === index ? "border-foreground" : "border-transparent"
-                }`}
-                aria-label={`تصویر ${toFa(index + 1)}`}
-              >
-                <img src={image} alt="" loading="lazy" className="h-24 w-full object-cover" />
-              </button>
-            ))}
-          </div>
+          {product.images.length > 1 && (
+            <div className="mt-3 flex gap-3">
+              {product.images.map((image, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => setActive(index)}
+                  className={`w-20 overflow-hidden border ${
+                    active === index ? "border-foreground" : "border-transparent"
+                  }`}
+                  aria-label={`تصویر ${toFa(index + 1)}`}
+                >
+                  <img src={image} alt="" loading="lazy" className="h-24 w-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div>
@@ -137,6 +245,24 @@ function ProductPage() {
             {categoryTitle(product.category)}
           </p>
           <h1 className="mt-2 text-3xl leading-tight">{product.name}</h1>
+
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
+            {product.avgRating != null && product.reviewCount > 0 && (
+              <span className="text-gold">
+                ★ {toFa(product.avgRating.toFixed(1))}
+                <span className="text-muted-foreground"> ({toFa(product.reviewCount)} نظر)</span>
+              </span>
+            )}
+            {(comingSoon || preorder) && (
+              <span className="rounded-full bg-sage/25 px-3 py-1 text-sage-deep">
+                {comingSoon ? "به‌زودی" : "پیش‌خرید"}
+              </span>
+            )}
+            {!comingSoon && !preorder && product.stock <= 0 && (
+              <span className="rounded-full bg-clay px-3 py-1 text-muted-foreground">ناموجود</span>
+            )}
+          </div>
+
           <p className="mt-4 flex items-baseline gap-3">
             <span className="text-xl">{formatToman(product.price)} تومان</span>
             {product.oldPrice && (
@@ -144,48 +270,41 @@ function ProductPage() {
                 {formatToman(product.oldPrice)}
               </span>
             )}
+            {discount != null && (
+              <span className="rounded-full bg-terracotta/10 px-2 py-0.5 text-xs text-terracotta">
+                ٪{toFa(discount)} تخفیف
+              </span>
+            )}
           </p>
           <p className="mt-5 text-sm leading-7 text-muted-foreground">{product.description}</p>
 
-          <div className="mt-8">
-          <p className="mb-3 text-xs tracking-[0.2em] text-muted-foreground">
-              رنگ: {selectedColor}
-            </p>
-            <div className="flex gap-3">
-              {product.colors.map((c) => (
-                <button
-                  key={c.name}
-                  type="button"
-                  onClick={() => setColor(c.name)}
-                  aria-label={c.name}
-                  className={`size-8 rounded-full border border-border ${
-                    selectedColor === c.name ? "ring-1 ring-foreground ring-offset-2" : ""
-                  }`}
-                  style={{ backgroundColor: c.hex }}
-                />
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-8">
-            <p className="mb-3 text-xs tracking-[0.2em] text-muted-foreground">سایز</p>
-            <div className="flex flex-wrap gap-2">
-              {product.sizes.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setSize(s)}
-                  className={`border px-4 py-2 text-sm transition-colors ${
-                    size === s
-                      ? "border-foreground bg-foreground text-background"
-                      : "border-border hover:border-foreground"
-                  }`}
+          {product.tags.length > 0 && (
+            <div className="mt-5 flex flex-wrap gap-2">
+              {product.tags.map((tag) => (
+                <Link
+                  key={tag}
+                  to="/shop"
+                  search={{ q: tag }}
+                  className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-terracotta hover:text-terracotta"
                 >
-                  {toFa(s)}
-                </button>
+                  #{tag}
+                </Link>
               ))}
             </div>
-          </div>
+          )}
+
+          <VariantPicker
+            product={product}
+            variants={variants}
+            size={size}
+            color={selectedColor}
+            onSize={setSize}
+            onColor={(next) => {
+              setColor(next);
+              // keep the chosen size only if it is still purchasable in the new colour
+              if (size && variantStockFor(product, variants, size, next).soldOut) setSize(null);
+            }}
+          />
 
           <div className="mt-8 flex items-center gap-4">
             <div className="flex items-center border border-border">
@@ -200,17 +319,32 @@ function ProductPage() {
               <span className="w-10 text-center text-sm">{toFa(quantity)}</span>
               <button
                 type="button"
-                onClick={() => setQuantity((q) => Math.min(20, q + 1))}
+                onClick={() => setQuantity((q) => Math.min(quantityCeiling, q + 1))}
                 aria-label="افزایش تعداد"
                 className="p-2.5"
               >
                 <Plus className="size-4" />
               </button>
             </div>
-            <Button onClick={handleAdd} className="h-11 flex-1 rounded-none text-sm">
-              افزودن به سبد خرید
+            <Button
+              onClick={handleAdd}
+              disabled={!purchasable}
+              className="h-11 flex-1 rounded-none text-sm"
+            >
+              {addLabel}
             </Button>
           </div>
+
+          {stockMessage && (
+            <p
+              className={cn(
+                "mt-3 text-xs",
+                comingSoon || preorder ? "text-sage-deep" : "text-terracotta",
+              )}
+            >
+              {stockMessage}
+            </p>
+          )}
 
           <div className="mt-6 space-y-2 text-xs text-muted-foreground">
             <p className="flex items-center gap-2">
@@ -225,8 +359,7 @@ function ProductPage() {
             <AccordionItem value="material">
               <AccordionTrigger className="text-sm">جنس و مراقبت</AccordionTrigger>
               <AccordionContent className="text-sm leading-7 text-muted-foreground">
-                {product.material}. شست‌وشو با آب سرد، خشک کردن در سایه و اتوی ملایم توصیه
-                می‌شود.
+                {product.material}. شست‌وشو با آب سرد، خشک کردن در سایه و اتوی ملایم توصیه می‌شود.
               </AccordionContent>
             </AccordionItem>
             <AccordionItem value="size">
@@ -240,24 +373,13 @@ function ProductPage() {
             <AccordionItem value="ship">
               <AccordionTrigger className="text-sm">ارسال و مرجوعی</AccordionTrigger>
               <AccordionContent className="text-sm leading-7 text-muted-foreground">
-                ارسال به تهران ۲۴ ساعت کاری و به سایر شهرها ۲ تا ۴ روز کاری. تعویض سایز تا ۷
-                روز پس از تحویل امکان‌پذیر است.
+                ارسال به تهران ۲۴ ساعت کاری و به سایر شهرها ۲ تا ۴ روز کاری. تعویض سایز تا ۷ روز پس
+                از تحویل امکان‌پذیر است.
               </AccordionContent>
             </AccordionItem>
           </Accordion>
         </div>
       </div>
-
-      {related.length > 0 && (
-        <section className="mt-20">
-          <h2 className="text-2xl">محصولات مرتبط</h2>
-          <div className="mt-6 grid grid-cols-2 gap-x-5 gap-y-10 lg:grid-cols-3">
-            {related.map((p) => (
-              <ProductCard key={p.id} product={p} />
-            ))}
-          </div>
-        </section>
-      )}
     </div>
   );
 }

@@ -69,8 +69,9 @@ new session can pick up exactly where this one stopped. Legend: `[ ]` todo ·
 
 ### F1 still open (nice-to-have / blocked)
 
-- [ ] **F1.5 Search bar** — header search opens `GET /search` results (dropdown or
-  `/shop?q=`), wired in `SiteHeader.tsx` + `shop.tsx` query param
+- [x] **F1.5 Search bar** — header search opens `GET /search` results (dropdown or
+  `/shop?q=`), wired in `SiteHeader.tsx` + `shop.tsx` query param. Done as F3.1.
+  → audit: [2026-09-20-frontend-f31-search.md](audit/2026-09-20-frontend-f31-search.md)
 - [ ] **F1.6 Live stock in product page & cart** — use `POST /stock/check` on
   add-to-cart; show "only N left" when stock ≤ 3; disable add when 0
 - [ ] **F1.7 Stock decrement shown to admin** — admin products page reflects real stock after backend-decremented orders
@@ -132,40 +133,76 @@ needs new backend work except where explicitly noted.
   `useCatalog()` consumers can read them.
   → audit: [2026-09-20-frontend-catalog-type-bridge.md](audit/2026-09-20-frontend-catalog-type-bridge.md)
 
-### F3.1 Search
+### F3.1 Search — DONE
 
-- [ ] Header search box in `SiteHeader.tsx` (search icon exists, no behaviour yet)
+→ audit: [2026-09-20-frontend-f31-search.md](audit/2026-09-20-frontend-f31-search.md)
+
+- [x] Header search box in `SiteHeader.tsx` (search icon exists, no behaviour yet)
   with a debounced `GET /search/suggest` dropdown
-  (products / categories / tags / recent queries)
-- [ ] Search history: show recent searches in the dropdown, clear-all and
-  per-entry delete
-- [ ] `shop.tsx` accepts `?q=` and calls `GET /search`; result count + empty state
+  (products / categories / tags / recent queries) — new `HeaderSearch.tsx`,
+  images signed via `resolveImageMap`, ArrowUp/Down + Enter navigation
+- [x] Search history: show recent searches in the dropdown, clear-all and
+  per-entry delete (signed-in only, `sonner` error toasts)
+- [x] `shop.tsx` accepts `?q=` and calls `GET /search`; result count + empty state
+  (loading/error/empty states; `CatalogPage` split out so a search never fetches
+  the whole catalog)
+- [x] **F3.1b Tags in `/search`** — the backend matcher now covers `tags` too
+  (`tag_hit` ranking: name > category > tag > description/material) and the
+  starter catalog is tagged, so tag suggestions return products.
+  → audit: [2026-09-20-backend-search-tags.md](audit/2026-09-20-backend-search-tags.md)
 
-### F3.2 Product page (`product.$id.tsx`)
+### F3.2 Product page (`product.$id.tsx`) — DONE
 
-- [ ] Variant picker from `GET /products/{id}/variants` — disable unavailable
+→ audit: [2026-09-20-frontend-f32-product-page.md](audit/2026-09-20-frontend-f32-product-page.md)
+
+- [x] Variant picker from `GET /products/{id}/variants` — disable unavailable
   size×color combos, show per-combination stock ("N left"), block add-to-cart at 0
-- [ ] Reviews section: stars summary, rating distribution, list, and a write/edit
+  (`components/product/VariantPicker.tsx` + `lib/variants.ts` mirroring the
+  backend rule)
+- [x] Reviews section: stars summary, rating distribution, list, and a write/edit
   review form (`GET/POST /products/{id}/reviews`)
-- [ ] Related products carousel (`GET /products/{id}/related`)
-- [ ] Recommended products carousel (`GET /products/{id}/recommendations`)
-- [ ] Record a view on mount (`POST /products/{id}/view`)
-- [ ] Availability states: badge + `coming_soon`/`preorder` with `available_at`;
+  (`components/product/ReviewsSection.tsx`, incl. delete-own-review and seller replies)
+- [x] Related products carousel (`GET /products/{id}/related`)
+- [x] Recommended products carousel (`GET /products/{id}/recommendations`)
+  (both via `components/product/ProductRail.tsx`, RTL embla rail)
+- [x] Record a view on mount (`POST /products/{id}/view`)
+- [x] Availability states: badge + `coming_soon`/`preorder` with `available_at`;
   disable add-to-cart / show "به‌زودی"
-- [ ] Show `tags` and `badge` (special offer / new)
+- [x] Show `tags` and `badge` (special offer / new)
+- [x] Single-product fetch → the page now uses `GET /products/{id}` instead of
+  reading the whole catalog (`useCatalog().byId`)
+- [ ] **F3.2b Availability is UI-only** — `checkout` / `stock/check` ignore
+  `coming_soon`/`preorder`, so the API still accepts an order for an unreleased
+  product. Backend work → `backend-tasks.md` **B4.11**
 
-### F3.3 Catalog listing / shop (`shop.tsx`, `ProductCard.tsx`)
+### F3.3 Catalog listing / shop (`shop.tsx`, `ProductCard.tsx`) — DONE
 
-- [ ] Move filtering + sorting to the server via the new `api.products()` params
-  (replaces the client-side `useMemo` filter)
-- [ ] Add filter chips for availability, tag, badge and on-sale
-- [ ] Rating display on `ProductCard` (`avg_rating` / `review_count`)
-- [ ] Compare: add-to-compare toggle + `/compare` page using
-  `GET /products/compare?ids=`
+→ audit: [2026-09-20-frontend-f33-shop-filters-compare.md](audit/2026-09-20-frontend-f33-shop-filters-compare.md)
 
-### F3.4 Recently viewed
+- [x] Move filtering + sorting to the server via the new `api.products()` params
+  (replaces the client-side `useMemo` filter) — the URL (`validateSearch`) is the
+  single source of truth; sort options now new/popular/rating/price_asc/price_desc
+- [x] Add filter chips for availability, tag, badge and on-sale
+  (tag chips come from the cached catalog — no tag-facet endpoint yet)
+- [x] Rating display on `ProductCard` (`avg_rating` / `review_count`)
+- [x] Compare: add-to-compare toggle + `/compare` page using
+  `GET /products/compare?ids=` (`lib/compare.tsx` + `CompareBar`, localStorage,
+  cap 4; new route added to `routeTree.gen.ts`)
+- [x] **F3.3b card structure** — `ProductCard` root became a wrapper div so the
+  compare toggle is not a `<button>` inside the product `<a>`
+- [ ] **F3.3c multi-select size/color** — blocked on the backend accepting more
+  than one value per param (`backend-tasks.md` **B4.12**)
 
-- [ ] "بازدیدهای اخیر" rail on home/shop (`GET /recently-viewed`)
+### F3.4 Recently viewed — DONE
+
+→ audit: [2026-09-20-frontend-f34-recently-viewed.md](audit/2026-09-20-frontend-f34-recently-viewed.md)
+
+- [x] "بازدیدهای اخیر" rail on home/shop (`GET /recently-viewed`) — new
+  `components/product/RecentlyViewedRail.tsx` reusing `ProductRail`; renders only
+  for signed-in customers with a non-empty list
+- [ ] **F3.4b Guest recently-viewed** — the endpoint needs auth, so signed-out
+  browsing is not remembered; decide whether a localStorage rail should merge
+  with the account list after sign-in (`GET /recently-viewed` has no DELETE either)
 
 ### F3.5 Cart (`cart.tsx`)
 
@@ -184,7 +221,8 @@ needs new backend work except where explicitly noted.
 
 ### F3.7 Supersedes open F1/F2 items
 
-- [ ] F1.5 search bar → covered by F3.1
+- [x] F1.5 search bar → covered by F3.1
+  → audit: same file as F3.1
 - [ ] F1.6 live stock in product page & cart → covered by F3.2/F3.5
 - [ ] F2.2 reviews & ratings → schema + API now exist; UI is F3.2
 

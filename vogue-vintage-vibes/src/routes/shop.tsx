@@ -1,19 +1,79 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import type { Availability, ProductBadge, ProductSort } from "@/lib/api";
+import { api } from "@/lib/api";
 import { ProductCard } from "@/components/ProductCard";
+import { RecentlyViewedRail } from "@/components/product/RecentlyViewedRail";
 import { categories, type CategoryId } from "@/data/products";
-import { useCatalog } from "@/lib/catalog";
+import { searchQuery, toProducts, useCatalog } from "@/lib/catalog";
 import { formatToman, toFa } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 
-type ShopSearch = { category?: CategoryId };
+const BADGES: ProductBadge[] = ["sale", "new", "exclusive"];
+const AVAILABILITIES: Availability[] = ["in_stock", "coming_soon", "preorder"];
+
+const BADGE_LABELS: Record<ProductBadge, string> = {
+  sale: "حراج",
+  new: "جدید",
+  exclusive: "ویژه",
+  coming_soon: "به‌زودی",
+  preorder: "پیش‌خرید",
+};
+
+const AVAILABILITY_LABELS: Record<Availability, string> = {
+  in_stock: "موجود",
+  coming_soon: "به‌زودی",
+  preorder: "پیش‌خرید",
+};
+
+const SORTS: { key: ProductSort; label: string }[] = [
+  { key: "new", label: "جدیدترین" },
+  { key: "popular", label: "محبوب‌ترین" },
+  { key: "rating", label: "بیشترین امتیاز" },
+  { key: "price_asc", label: "ارزان‌ترین" },
+  { key: "price_desc", label: "گران‌ترین" },
+];
+
+type ShopSearch = {
+  category?: CategoryId;
+  size?: string;
+  color?: string;
+  maxPrice?: number;
+  sort?: ProductSort;
+  tag?: string;
+  badge?: ProductBadge;
+  availability?: Availability;
+  onSale?: boolean;
+  q?: string;
+};
+
+const str = (value: unknown): string | undefined =>
+  typeof value === "string" && value.trim() ? value.trim() : undefined;
 
 export const Route = createFileRoute("/shop")({
   validateSearch: (search: Record<string, unknown>): ShopSearch => {
     const category = search["category"];
-    const valid = categories.some((c) => c.id === category);
-    return valid ? { category: category as CategoryId } : {};
+    const sort = str(search["sort"]);
+    const badge = str(search["badge"]);
+    const availability = str(search["availability"]);
+    const maxPrice = Number(search["maxPrice"]);
+    return {
+      ...(categories.some((c) => c.id === category) ? { category: category as CategoryId } : {}),
+      ...(str(search["size"]) ? { size: str(search["size"]) as string } : {}),
+      ...(str(search["color"]) ? { color: str(search["color"]) as string } : {}),
+      ...(Number.isFinite(maxPrice) && maxPrice > 0 ? { maxPrice } : {}),
+      ...(sort && SORTS.some((s) => s.key === sort) ? { sort: sort as ProductSort } : {}),
+      ...(str(search["tag"]) ? { tag: str(search["tag"]) as string } : {}),
+      ...(badge && BADGES.includes(badge as ProductBadge) ? { badge: badge as ProductBadge } : {}),
+      ...(availability && AVAILABILITIES.includes(availability as Availability)
+        ? { availability: availability as Availability }
+        : {}),
+      ...(search["onSale"] === true || search["onSale"] === "true" ? { onSale: true } : {}),
+      ...(str(search["q"]) ? { q: str(search["q"]) as string } : {}),
+    };
   },
   head: () => ({
     meta: [
@@ -21,7 +81,7 @@ export const Route = createFileRoute("/shop")({
       {
         name: "description",
         content:
-          "همه‌ی محصولات ساندِه: تی‌شرت، کراپ‌تاپ، شورت، جوراب و ست، با فیلتر سایز، رنگ و قیمت.",
+          "همه‌ی محصولات ساندِه: تی‌شرت، کراپ‌تاپ، شورت، جوراب و ست، با فیلتر سایز، رنگ، برچسب، موجودی و قیمت.",
       },
       { property: "og:title", content: "فروشگاه پوشاک زنانه — ساندِه" },
       {
@@ -33,55 +93,131 @@ export const Route = createFileRoute("/shop")({
   component: ShopPage,
 });
 
-type SortKey = "new" | "cheap" | "expensive";
-
 function ShopPage() {
-  const { category } = Route.useSearch();
-  const {
-    products,
-    allSizes,
-    allColors,
-    priceBounds,
-    isLoading,
-  } = useCatalog();
-  const [sizes, setSizes] = useState<string[]>([]);
-  const [colors, setColors] = useState<string[]>([]);
-  const [maxPrice, setMaxPrice] = useState<number | null>(null);
-  const [sort, setSort] = useState<SortKey>("new");
-  const priceCap = maxPrice ?? priceBounds.max;
+  const search = Route.useSearch();
+  if (search.q) return <SearchResults query={search.q} />;
+  return <CatalogPage search={search} />;
+}
 
-  const toggle = (value: string, list: string[], set: (v: string[]) => void) =>
-    set(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
+/** Server-side results for `GET /search` when the page is opened with `?q=`. */
+function SearchResults({ query }: { query: string }) {
+  const search = useQuery(searchQuery(query));
+  const products = search.data?.products ?? [];
 
-  const visible = useMemo(() => {
-    const filtered = products.filter((p) => {
-      if (category && p.category !== category) return false;
-      if (p.price > priceCap) return false;
-      if (sizes.length && !p.sizes.some((s) => sizes.includes(s))) return false;
-      if (colors.length && !p.colors.some((c) => colors.includes(c.name))) return false;
-      return true;
-    });
-    const sorted = [...filtered];
-    if (sort === "cheap") sorted.sort((a, b) => a.price - b.price);
-    if (sort === "expensive") sorted.sort((a, b) => b.price - a.price);
-    if (sort === "new") sorted.sort((a, b) => Number(!!b.isNew) - Number(!!a.isNew));
-    return sorted;
-  }, [products, category, priceCap, sizes, colors, sort]);
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
+      <h1 className="text-4xl">نتایج جستجو</h1>
+      <p className="mt-2 text-sm text-muted-foreground">
+        {search.isLoading
+          ? "در حال جستجو…"
+          : `${toFa(search.data?.total ?? 0)} نتیجه برای «${query}»`}
+      </p>
+
+      <div className="mt-4 border-b border-border pb-6">
+        <Link to="/shop" search={{}} className="text-sm text-terracotta hover:underline">
+          حذف جستجو و دیدن همه‌ی محصولات
+        </Link>
+      </div>
+
+      <div className="mt-10">
+        {search.isLoading ? (
+          <div className="grid grid-cols-2 gap-x-5 gap-y-10 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="aspect-[4/5] animate-pulse rounded-[1.25rem] bg-clay" />
+            ))}
+          </div>
+        ) : search.isError ? (
+          <div className="border border-dashed border-border p-12 text-center">
+            <p className="text-muted-foreground">جستجو انجام نشد. دوباره تلاش کنید.</p>
+          </div>
+        ) : products.length === 0 ? (
+          <div className="border border-dashed border-border p-12 text-center">
+            <p className="text-muted-foreground">نتیجه‌ای برای «{query}» پیدا نشد.</p>
+            <Button variant="outline" className="mt-4" asChild>
+              <Link to="/shop" search={{}}>
+                دیدن همه‌ی محصولات
+              </Link>
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-x-5 gap-y-10 lg:grid-cols-3">
+            {products.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** A patch where a key may be cleared with `undefined`. */
+type ShopSearchPatch = { [K in keyof ShopSearch]?: ShopSearch[K] | undefined };
+
+/** Removes empty values so links never carry `?size=undefined`. */
+function clean(next: ShopSearchPatch): ShopSearch {
+  return Object.fromEntries(
+    Object.entries(next).filter(
+      ([, value]) => value !== undefined && value !== false && value !== "",
+    ),
+  ) as ShopSearch;
+}
+
+function CatalogPage({ search }: { search: ShopSearch }) {
+  const navigate = useNavigate();
+  const { allSizes, allColors, priceBounds, all, isLoading: catalogLoading } = useCatalog();
+  const [maxPriceDraft, setMaxPriceDraft] = useState<number | null>(search.maxPrice ?? null);
+  const priceCap = search.maxPrice ?? priceBounds.max;
+
+  const filters = {
+    ...(search.category ? { category: search.category } : {}),
+    ...(search.size ? { size: search.size } : {}),
+    ...(search.color ? { color: search.color } : {}),
+    ...(search.maxPrice != null ? { max_price: search.maxPrice } : {}),
+    ...(search.tag ? { tag: search.tag } : {}),
+    ...(search.badge ? { badge: search.badge } : {}),
+    ...(search.availability ? { availability: search.availability } : {}),
+    ...(search.onSale ? { on_sale: true } : {}),
+    sort: search.sort ?? ("new" as ProductSort),
+  };
+
+  // Filtering, sorting and stock limits all happen in the backend.
+  const products = useQuery({
+    queryKey: ["products", filters],
+    queryFn: async () => toProducts(await api.products(filters)),
+  });
+  const visible = products.data ?? [];
+
+  const tags = Array.from(new Set(all.flatMap((product) => product.tags ?? []))).sort((a, b) =>
+    a.localeCompare(b, "fa"),
+  );
+  const hasFilters = Boolean(
+    search.category ||
+    search.size ||
+    search.color ||
+    search.maxPrice != null ||
+    search.tag ||
+    search.badge ||
+    search.availability ||
+    search.onSale,
+  );
+
+  const chipBase = "rounded-full border px-3 py-1 text-xs transition-colors";
+  const chipOn = "border-primary bg-primary text-primary-foreground";
+  const chipOff = "border-border text-muted-foreground hover:text-foreground";
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
       <h1 className="text-4xl">فروشگاه</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        {isLoading ? "در حال بارگذاری…" : `${toFa(visible.length)} محصول در دسترس`}
+        {products.isLoading ? "در حال بارگذاری…" : `${toFa(visible.length)} محصول در دسترس`}
       </p>
 
       <div className="mt-8 flex flex-wrap items-center gap-2 border-b border-border pb-6">
         <Link
           to="/shop"
-          search={{}}
-          className={`rounded-full border px-4 py-1.5 text-sm transition-colors ${
-            category ? "border-border text-muted-foreground" : "border-primary bg-primary text-primary-foreground"
-          }`}
+          search={clean({ ...search, category: undefined })}
+          className={cn(chipBase, search.category ? chipOff : chipOn)}
         >
           همه
         </Link>
@@ -89,12 +225,8 @@ function ShopPage() {
           <Link
             key={c.id}
             to="/shop"
-            search={{ category: c.id }}
-            className={`rounded-full border px-4 py-1.5 text-sm transition-colors ${
-              category === c.id
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border text-muted-foreground hover:text-foreground"
-            }`}
+            search={clean({ ...search, category: c.id })}
+            className={cn(chipBase, search.category === c.id ? chipOn : chipOff)}
           >
             {c.title}
           </Link>
@@ -104,21 +236,45 @@ function ShopPage() {
       <div className="mt-10 grid gap-10 md:grid-cols-[220px_1fr]">
         <aside className="space-y-8">
           <div>
+            <p className="mb-3 text-xs tracking-[0.2em] text-muted-foreground">وضعیت</p>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                to="/shop"
+                search={clean({ ...search, availability: undefined })}
+                className={cn(chipBase, search.availability ? chipOff : chipOn)}
+              >
+                همه
+              </Link>
+              {AVAILABILITIES.map((value) => (
+                <Link
+                  key={value}
+                  to="/shop"
+                  search={clean({ ...search, availability: value })}
+                  className={cn(chipBase, search.availability === value ? chipOn : chipOff)}
+                >
+                  {AVAILABILITY_LABELS[value]}
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          <div>
             <p className="mb-3 text-xs tracking-[0.2em] text-muted-foreground">سایز</p>
             <div className="flex flex-wrap gap-2">
               {allSizes.map((size) => (
-                <button
+                <Link
                   key={size}
-                  type="button"
-                  onClick={() => toggle(size, sizes, setSizes)}
-                  className={`border px-3 py-1 text-xs transition-colors ${
-                    sizes.includes(size)
+                  to="/shop"
+                  search={clean({ ...search, size: search.size === size ? undefined : size })}
+                  className={cn(
+                    "border px-3 py-1 text-xs transition-colors",
+                    search.size === size
                       ? "border-foreground bg-foreground text-background"
-                      : "border-border text-muted-foreground hover:text-foreground"
-                  }`}
+                      : "border-border text-muted-foreground hover:text-foreground",
+                  )}
                 >
                   {toFa(size)}
-                </button>
+                </Link>
               ))}
             </div>
           </div>
@@ -126,28 +282,28 @@ function ShopPage() {
           <div>
             <p className="mb-3 text-xs tracking-[0.2em] text-muted-foreground">رنگ</p>
             <div className="space-y-2">
-              {allColors.map((color) => (
-                <button
-                  key={color.name}
-                  type="button"
-                  onClick={() => toggle(color.name, colors, setColors)}
-                  className="flex w-full items-center gap-3 text-sm"
-                >
-                  <span
-                    className={`size-4 rounded-full border ${
-                      colors.includes(color.name) ? "ring-1 ring-foreground ring-offset-2" : ""
-                    }`}
-                    style={{ backgroundColor: color.hex }}
-                  />
-                  <span
-                    className={
-                      colors.includes(color.name) ? "text-foreground" : "text-muted-foreground"
-                    }
+              {allColors.map((color) => {
+                const active = search.color === color.name;
+                return (
+                  <Link
+                    key={color.name}
+                    to="/shop"
+                    search={clean({ ...search, color: active ? undefined : color.name })}
+                    className="flex w-full items-center gap-3 text-sm"
                   >
-                    {color.name}
-                  </span>
-                </button>
-              ))}
+                    <span
+                      className={cn(
+                        "size-4 rounded-full border",
+                        active ? "ring-1 ring-foreground ring-offset-2" : "",
+                      )}
+                      style={{ backgroundColor: color.hex }}
+                    />
+                    <span className={active ? "text-foreground" : "text-muted-foreground"}>
+                      {color.name}
+                    </span>
+                  </Link>
+                );
+              })}
             </div>
           </div>
 
@@ -158,57 +314,122 @@ function ShopPage() {
               min={priceBounds.min}
               max={priceBounds.max}
               step={10000}
-              value={[priceCap]}
-              onValueChange={(v) => setMaxPrice(v[0] ?? priceBounds.max)}
+              value={[maxPriceDraft ?? priceCap]}
+              onValueChange={(value) => setMaxPriceDraft(value[0] ?? priceBounds.max)}
+              onValueCommit={(value) => {
+                // the cap is applied to the server query once the handle is released
+                const next = value[0] ?? priceBounds.max;
+                setMaxPriceDraft(next);
+                void navigate({
+                  to: "/shop",
+                  search: clean({
+                    ...search,
+                    maxPrice: next >= priceBounds.max ? undefined : next,
+                  }),
+                });
+              }}
             />
-            <p className="mt-3 text-sm">{formatToman(priceCap)} تومان</p>
+            <p className="mt-3 text-sm">{formatToman(maxPriceDraft ?? priceCap)} تومان</p>
+            {search.maxPrice != null && (
+              <Link
+                to="/shop"
+                search={clean({ ...search, maxPrice: undefined })}
+                className="mt-2 inline-block text-xs text-muted-foreground hover:text-foreground"
+              >
+                حذف سقف قیمت
+              </Link>
+            )}
+          </div>
+
+          <div>
+            <p className="mb-3 text-xs tracking-[0.2em] text-muted-foreground">برچسب‌ها</p>
+            <div className="flex flex-wrap gap-2">
+              {tags.map((tag) => (
+                <Link
+                  key={tag}
+                  to="/shop"
+                  search={clean({ ...search, tag: search.tag === tag ? undefined : tag })}
+                  className={cn(chipBase, search.tag === tag ? chipOn : chipOff)}
+                >
+                  {tag}
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-3 text-xs tracking-[0.2em] text-muted-foreground">ویژه</p>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                to="/shop"
+                search={clean({
+                  ...search,
+                  onSale: search.onSale ? undefined : true,
+                })}
+                className={cn(chipBase, search.onSale ? chipOn : chipOff)}
+              >
+                فقط تخفیف‌دار
+              </Link>
+              {BADGES.map((value) => (
+                <Link
+                  key={value}
+                  to="/shop"
+                  search={clean({ ...search, badge: search.badge === value ? undefined : value })}
+                  className={cn(chipBase, search.badge === value ? chipOn : chipOff)}
+                >
+                  {BADGE_LABELS[value]}
+                </Link>
+              ))}
+            </div>
           </div>
 
           <div>
             <p className="mb-3 text-xs tracking-[0.2em] text-muted-foreground">مرتب‌سازی</p>
             <div className="flex flex-col items-start gap-2 text-sm">
-              {(
-                [
-                  ["new", "جدیدترین"],
-                  ["cheap", "ارزان‌ترین"],
-                  ["expensive", "گران‌ترین"],
-                ] as const
-              ).map(([key, label]) => (
-                <button
+              {SORTS.map(({ key, label }) => (
+                <Link
                   key={key}
-                  type="button"
-                  onClick={() => setSort(key)}
-                  className={
-                    sort === key ? "text-foreground underline" : "text-muted-foreground"
-                  }
+                  to="/shop"
+                  search={clean({ ...search, sort: key })}
+                  className={cn(
+                    search.sort === key || (!search.sort && key === "new")
+                      ? "text-foreground underline"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
                 >
                   {label}
-                </button>
+                </Link>
               ))}
             </div>
           </div>
+
+          {hasFilters && (
+            <Button variant="outline" className="w-full rounded-none" asChild>
+              <Link to="/shop" search={{}}>
+                حذف فیلترها
+              </Link>
+            </Button>
+          )}
         </aside>
 
         <div>
-          {isLoading ? (
+          {products.isLoading || catalogLoading ? (
             <div className="grid grid-cols-2 gap-x-5 gap-y-10 lg:grid-cols-3">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="aspect-[4/5] animate-pulse rounded-[1.25rem] bg-clay" />
               ))}
             </div>
+          ) : products.isError ? (
+            <div className="border border-dashed border-border p-12 text-center">
+              <p className="text-muted-foreground">خواندن محصولات انجام نشد. دوباره تلاش کنید.</p>
+            </div>
           ) : visible.length === 0 ? (
             <div className="border border-dashed border-border p-12 text-center">
               <p className="text-muted-foreground">محصولی با این فیلترها پیدا نشد.</p>
-              <Button
-                variant="outline"
-                className="mt-4"
-                onClick={() => {
-                  setSizes([]);
-                  setColors([]);
-                  setMaxPrice(null);
-                }}
-              >
-                حذف فیلترها
+              <Button variant="outline" className="mt-4" asChild>
+                <Link to="/shop" search={{}}>
+                  حذف فیلترها
+                </Link>
               </Button>
             </div>
           ) : (
@@ -220,6 +441,8 @@ function ShopPage() {
           )}
         </div>
       </div>
+
+      <RecentlyViewedRail />
     </div>
   );
 }

@@ -426,3 +426,225 @@ markdown docs, and codify a rule to do so after every task.
   always built by `toProduct()` from a real API row).
 - **Not done:** the unused static seed exports in `data/products.ts` remain dead
   code — separate cleanup.
+
+## Session 10 — 2026-09-20
+
+**Scope (user request):** check the frontend task list, confirm the backend APIs
+are ready, read the design system, then start implementing.
+
+### ✅ What was done
+
+1. **Readiness check:** every F3 endpoint the frontend needs exists in
+   `backend/app/routers/` (`/search`, `/search/suggest`, `/search/history` GET+
+   DELETE, product detail/related/recommendations/compare/variants/reviews,
+   `POST /products/{id}/view`, `/recently-viewed`, `/admin/inventory[/low-stock]`,
+   `/admin/reviews`, `PATCH /reviews/{id}`, variant CRUD) and the F3.0 client
+   already wrapped them. F3.1 is the first open item → implemented it.
+2. **DESIGN_SYSTEM.md re-read before writing UI** — Persian/RTL copy, `@/`
+   imports, `cn()`, brand tokens (`bg-sand`, `text-terracotta`, `bg-clay`
+   skeletons), `toFa`, TanStack Query, `sonner`, existing `ui/*` primitives
+   (`Popover`, `Input`).
+3. **F3.1 Search implemented:**
+   - new `src/components/HeaderSearch.tsx` — popover search with a 250 ms debounce
+     on `GET /search/suggest`, product thumbnails signed via the new
+     `resolveImageMap()`, category/tag/query/product kinds, plus a raw
+     «جستجوی …» row; ArrowUp/ArrowDown + Enter keyboard flow.
+   - search history for signed-in customers: recent queries in the dropdown,
+     per-entry ✕ delete and «پاک کردن همه», each a `useMutation` that invalidates
+     `["search", "history"]` and toasts on failure; signed-out visitors get a
+     sign-in hint instead.
+   - `shop.tsx` now parses `?q=` and renders a new `SearchResults` view (count,
+     loading, error and empty states); the previous filter/sort page became
+     `CatalogPage` and is untouched.
+   - data layer: `searchQuery(q)` in `@/lib/catalog` maps `GET /search` hits to
+     the local `Product` shape; `SearchHit`/`SearchResult` are now exported from
+     `@/lib/api`.
+4. **Verified:** `tsc --noEmit` 0 errors; eslint clean on the touched files;
+   headless Chrome (DevTools pipe) against the live stack — dropdown opens and
+   renders suggestions, ArrowDown+Enter lands on `/shop?q=شورت` with «۸ نتیجه»,
+   `?q=zzzzqq` shows «۰ نتیجه» + empty state, plain `/shop` keeps its filters,
+   and the signed-in history lists/deletes/clears correctly.
+   Audit: `plan/audit/2026-09-20-frontend-f31-search.md`.
+
+### ❌ What was NOT done
+
+- F3.2–F3.6 (product page variants/reviews/carousels, server-side filters, admin
+  screens) are untouched.
+- Search results are not SSR-prefetched and have no filter sidebar (F3.3).
+- `GET /search` does not match `tags`; logged as new **F3.1b** in
+  `frontend-tasks.md`.
+- `vite build` could not run in this environment (no `bun`; local Node 20.9 lacks
+  `util.styleText`) — typecheck + live browser run used instead.
+
+### Decisions
+
+- **Search lives in `/shop?q=`** (no new route) so result URLs stay shareable and
+  the route tree/`routeTree.gen.ts` needs no regeneration.
+- `ShopPage` **dispatches** between `SearchResults` and `CatalogPage` instead of
+  adding a branch to the existing body, so a search never fetches the full
+  catalog.
+- Suggestions navigate by kind: product → product page, known category →
+  `?category=`, everything else → `?q=` (tags included, pending F3.1b).
+- Did not reformat the 4 pre-existing prettier violations in `shop.tsx` to keep
+  the diff minimal.
+
+### Addendum — F3.1b backend tag search
+
+- **Done:** `GET /search` now matches the `tags` array (`EXISTS … unnest(tags)`)
+  and ranks it name > category > tag > description/material. Investigating showed
+  the deeper problem: **no seeded product had any tags** (0/20), so tag
+  suggestions could never fire and `?tag=` filtering was a no-op on the starter
+  catalog. `app/seed_products.py` now tags all 20 products (material / fit /
+  season vocabulary) and backfills tags **only on rows with none**, so an admin's
+  own tags survive a re-run. `tests/api_smoke.py` gained a `check()` helper plus
+  two assertions (tag query returns hits; suggest returns a `tag` kind).
+  Audit: `plan/audit/2026-09-20-backend-search-tags.md`.
+- **Verified:** `pytest -q` 25 passed, `ruff check app tests` clean,
+  `tests/api_smoke.py` **63 routes/checks, 0 failed**; live `GET /search?q=زمستانی`
+  now returns the one tagged product (it returned 0 before) and the browser shows
+  «۳ نتیجه برای «کتان»» on `/shop?q=کتان`.
+- **DB write (user-approved):** ran `python -m app.seed_products` inside the
+  running backend container to backfill tags — idempotent, dev stack only.
+- **Decision:** no tag-search unit test. `search_products` is pure SQL and the
+  repo still has no pytest DB fixture (open under B3.5), so the live smoke checks
+  carry it rather than a brittle string assertion on the SQL.
+- **Not done:** tag filter chips / tag facets in the shop UI remain F3.3;
+  `infra/initdb/02-public-schema.sql` intentionally untouched (the `db-init`
+  seed step backfills tags on a fresh database in the same `compose up`).
+
+## Session 11 — 2026-09-20
+
+**Scope (user request):** build the **F3.2** product page — variant picker,
+reviews section, related/recommended carousels.
+
+### ✅ What was done
+
+1. **New data layer:** `src/lib/variants.ts` (`comboStock` / `variantStockFor` /
+   `defaultColor`) mirrors the backend's `app/services/variants.py` so the UI can
+   never offer a combination checkout would reject; `@/lib/catalog` gained
+   `productQuery`, `variantsQuery`, `reviewsQuery`, `relatedQuery`,
+   `recommendationsQuery` and `toProducts()`.
+2. **`components/product/VariantPicker.tsx`** — colour swatches + size buttons
+   with per-combination availability, disabled sold-out/deactivated combos,
+   disabled colours, and an `aria-live` stock line («فقط N عدد باقی مانده»).
+3. **`components/product/ReviewsSection.tsx`** — average + 1–5 distribution,
+   published list with seller replies and Jalali dates, star-input write/edit
+   form (`POST` upserts), delete-own-review, guest sign-in link.
+4. **`components/product/ProductRail.tsx`** — RTL embla rail with header arrows
+   for related + recommended products.
+5. **`product.$id.tsx` rewritten** — single-product fetch (`GET /products/{id}`),
+   badge/discount/tags, availability states (`coming_soon`/`preorder` +
+   `available_at` with a Persian date), quantity capped by the selected combo,
+   view tracking, and an inactive-product 404 view.
+6. **`formatFaDate()`** added to `@/lib/format` (Jalali dates, Persian digits).
+7. **Verified:** `tsc` + eslint clean; headless Chrome (DevTools pipe) against
+   the live stack for the product-level paths, and — with user approval —
+   **temporary demo data (8 variants + two availability flips) created through
+   the admin API, used to verify every combination/availability state, then fully
+   reverted** (20 products back to `in_stock`, 0 variants).
+   Audit: `plan/audit/2026-09-20-frontend-f32-product-page.md`.
+
+### ❌ What was NOT done
+
+- Cart/stock re-check on open remains F3.3/F3.5; `ProductCard` still shows no
+  rating (F3.3).
+- Product page is not SSR-prefetched.
+- F3.4 (recently-viewed rail) and F3.6 (admin variants/inventory/reviews
+  screens) untouched.
+
+### Decisions
+
+- **Variant selection defaults to the first colour that has stock** (pure
+  function of product + variants, no effect) instead of blindly taking
+  `colors[0]`.
+- **Availability blocks ordering in the UI only** — `checkout`/`stock/check`
+  ignore it, so this was logged as backend **B4.11** rather than faked in the UI.
+- **Inactive products are no longer reachable on the storefront URL** (the page
+  fetches by id and guards `active`), which is a small behaviour change from the
+  catalog-cache based page.
+- Demo data for verification was **created and reverted** (user-chosen option)
+  so the dev DB keeps no throwaway rows.
+
+## Session 12 — 2026-09-20
+
+**Scope (user request):** **F3.3** — move shop filtering/sorting to the server
+with availability/tag/badge/on-sale chips, ratings on cards, and compare.
+
+### ✅ What was done
+
+1. **`shop.tsx` is now URL-driven and server-filtered.** `validateSearch` parses
+   and sanitises `category, size, color, maxPrice, sort, tag, badge, availability,
+   onSale, q`; every chip is a `<Link>` so filters are shareable and survive a
+   reload. The client-side `useMemo` filter over `useCatalog()` is gone — the list
+   comes from `GET /products` (`toProducts()`), while `useCatalog()` still feeds
+   the facet lists (sizes/colours/price bounds/tags). Price slider commits on
+   release.
+2. **`ProductCard`** shows `avg_rating` + `review_count` and gained a compare
+   toggle; its root is now a wrapper `<div>` so the toggle is not a `<button>`
+   nested inside the product `<a>`.
+3. **Compare:** new `lib/compare.tsx` (localStorage `sandeh-compare-v1`, cap 4,
+   `toggle()` returning added/removed/full), a sticky `CompareBar` rendered from
+   `__root.tsx`, and a new `/compare` route (table via `ui/table`, `noindex`, per
+   column remove, empty/error states). A footer link makes it discoverable.
+4. **Verified:** `tsc` clean; eslint 0 errors on every touched file; headless
+   Chrome (DevTools pipe) — tag/size/availability chips change the URL and the
+   server result count (کتان ۳، پنبه ۸، پنبه+M ۵، به‌زودی ۰ + empty state), clear
+   restores ۲۰, `?sort=rating` works, card ratings show «۵.۰ (۱ نظر)», compare
+   toggles persist to localStorage, the bar appears, and `/compare` renders the
+   comparison table with real values; remove/clear paths verified.
+   Audit: `plan/audit/2026-09-20-frontend-f33-shop-filters-compare.md`.
+
+### ❌ What was NOT done
+
+- Multi-select size/colour (backend takes one value each) → **B4.12**.
+- Tag chips are derived from the full cached catalog, not a facet endpoint.
+- `?q=` search results still have no sidebar; no pagination; compare page shows
+  product-level availability only.
+- F3.4 (recently-viewed rail) and F3.6 (admin screens) untouched.
+
+### Decisions
+
+- **URL is the filter state.** No local filter state (except the slider draft),
+  so back/forward and shared links behave like the category links already did.
+- **Server does the truth:** result counts/empty states come from the filtered
+  response, not a client re-filter.
+- **Compare is client-side** (like the cart) rather than a backend list — no
+  endpoint exists and the feature works fully offline of the account.
+- Kept the existing `react-refresh/only-export-components` warning style for the
+  provider+hook file, matching `lib/cart.tsx`.
+
+## Session 13 — 2026-09-20
+
+**Scope (user request):** **F3.4** — «بازدیدهای اخیر» rail on home/shop.
+
+### ✅ What was done
+
+1. `catalog.ts` gained `recentlyViewedQuery(limit)`; new
+   `components/product/RecentlyViewedRail.tsx` wraps the existing `ProductRail`
+   with it and renders **only** for signed-in customers with a non-empty list.
+2. Rail mounted on the home page (after «جدیدترین‌ها») and at the bottom of the
+   shop's `CatalogPage`.
+3. The product page now invalidates `["recently-viewed"]` after a successful
+   `POST /products/{id}/view`, so the rail is correct even if the visitor leaves
+   before the request settles (otherwise the home fetch could race it).
+4. **Verified:** `tsc` clean, eslint clean on the touched files; headless Chrome
+   (DevTools pipe) — signed out there is no rail on `/` or `/shop`; signed in as
+   the demo customer and after opening two products, both pages show the rail
+   newest-first (crop-5 → tshirt-1 → older smoke-test views, 5 embla slides).
+   Audit: `plan/audit/2026-09-20-frontend-f34-recently-viewed.md`.
+
+### ❌ What was NOT done
+
+- Guests still have no rail (endpoint requires auth, no merge with a local list).
+- No clear/remove control (no `DELETE /recently-viewed` endpoint).
+- Not added to the product page (it already has related + recommended rails), the
+  `?q=` search view or the compare page.
+
+### Decisions
+
+- **Render nothing when empty or signed out** rather than an empty heading — the
+  endpoint is per-customer, so a guest would otherwise always see a "no history"
+  block on the home page.
+- **Reused `ProductRail`** instead of a second carousel so all rails share one
+  RTL implementation.
+- **Invalidate after the view POST** rather than relying on mount-refetch timing.

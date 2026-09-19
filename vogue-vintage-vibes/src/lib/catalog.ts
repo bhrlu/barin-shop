@@ -4,6 +4,7 @@ import {
   type Availability,
   type Product as ApiProduct,
   type ProductBadge,
+  type SearchHit,
 } from "@/lib/api";
 import type { CategoryId, Product } from "@/data/products";
 
@@ -55,6 +56,18 @@ async function signStorageImages(rows: { images?: string[] }[]): Promise<Map<str
   return map;
 }
 
+/**
+ * Map raw image references (asset keys, absolute URLs, `uploads/…` storage paths)
+ * to displayable URLs, whatever their order or duplication in the input.
+ */
+export async function resolveImageMap(
+  references: (string | null | undefined)[],
+): Promise<Map<string, string>> {
+  const paths = Array.from(new Set(references.filter((ref): ref is string => !!ref)));
+  const signed = await signStorageImages([{ images: paths }]);
+  return new Map(paths.map((path) => [path, signed.get(path) ?? img(path)]));
+}
+
 export type AdminProduct = Product & {
   stock: number;
   active: boolean;
@@ -96,15 +109,62 @@ export function toProduct(row: ApiProduct, signed?: Map<string, string>): AdminP
   };
 }
 
+/** Map a list of API rows to the local shape, signing storage images once. */
+export async function toProducts(rows: ApiProduct[]): Promise<AdminProduct[]> {
+  const signed = await resolveImageMap(rows.flatMap((row) => row.images ?? []));
+  return rows.map((row) => toProduct(row, signed));
+}
+
 export const catalogQuery = queryOptions({
   queryKey: ["catalog"],
   queryFn: async () => {
     // include_inactive is ignored for anonymous callers; admins receive inactive rows too.
-    const rows = await api.products({ include_inactive: true });
-    const signed = await signStorageImages(rows);
-    return rows.map((row) => toProduct(row, signed));
+    return toProducts(await api.products({ include_inactive: true }));
   },
 });
+
+// --- single product, its variants, reviews and discovery rails ------------------
+
+export const productQuery = (id: string) =>
+  queryOptions({
+    queryKey: ["product", id],
+    queryFn: async () => {
+      const row = await api.product(id);
+      const signed = await resolveImageMap(row.images ?? []);
+      return toProduct(row, signed);
+    },
+  });
+
+export const variantsQuery = (id: string) =>
+  queryOptions({
+    queryKey: ["product", id, "variants"],
+    queryFn: () => api.productVariants(id),
+  });
+
+export const reviewsQuery = (id: string, limit = 20) =>
+  queryOptions({
+    queryKey: ["product", id, "reviews", limit],
+    queryFn: () => api.productReviews(id, limit),
+  });
+
+export const relatedQuery = (id: string, limit = 4) =>
+  queryOptions({
+    queryKey: ["product", id, "related", limit],
+    queryFn: async () => toProducts(await api.relatedProducts(id, limit)),
+  });
+
+export const recommendationsQuery = (id: string, limit = 8) =>
+  queryOptions({
+    queryKey: ["product", id, "recommendations", limit],
+    queryFn: async () => toProducts(await api.recommendedProducts(id, limit)),
+  });
+
+/** Signed-in customer's most recently viewed products (newest first). */
+export const recentlyViewedQuery = (limit = 8) =>
+  queryOptions({
+    queryKey: ["recently-viewed", limit],
+    queryFn: async () => toProducts(await api.recentlyViewed(limit)),
+  });
 
 export function useCatalog() {
   const query = useQuery(catalogQuery);
@@ -128,3 +188,41 @@ export function useCatalog() {
     },
   };
 }
+
+// --- search (backend `GET /search`) ------------------------------------------
+
+/**
+ * `GET /search` hits carry less data than `GET /products` rows; this fills the
+ * local `Product` shape `ProductCard` renders (name, price, category, image).
+ */
+function hitToProduct(hit: SearchHit, images: Map<string, string>): Product {
+  return {
+    id: hit.id,
+    name: hit.name,
+    category: hit.category as CategoryId,
+    price: hit.price,
+    ...(hit.old_price ? { oldPrice: hit.old_price } : {}),
+    colors: [],
+    sizes: [],
+    images: [hit.image ? (images.get(hit.image) ?? img(hit.image)) : img(undefined)],
+    material: "",
+    description: "",
+    isNew: hit.is_new,
+    availability: hit.stock > 0 ? "in_stock" : "coming_soon",
+  };
+}
+
+/** Full-text search through the backend, with storage-backed images signed. */
+export const searchQuery = (q: string) =>
+  queryOptions({
+    queryKey: ["search", q],
+    queryFn: async () => {
+      const result = await api.search(q, 40);
+      const images = await resolveImageMap(result.hits.map((hit) => hit.image));
+      return {
+        query: result.query,
+        total: result.total,
+        products: result.hits.map((hit) => hitToProduct(hit, images)),
+      };
+    },
+  });

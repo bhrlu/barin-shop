@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import hero from "@/assets/hero.jpg";
 import { categories } from "@/data/products";
 import { ProductCard } from "@/components/ProductCard";
+import { RecentlyViewedRail } from "@/components/product/RecentlyViewedRail";
 import { img, useCatalog } from "@/lib/catalog";
 
 export const Route = createFileRoute("/")({
@@ -169,6 +170,10 @@ function Index() {
             <ProductCard key={product.id} product={product} />
           ))}
         </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 sm:px-6">
+        <RecentlyViewedRail />
       </section>
 
       <section className="mt-24 bg-sage-deep text-background">

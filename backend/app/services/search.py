@@ -1,9 +1,9 @@
 """Product full-text search over the existing products table.
 
 Uses Postgres trigram-ish ILIKE matching (no extension needed) across name,
-description, material and category, ranked: name match > category match >
-description match. Good enough for a small catalog; can be swapped for
-pg_trgm/pgroonga later without changing the API.
+description, material, category and the `tags` array, ranked: name match >
+category match > tag match > description/material match. Good enough for a small
+catalog; can be swapped for pg_trgm/pgroonga later without changing the API.
 """
 
 from sqlalchemy import text
@@ -30,13 +30,22 @@ async def search_products(
                 SELECT id, name, category, price, old_price, images, stock, is_new,
                        (name ILIKE :pat) AS name_hit,
                        (category ILIKE :pat) AS cat_hit,
+                       (EXISTS (
+                            SELECT 1 FROM unnest(products.tags) AS tag
+                            WHERE tag ILIKE :pat
+                        )) AS tag_hit,
                        COUNT(*) OVER() AS total
                 FROM public.products
                 WHERE active
                   AND (name ILIKE :pat OR description ILIKE :pat
-                       OR material ILIKE :pat OR category ILIKE :pat)
+                       OR material ILIKE :pat OR category ILIKE :pat
+                       OR EXISTS (
+                            SELECT 1 FROM unnest(products.tags) AS tag
+                            WHERE tag ILIKE :pat
+                        ))
                   AND (CAST(:category AS text) IS NULL OR category = :category)
-                ORDER BY name_hit DESC, cat_hit DESC, is_new DESC, created_at DESC
+                ORDER BY name_hit DESC, cat_hit DESC, tag_hit DESC,
+                         is_new DESC, created_at DESC
                 LIMIT :limit OFFSET :offset
                 """
             ),

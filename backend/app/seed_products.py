@@ -9,7 +9,9 @@ that was not created by the compose initdb — e.g. one pointed at directly via
 
 Run from backend/:
     python -m app.seed_products
-Requires DATABASE_URL only. Re-runnable: existing ids are left untouched.
+Requires DATABASE_URL only. Re-runnable: existing ids are left untouched except
+that rows with no `tags` yet get the tags below backfilled (so a database seeded
+before tags existed starts matching `GET /search?q=<tag>`).
 """
 
 import asyncio
@@ -32,6 +34,7 @@ PRODUCTS: list[dict] = [
     {
         "id": "tshirt-1",
         "name": "تی‌شرت اورسایز پنبه‌ای مینا",
+        "tags": ["اورسایز", "پنبه", "روزمره"],
         "category": "tshirt",
         "price": 690_000,
         "old_price": 890_000,
@@ -48,6 +51,7 @@ PRODUCTS: list[dict] = [
     {
         "id": "tshirt-2",
         "name": "تی‌شرت جادار روزمره نارین",
+        "tags": ["جادار", "ویسکوز", "روزمره"],
         "category": "tshirt",
         "price": 540_000,
         "old_price": None,
@@ -64,6 +68,7 @@ PRODUCTS: list[dict] = [
     {
         "id": "tshirt-3",
         "name": "تی‌شرت یقه‌گرد کلاسیک ورا",
+        "tags": ["کلاسیک", "پنبه", "روزمره"],
         "category": "tshirt",
         "price": 620_000,
         "old_price": None,
@@ -76,6 +81,7 @@ PRODUCTS: list[dict] = [
     },
     {
         "id": "tshirt-4",
+        "tags": ["ریب", "پنبه", "روزمره"],
         "name": "تی‌شرت آستین‌کوتاه ریب لینا",
         "category": "tshirt",
         "price": 580_000,
@@ -90,6 +96,7 @@ PRODUCTS: list[dict] = [
     {
         "id": "crop-5",
         "name": "کراپ‌تاپ بافت ریب آوا",
+        "tags": ["ریب", "تابستانی", "روزمره"],
         "category": "crop",
         "price": 720_000,
         "old_price": None,
@@ -103,6 +110,7 @@ PRODUCTS: list[dict] = [
     {
         "id": "crop-6",
         "name": "کراپ‌تاپ آستین‌پفی رها",
+        "tags": ["پفی", "مجلسی", "تابستانی"],
         "category": "crop",
         "price": 780_000,
         "old_price": 950_000,
@@ -116,6 +124,7 @@ PRODUCTS: list[dict] = [
     {
         "id": "crop-7",
         "name": "کراپ‌تاپ بندی نیلا",
+        "tags": ["بنددار", "تابستانی", "روزمره"],
         "category": "crop",
         "price": 640_000,
         "old_price": None,
@@ -129,6 +138,7 @@ PRODUCTS: list[dict] = [
     {
         "id": "crop-8",
         "name": "کراپ‌تاپ یقه‌قایقی سانا",
+        "tags": ["کلاسیک", "مجلسی"],
         "category": "crop",
         "price": 690_000,
         "old_price": None,
@@ -142,6 +152,7 @@ PRODUCTS: list[dict] = [
     {
         "id": "shorts-9",
         "name": "شورت کتان پیلی‌دار هلیا",
+        "tags": ["کتان", "پیلی‌دار", "مجلسی"],
         "category": "shorts",
         "price": 980_000,
         "old_price": None,
@@ -155,6 +166,7 @@ PRODUCTS: list[dict] = [
     {
         "id": "shorts-10",
         "name": "شورت راحتی کشی سوگل",
+        "tags": ["خانگی", "پنبه", "روزمره"],
         "category": "shorts",
         "price": 620_000,
         "old_price": None,
@@ -168,6 +180,7 @@ PRODUCTS: list[dict] = [
     {
         "id": "shorts-11",
         "name": "شورت جین کوتاه بهار",
+        "tags": ["دنیم", "تابستانی", "کلاسیک"],
         "category": "shorts",
         "price": 1_120_000,
         "old_price": 1_350_000,
@@ -181,6 +194,7 @@ PRODUCTS: list[dict] = [
     {
         "id": "shorts-12",
         "name": "شورت کتان بغل‌چاک آرمیتا",
+        "tags": ["کتان", "تابستانی", "ساحلی"],
         "category": "shorts",
         "price": 890_000,
         "old_price": None,
@@ -194,6 +208,7 @@ PRODUCTS: list[dict] = [
     {
         "id": "socks-13",
         "name": "جوراب نخی ساق‌کوتاه (سه‌جفت)",
+        "tags": ["پنبه", "روزمره"],
         "category": "socks",
         "price": 320_000,
         "old_price": None,
@@ -207,6 +222,7 @@ PRODUCTS: list[dict] = [
     {
         "id": "socks-14",
         "name": "جوراب ساق‌بلند ریب مه",
+        "tags": ["ریب", "پنبه", "روزمره"],
         "category": "socks",
         "price": 240_000,
         "old_price": None,
@@ -220,6 +236,7 @@ PRODUCTS: list[dict] = [
     {
         "id": "socks-15",
         "name": "جوراب مچی نامرئی (پنج‌جفت)",
+        "tags": ["پنبه", "نامرئی", "تابستانی"],
         "category": "socks",
         "price": 380_000,
         "old_price": 450_000,
@@ -233,6 +250,7 @@ PRODUCTS: list[dict] = [
     {
         "id": "socks-16",
         "name": "جوراب پشمی گرم زمستان",
+        "tags": ["پشمی", "مرینوس", "زمستانی"],
         "category": "socks",
         "price": 430_000,
         "old_price": None,
@@ -246,6 +264,7 @@ PRODUCTS: list[dict] = [
     {
         "id": "set-17",
         "name": "ست کراپ و شورت شنی",
+        "tags": ["کتان", "ویسکوز", "تابستانی"],
         "category": "set",
         "price": 1_650_000,
         "old_price": 1_980_000,
@@ -259,6 +278,7 @@ PRODUCTS: list[dict] = [
     {
         "id": "set-18",
         "name": "ست تی‌شرت و شورت خانه",
+        "tags": ["خانگی", "پنبه", "روزمره"],
         "category": "set",
         "price": 1_380_000,
         "old_price": None,
@@ -272,6 +292,7 @@ PRODUCTS: list[dict] = [
     {
         "id": "set-19",
         "name": "ست لانژ آستین‌بلند نسیم",
+        "tags": ["لانژ", "ویسکوز", "خانگی"],
         "category": "set",
         "price": 1_890_000,
         "old_price": None,
@@ -285,6 +306,7 @@ PRODUCTS: list[dict] = [
     {
         "id": "set-20",
         "name": "ست بافت ریب دوتکه رزا",
+        "tags": ["ریب", "کلاسیک", "روزمره"],
         "category": "set",
         "price": 1_740_000,
         "old_price": None,
@@ -300,11 +322,13 @@ PRODUCTS: list[dict] = [
 _INSERT = text(
     "INSERT INTO public.products "
     "(id, name, category, price, old_price, sizes, colors, images, "
-    " material, description, is_new, stock, active) "
+    " material, description, is_new, stock, active, tags) "
     "VALUES (:id, :name, :category, :price, :old_price, CAST(:sizes AS text[]), "
     "        CAST(:colors AS jsonb), CAST(:images AS text[]), :material, "
-    "        :description, :is_new, 25, true) "
-    "ON CONFLICT (id) DO NOTHING"
+    "        :description, :is_new, 25, true, CAST(:tags AS text[])) "
+    # Backfill tags only where the row has none, so an admin's own tags survive a re-run.
+    "ON CONFLICT (id) DO UPDATE SET tags = EXCLUDED.tags "
+    "WHERE public.products.tags = '{}'::text[]"
 )
 
 
@@ -318,9 +342,13 @@ async def main() -> None:
                     "sizes": product["sizes"],
                     "colors": json.dumps(product["colors"], ensure_ascii=False),
                     "images": product["images"],
+                    "tags": product["tags"],
                 },
             )
-    print(f"seeded: {len(PRODUCTS)} starter products (existing ids untouched)")
+    print(
+        f"seeded: {len(PRODUCTS)} starter products "
+        "(existing ids untouched, tags backfilled where empty)"
+    )
 
 
 if __name__ == "__main__":

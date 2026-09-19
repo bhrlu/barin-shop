@@ -6,8 +6,12 @@ Unchecked items are not yet implemented.
 ---
 
 ## 1. Catalog & Products
-- ✅ Product listing with filters (category, size, color, price) and sorting
-- [x] Live search with autocomplete suggestions and search history — **backend API done**
+- ✅ Product listing with server-side filters (category, size, color, price, tag, badge, availability, on-sale) and sorting (new/popular/rating/price)
+- ✅ Live search with autocomplete suggestions and search history (matches name, description, material, category and **tags**)
+- ✅ Product variants (size × color) with cross-combination availability and "only N left" alerts on the product page
+- ✅ Reviews & star ratings with a rating breakdown, seller replies and a write/edit form
+- ✅ Related, recommended and recently-viewed rails, tags/badges display and coming-soon/pre-order states
+- ✅ Product comparison (add-to-compare toggle + `/compare` table)
 - [x] Product variants (size × color) with separate stock per combination — **backend API done**
 - [x] Inventory management with low-stock alerts — **backend API done**
 - [x] Customer reviews and star ratings + seller replies — **backend API done**
@@ -15,7 +19,8 @@ Unchecked items are not yet implemented.
 - [x] Related and recommended products — **backend API done**
 - [x] Tags, special offers, "coming soon", and pre-order — **backend API done**
 
-> Catalog & Products: backend API complete (UI wiring still pending for most of these).
+> Catalog & Products: live search **UI is done** (F3.1: header suggestions, history,
+> `/shop?q=` results); the rest still needs UI wiring. Backend API complete.
 > New endpoints: `GET /search/suggest`, `/search/history` (GET/DELETE), product
 > `related`/`recommendations`/`compare`/`variants`/`reviews`, `POST /products/{id}/view`,
 > `GET /recently-viewed`, variant admin CRUD, `GET /admin/inventory[/low-stock]`,
@@ -97,20 +102,23 @@ Endpoints noted in `code` already exist and are verified working.
 - [x] Extended `GET /products` filters: tag, badge, availability, on_sale, size, color, min/max price, and sort
 - [x] Merchandising: `tags`, `badge`, `availability` (in_stock/coming_soon/preorder), `available_at`, `low_stock_threshold`, plus `avg_rating`/`review_count` on every read
 - [x] Autocomplete `GET /search/suggest` + history `GET/DELETE /search/history`
+- [x] Tag matching in `GET /search` + a tagged starter catalog (tag suggestions now return products)
 - [x] Per-variant stock CRUD wired into `POST /stock/check` and checkout (variant stock is authoritative)
 - [x] Reviews & ratings with seller replies + admin moderation (`/products/{id}/reviews`, `/admin/reviews`, `PATCH /reviews/{id}`)
 - [x] Related / recommended (`/products/{id}/related`, `/recommendations`)
-- [x] Recently viewed + comparison (`POST /products/{id}/view`, `GET /recently-viewed`, `GET /products/compare?ids=`)
+- [x] Recently viewed + comparison (`POST /products/{id}/view`, `GET /recently-viewed`, `GET /products/compare?ids=`) — **UI done** (F3.4 rail, F3.3 compare page)
 - [x] Low-stock alerts (`GET /admin/inventory`, `GET /admin/inventory/low-stock`)
 
 ### Quick wins — backend already exists, only UI wiring needed
-- [ ] **Catalog UI wiring** → search box + suggestions + history, reviews/ratings UI, related/recommended carousels, compare view, recently-viewed rail, availability/badge/tags filters, variant picker + admin variant editor, admin inventory/low-stock screen
+- [ ] **Catalog UI wiring** → admin variant editor, admin inventory/low-stock screen, admin review moderation (product page F3.2; shop server-side filters, card ratings, compare view F3.3; recently-viewed rail F3.4)
 - [ ] **Admin coupon management screen** → `GET/POST /coupons`, `PATCH /coupons/{id}`, `POST /coupons/generate`
 - [ ] **Complete refund UI** → customer request in order detail + admin approve/reject screen → `POST /orders/{id}/refunds`, `PATCH /refunds/{id}`, `GET /admin/refunds`
-- [ ] **Search box UI** → `GET /search`
+- [x] **Search box UI** → `GET /search` (F3.1: `HeaderSearch.tsx` + `/shop?q=`, with tag matching since F3.1b)
 - [ ] **Stock check before checkout** → wire `api.stockCheck` into the cart
+- [ ] **Multi-value size/colour filters** → the sidebar is single-select until `GET /products` accepts more than one value (B4.12)
+- [ ] **Enforce availability in the API** → `coming_soon`/`preorder` products are blocked in the UI (F3.2) but not by `checkout`/`stock/check` (B4.11)
 - [ ] **Admin payments list** → `GET /admin/payments`
-- [ ] **Single-product fetch** → use `GET /products/{id}` on the product page
+- [x] **Single-product fetch** → product page uses `GET /products/{id}` (F3.2)
 
 ### Core commerce gaps
 - [ ] Real Zarinpal gateway (replace simulated flow) → `POST /payments/start`, `POST /payments/verify`, `GET /payments/zarinpal/callback`

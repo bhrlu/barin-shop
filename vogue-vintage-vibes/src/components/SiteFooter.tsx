@@ -8,8 +8,8 @@ export function SiteFooter() {
         <div>
           <p className="font-display text-2xl tracking-[0.22em] text-terracotta">SÂNDÉ</p>
           <p className="mt-3 max-w-xs text-sm leading-7 text-muted-foreground">
-            لباس‌های ساده و بادوام برای روزهای معمولی؛ رنگ‌های خنثی، پارچه‌های طبیعی و برش‌هایی
-            که کهنه نمی‌شوند.
+            لباس‌های ساده و بادوام برای روزهای معمولی؛ رنگ‌های خنثی، پارچه‌های طبیعی و برش‌هایی که
+            کهنه نمی‌شوند.
           </p>
         </div>
 
@@ -41,6 +41,11 @@ export function SiteFooter() {
             <li>
               <Link to="/contact" className="hover:text-terracotta">
                 تماس با ما
+              </Link>
+            </li>
+            <li>
+              <Link to="/compare" className="hover:text-terracotta">
+                مقایسه محصولات
               </Link>
             </li>
             <li>ارسال رایگان برای خرید بالای ۲٫۰۰۰٫۰۰۰ تومان</li>

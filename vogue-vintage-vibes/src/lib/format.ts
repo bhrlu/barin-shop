@@ -7,3 +7,17 @@ export function toFa(value: string | number): string {
 export function formatToman(value: number): string {
   return toFa(value.toLocaleString("en-US"));
 }
+
+/** Persian (Jalali) date such as «۱۲ مهر ۱۴۰۵»; empty string for missing/invalid input. */
+export function formatFaDate(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return toFa(
+    new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }).format(date),
+  );
+}

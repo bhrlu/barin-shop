@@ -15,6 +15,7 @@ import { Route as AboutRouteImport } from './routes/about'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CartRouteImport } from './routes/cart'
 import { Route as CheckoutRouteImport } from './routes/checkout'
+import { Route as CompareRouteImport } from './routes/compare'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as ShopRouteImport } from './routes/shop'
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
@@ -59,6 +60,11 @@ const CartRoute = CartRouteImport.update({
 const CheckoutRoute = CheckoutRouteImport.update({
   id: '/checkout',
   path: '/checkout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CompareRoute = CompareRouteImport.update({
+  id: '/compare',
+  path: '/compare',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContactRoute = ContactRouteImport.update({
@@ -157,6 +163,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
+  '/compare': typeof CompareRoute
   '/contact': typeof ContactRoute
   '/shop': typeof ShopRoute
   '/account': typeof AuthenticatedAccountRouteWithChildren
@@ -180,6 +187,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
+  '/compare': typeof CompareRoute
   '/contact': typeof ContactRoute
   '/shop': typeof ShopRoute
   '/product/$id': typeof ProductIdRoute
@@ -203,6 +211,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
+  '/compare': typeof CompareRoute
   '/contact': typeof ContactRoute
   '/shop': typeof ShopRoute
   '/_authenticated/account': typeof AuthenticatedAccountRouteWithChildren
@@ -228,6 +237,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/cart'
     | '/checkout'
+    | '/compare'
     | '/contact'
     | '/shop'
     | '/account'
@@ -251,6 +261,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/cart'
     | '/checkout'
+    | '/compare'
     | '/contact'
     | '/shop'
     | '/product/$id'
@@ -273,6 +284,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/cart'
     | '/checkout'
+    | '/compare'
     | '/contact'
     | '/shop'
     | '/_authenticated/account'
@@ -298,6 +310,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   CartRoute: typeof CartRoute
   CheckoutRoute: typeof CheckoutRoute
+  CompareRoute: typeof CompareRoute
   ContactRoute: typeof ContactRoute
   ShopRoute: typeof ShopRoute
   ProductIdRoute: typeof ProductIdRoute
@@ -345,6 +358,13 @@ declare module '@tanstack/react-router' {
       path: '/checkout'
       fullPath: '/checkout'
       preLoaderRoute: typeof CheckoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/compare': {
+      id: '/compare'
+      path: '/compare'
+      fullPath: '/compare'
+      preLoaderRoute: typeof CompareRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/contact': {
@@ -522,6 +542,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   CartRoute: CartRoute,
   CheckoutRoute: CheckoutRoute,
+  CompareRoute: CompareRoute,
   ContactRoute: ContactRoute,
   ShopRoute: ShopRoute,
   ProductIdRoute: ProductIdRoute,

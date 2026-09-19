@@ -104,6 +104,24 @@ Closes the backend half of `plan/feature-roadmap.md` §1. Idempotent DDL lives i
   → audit: same as B4.1
 - [x] **B4.7 Low-stock inventory** — `GET /admin/inventory`, `/admin/inventory/low-stock`
   → audit: same as B4.1
+- [x] **B4.10 Search matches product tags** — `GET /search` matched name,
+  description, material and category but not `tags`, so the tag suggestions from
+  `/search/suggest` led nowhere; and no seeded product had tags at all. The
+  matcher now includes `tags` (ranked name > category > tag > description),
+  `app/seed_products.py` tags all 20 starter products and backfills tags only on
+  rows that have none, and `tests/api_smoke.py` asserts tag hits + tag
+  suggestions.
+  → audit: [2026-09-20-backend-search-tags.md](audit/2026-09-20-backend-search-tags.md)
+- [ ] **B4.12 Multi-value catalog filters** — `GET /products` accepts a single
+  `size` and a single `color`, so the shop sidebar is single-select (F3.3). Accept
+  repeated or comma-separated values (and consider dropping the AND semantics
+  trap: a size+colour pair should ideally mean "this combination exists").
+- [ ] **B4.11 Enforce `availability` in stock-check and checkout** — the
+  storefront (F3.2) disables add-to-cart for `coming_soon`/`preorder`, but
+  `app/services/checkout.py` validates only stock/activity/size, so a direct API
+  call can still order an unreleased product. Add the guard to `stock/check` and
+  checkout (and decide whether `preorder` should be orderable with a different
+  fulfilment note).
 - [ ] **B4.8 Product model dimension** — variants cover size × color only; add a
   model/name dimension if the catalog needs it
 - [ ] **B4.9 Stock reservation with TTL** — hold stock during checkout instead of

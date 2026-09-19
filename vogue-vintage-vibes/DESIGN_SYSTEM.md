@@ -95,11 +95,17 @@ Per the comment at the top of `styles.css`:
 
 | Component | Notes |
 |---|---|
-| `SiteHeader.tsx` | Sticky header, `surface-warm` top rule, mobile drawer, cart badge. Search icon is currently just a `<Link to="/shop">` — **no search behavior yet**. |
+| `SiteHeader.tsx` | Sticky header, `surface-warm` top rule, mobile drawer, cart badge, and the `<HeaderSearch />` trigger. |
+| `HeaderSearch.tsx` | Popover search: debounced (`GET /search/suggest`) suggestions grouped by kind (product / category / tag / previous query), product thumbnails, signed-in recent searches with per-entry delete + clear-all, ArrowUp/Down + Enter navigation. Submits to `/shop?q=…`. |
 | `SiteFooter.tsx` | Category links via `search={{ category }}`. |
-| `ProductCard.tsx` | Two-image hover swap, `isNew` badge, price + struck `oldPrice`. Typed against `@/data/products`. |
+| `ProductCard.tsx` | Two-image hover swap, `isNew` badge, price + struck `oldPrice`, rating (`avgRating`/`reviewCount`) and a compare toggle. Root is a wrapper `<div>` with the product `<Link>` inside it, so the toggle is never a button nested in an anchor. Typed against `@/data/products`. |
+| `CompareBar.tsx` | Sticky bar above the footer showing the comparison basket (count, clear, link to `/compare`); hidden while empty. Rendered once from `__root.tsx`. |
 | `CancelOrderButton.tsx` | Mutation calling `api.cancelOrder`. |
 | `admin/ProductImageManager.tsx` | Upload (`api.uploadImage`) + URL entry + reorder + primary-image badge. |
+| `product/VariantPicker.tsx` | Size × colour selection with per-combination availability (disabled sold-out/deactivated combos, disabled colours) and an `aria-live` stock line. Uses `@/lib/variants` — never re-implement the rule. |
+| `product/ReviewsSection.tsx` | Rating summary + 1–5 distribution, review list (seller replies, Jalali dates), star-input write/edit form; one review per customer per product (backend upserts). |
+| `product/ProductRail.tsx` | RTL embla carousel rail (`ui/carousel`, `direction: "rtl"`) with header arrow buttons tracking `canScrollPrev/Next`; used for related, recommended and recently-viewed products. |
+| `product/RecentlyViewedRail.tsx` | `ProductRail` fed by `recentlyViewedQuery`; hidden for guests and while the list is empty (home + shop). |
 
 ### 3.2 shadcn/ui primitives (`src/components/ui/`)
 
@@ -122,14 +128,31 @@ sizes: `default | sm | lg | icon`. `asChild` supported via Radix `Slot`.
 - **Variants:** CVA; export both the component and `xVariants`.
 - **Refs:** `React.forwardRef` + `displayName` (matches shadcn style).
 - **Imports:** `@/` alias for all intra-`src` imports; group external → internal.
-- **Numbers/currency:** use `toFa()` and `formatToman()` from `@/lib/format`
-  (Persian digits). Never render raw Latin digits in UI.
-- **Images:** resolve references through `img()` / `resolveImageUrls()` in
-  `@/lib/catalog` — references are bundled asset keys (`cat-tshirt`), absolute
-  URLs, or storage paths (`uploads/…`, signed via `POST /storage/sign`).
+- **Numbers/currency/dates:** use `toFa()`, `formatToman()` and `formatFaDate()`
+  from `@/lib/format` (Persian digits, Jalali dates). Never render raw Latin
+  digits in UI.
+- **Images:** resolve references through `img()` / `resolveImageUrls()` /
+  `resolveImageMap()` in `@/lib/catalog` — references are bundled asset keys
+  (`cat-tshirt`), absolute URLs, or storage paths (`uploads/…`, signed via
+  `POST /storage/sign`). Use `resolveImageMap()` when you need a reference → URL
+  lookup (e.g. search hits and suggestions).
 - **Data:** TanStack Query. Catalog reads go through `useCatalog()` /
-  `catalogQuery` in `@/lib/catalog`, which maps API rows with `toProduct()`.
-  Mutations use `useMutation` + `queryClient.invalidateQueries`.
+  `catalogQuery` in `@/lib/catalog`, which maps API rows with `toProduct()` /
+  `toProducts()`; `productQuery`, `variantsQuery`, `reviewsQuery`, `relatedQuery`
+  and `recommendationsQuery` cover a single product, and `searchQuery()` maps
+  `GET /search` hits with `hitToProduct()`. Mutations use `useMutation` +
+  `queryClient.invalidateQueries`.
+- **Variants:** never re-derive size×colour availability by hand — use
+  `@/lib/variants` (`variantStockFor`, `comboStock`, `defaultColor`), which
+  mirrors the backend's `app/services/variants.py`.
+- **Shop filters live in the URL.** `shop.tsx` reads every filter/sort from
+  `validateSearch` and links to the next state (helper `clean()` drops empty
+  values), so filters are shareable and the list is filtered by the backend —
+  never re-filter `useCatalog()` client-side.
+- **Client-side lists:** cart (`sandeh-cart-v1`) and compare
+  (`sandeh-compare-v1`, cap 4) are localStorage providers in `@/lib` wrapped
+  around the app in `__root.tsx`; use their hooks (`useCart`, `useCompare`)
+  rather than reading storage directly.
 - **Feedback:** `toast.success` / `toast.error` from `sonner`.
 - **Styling color usage:** prefer semantic/brand tokens over raw hex/oklch.
 
@@ -141,11 +164,16 @@ sizes: `default | sm | lg | icon`. `asChild` supported via Radix `Slot`.
 |---|---|---|---|
 | `Product` | `@/data/products` | `oldPrice`, `isNew`, `CategoryId` | `ProductCard`, `ShopPage`, `product.$id`, seeds |
 | `Product` (API) | `@/lib/api` | `old_price`, `is_new`, snake_case | raw backend rows |
-| `AdminProduct` | `@/lib/catalog` | local `Product` + `stock, active, rawImages` | admin pages |
+| `AdminProduct` | `@/lib/catalog` | local `Product` + `stock, active, rawImages, tags, badge, availability, availableAt, lowStockThreshold, avgRating, reviewCount` | admin pages, product page |
 
-`toProduct()` bridges API → local shape. `src/data/products.ts` also still holds
+`toProduct()` bridges API → local shape (and `hitToProduct()` in the same module
+does the same for `GET /search` hits). `src/data/products.ts` also still holds
 a **static 20-product seed** and the `categories` / `palette` constants — the
 icons' `CategoryId` union lives there too.
+
+Search hits carry only id/name/category/price/old_price/image/stock/is_new, so
+`hitToProduct()` fills the remaining local `Product` fields with empty values —
+`ProductCard` is the only intended consumer.
 
 ---
 
@@ -158,11 +186,15 @@ icons' `CategoryId` union lives there too.
 2. **RTL not declared to shadcn.** `components.json` has `"rtl": false`, yet the
    app is RTL. Primitives can generate LTR-only styles (e.g. `command`, `sheet`
    animations). Worth setting `rtl: true` if you add Radix-heavy components.
-3. **Search is a stub.** Header search icon links to `/shop`; the backend now has
-   `GET /search` + `/search/suggest` + history (see `plan/frontend-tasks.md` F3.1).
-4. **Static seed vs API catalog.** `src/data/products.ts` duplicates what the
-   backend serves; new catalog fields (tags/badge/availability/ratings/variants)
-   exist only in the API and are not yet reflected in the local `Product` type.
+3. ~~**Search is a stub.**~~ **Done (F3.1 / F3.1b):** `HeaderSearch.tsx` drives
+   `GET /search/suggest` + history, `/shop?q=` runs `GET /search`, and the backend
+   matches `tags` too (the starter catalog is tagged). Open: results are not
+   SSR-prefetched, and the results view has no filter sidebar (F3.3).
+4. **Static seed vs API catalog.** `src/data/products.ts` still holds the static
+   20-product seed and the `categories` constants; every page now reads the API
+   (`useCatalog()`/`productQuery`), so only `categories`, `categoryTitle` and the
+   `CategoryId` union are really used. The legacy local `Product` type carries the
+   catalog fields optionally (`tags`, `badge`, `availability`, `avgRating`, …).
 5. **Leftover dependency.** `@supabase/supabase-js` remains in `package.json`
    (no imports) — kept only to avoid lockfile churn.
 6. **`recharts` installed but unused** — reserved for admin dashboard charts.

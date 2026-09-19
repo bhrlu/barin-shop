@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
-import { Menu, Search, ShoppingBag, User, X } from "lucide-react";
+import { Menu, ShoppingBag, User, X } from "lucide-react";
 import { useState } from "react";
+import { HeaderSearch } from "@/components/HeaderSearch";
 import { useCart } from "@/lib/cart";
 import { toFa } from "@/lib/format";
 import { categories } from "@/data/products";
@@ -48,13 +49,7 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-4">
-          <Link
-            to="/shop"
-            aria-label="جستجو در محصولات"
-            className="text-foreground/70 transition-colors hover:text-foreground"
-          >
-            <Search className="size-5" />
-          </Link>
+          <HeaderSearch />
           <Link
             to="/account"
             aria-label="حساب کاربری"

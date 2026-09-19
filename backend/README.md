@@ -20,7 +20,7 @@ backend/
 │   ├── auth.py            # CurrentUser / AdminUser / OptionalUser dependencies
 │   ├── schemas.py         # pydantic request/response models
 │   ├── seed_auth.py       # bootstrap admin + demo customer
-│   ├── seed_products.py   # 20-product catalog (idempotent)
+│   ├── seed_products.py   # 20-product catalog + browse tags (idempotent)
 │   ├── seed_demo.py       # demo addresses/favorites/orders
 │   ├── seed_coupons.py    # SANDE10 + WELCOME500
 │   ├── services/          # coupons, checkout, payments, pricing, search, roles, variants
@@ -37,7 +37,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env          # then fill DATABASE_URL + JWT_SECRET
 python -m app.seed_auth       # bootstrap admin + demo customer
-python -m app.seed_products   # 20 catalog products
+python -m app.seed_products   # 20 catalog products + tags
 python -m app.seed_coupons    # starter coupons
 uvicorn app.main:app --reload --port 8000
 ```
@@ -74,7 +74,7 @@ Public / customer:
 | GET/POST | `/products/{id}/reviews` | – / user | reviews + rating summary |
 | DELETE | `/reviews/{id}` | user | delete own review |
 | POST | `/products/{id}/view` · GET `/recently-viewed` | user | view tracking |
-| GET | `/search?q=` · `/search/suggest` | optional | search + autocomplete |
+| GET | `/search?q=` · `/search/suggest` | optional | search (name, description, material, category, tags) + autocomplete |
 | GET/DELETE | `/search/history` | user | recent searches |
 | POST | `/stock/check` | – | pre-check cart lines (variant-aware) |
 | POST | `/coupons/validate` | user | validate a code against a subtotal |
@@ -101,6 +101,17 @@ Admin:
 | GET | `/admin/stats` · `/users` · `/orders` · `/payments` · `/refunds` | dashboards |
 | PATCH | `/refunds/{id}` | resolve a refund request |
 | POST/GET/PATCH | `/coupons` · `/coupons/{id}` · `/coupons/generate` | coupon CRUD |
+
+## Search model
+
+`GET /search` matches `ILIKE %q%` across name, description, material, category
+and the `tags` array, ranked **name > category > tag > description/material**;
+the response carries `total` for pagination and signed-in queries are recorded in
+`search_history`. `GET /search/suggest` mixes the caller's recent queries,
+matching categories and tags, then product names. Tags are a browse vocabulary
+(material, fit, season) supplied by `app/seed_products.py`, which backfills them
+on rows that have none — so a catalog seeded before tags existed starts matching
+tag queries without a reset.
 
 ## Stock model
 
