@@ -1,5 +1,8 @@
 # Plan — SÂNDÉ Project (frontend + backend)
 
+> Repo-root [`../AGENTS.md`](../AGENTS.md) carries the always-loaded version of
+> these rules for agents.
+
 This folder tracks all planned work for both halves of the project:
 
 ```
@@ -17,7 +20,8 @@ plan/
     ├── 2026-09-19-docker-stack-up-and-runtime-fixes.md
     ├── 2026-09-19-seed-and-frontend-switch.md
     ├── 2026-09-19-e2e-flow-docker.md
-    └── 2026-09-20-catalog-backend-and-address-fix.md
+    ├── 2026-09-20-catalog-backend-and-address-fix.md
+    └── 2026-09-20-agent-doc-rule.md
 ```
 
 Legend used across the task files: `[ ]` todo · `[~]` in progress · `[x]` done
