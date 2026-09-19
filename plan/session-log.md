@@ -413,3 +413,16 @@ markdown docs, and codify a rule to do so after every task.
   surface; UI concerns are separate tasks.
 - `api.products()` keeps accepting the old param shapes, so no existing caller
   changed.
+
+### Addendum — catalog type bridge (F3.0 follow-up)
+
+- **Done:** bridged the legacy `@/data/products` `Product` type and `toProduct()`
+  in `@/lib/catalog` to the new catalog fields (`tags`, `badge`, `availability`,
+  `availableAt`, `lowStockThreshold`, `avgRating`, `reviewCount`) so
+  `useCatalog()` consumers can read them. `tsc --noEmit` → 0 errors.
+  Audit: `plan/audit/2026-09-20-frontend-catalog-type-bridge.md`.
+- **Decision:** catalog fields are **optional** on the legacy `Product` type (so
+  the static seed still compiles) and **required** on `AdminProduct` (which is
+  always built by `toProduct()` from a real API row).
+- **Not done:** the unused static seed exports in `data/products.ts` remain dead
+  code — separate cleanup.

@@ -22,7 +22,8 @@ plan/
     ├── 2026-09-19-e2e-flow-docker.md
     ├── 2026-09-20-catalog-backend-and-address-fix.md
     ├── 2026-09-20-agent-doc-rule.md
-    └── 2026-09-20-frontend-f30-api-client.md
+    ├── 2026-09-20-frontend-f30-api-client.md
+    └── 2026-09-20-frontend-catalog-type-bridge.md
 ```
 
 Legend used across the task files: `[ ]` todo · `[~]` in progress · `[x]` done

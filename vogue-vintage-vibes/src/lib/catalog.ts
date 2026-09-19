@@ -1,5 +1,10 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
-import { api, type Product as ApiProduct } from "@/lib/api";
+import {
+  api,
+  type Availability,
+  type Product as ApiProduct,
+  type ProductBadge,
+} from "@/lib/api";
 import type { CategoryId, Product } from "@/data/products";
 
 import catTshirt from "@/assets/cat-tshirt.jpg";
@@ -50,7 +55,18 @@ async function signStorageImages(rows: { images?: string[] }[]): Promise<Map<str
   return map;
 }
 
-export type AdminProduct = Product & { stock: number; active: boolean; rawImages: string[] };
+export type AdminProduct = Product & {
+  stock: number;
+  active: boolean;
+  rawImages: string[];
+  tags: string[];
+  badge: ProductBadge | null;
+  availability: Availability;
+  availableAt: string | null;
+  lowStockThreshold: number;
+  avgRating: number | null;
+  reviewCount: number;
+};
 
 export function toProduct(row: ApiProduct, signed?: Map<string, string>): AdminProduct {
   const resolve = (reference: string) => signed?.get(reference) ?? img(reference);
@@ -68,6 +84,13 @@ export function toProduct(row: ApiProduct, signed?: Map<string, string>): AdminP
     material: row.material,
     description: row.description,
     isNew: row.is_new,
+    tags: row.tags ?? [],
+    badge: row.badge,
+    availability: row.availability,
+    availableAt: row.available_at,
+    lowStockThreshold: row.low_stock_threshold,
+    avgRating: row.avg_rating,
+    reviewCount: row.review_count,
     stock: row.stock,
     active: row.active,
   };

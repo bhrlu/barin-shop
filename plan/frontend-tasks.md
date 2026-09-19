@@ -126,6 +126,11 @@ needs new backend work except where explicitly noted.
   `ProductVariant(-Input)`, `Review`, `ReviewList`, `ReviewInput`,
   `SearchSuggestion`, `SearchHistoryEntry`, `InventorySummary`,
   `LowStockProduct`, `LowStockVariant`, `LowStockReport`
+- [x] Bridged the legacy `@/data/products` `Product` type and `toProduct()` in
+  `@/lib/catalog` to the new catalog fields (`tags`, `badge`, `availability`,
+  `availableAt`, `lowStockThreshold`, `avgRating`, `reviewCount`), so
+  `useCatalog()` consumers can read them.
+  → audit: [2026-09-20-frontend-catalog-type-bridge.md](audit/2026-09-20-frontend-catalog-type-bridge.md)
 
 ### F3.1 Search
 

@@ -1,4 +1,6 @@
 
+import type { Availability, ProductBadge } from "@/lib/api";
+
 export type CategoryId = "tshirt" | "crop" | "shorts" | "socks" | "set";
 
 export type Product = {
@@ -13,6 +15,15 @@ export type Product = {
   material: string;
   description: string;
   isNew?: boolean;
+  // Catalog fields bridged from the API; optional so the static seed above still
+  // type-checks. `toProduct()` in @/lib/catalog fills these from backend rows.
+  tags?: string[];
+  badge?: ProductBadge | null;
+  availability?: Availability;
+  availableAt?: string | null;
+  lowStockThreshold?: number;
+  avgRating?: number | null;
+  reviewCount?: number;
 };
 
 export const categories: { id: CategoryId; title: string; image: string }[] = [
