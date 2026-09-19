@@ -3,7 +3,7 @@
 # فهرست کامل امکانات پروژه (Feature List)
 
 پروژه: فروشگاه آنلاین پوشاک زنانه «ساندِه» (SÂNDÉ)
-استک فعلی: TanStack Start (React 19) + TypeScript + Tailwind CSS 4 + shadcn/ui + Supabase (DB/Auth/Storage) + TanStack Query + Vite
+استک فعلی: TanStack Start (React 19) + TypeScript + Tailwind CSS 4 + shadcn/ui + TanStack Query + Vite — و بک‌اند اختصاصی **FastAPI** (`../backend`) با PostgreSQL و MinIO. دیگر Supabase وجود ندارد.
 
 ---
 
@@ -57,15 +57,16 @@
 | ۴.۵ | مدیریت کاربران | لیست کاربران با نقش‌ها، تعداد سفارش، مجموع خرید (بدون لغوشده‌ها) |
 | ۴.۶ | کنترل دسترسی | تابع `has_role` در DB + پالیسی‌های RLS؛ فقط admin اجازه نوشتن محصول/سفارش را دارد |
 
-## ۵. بک‌اند (Supabase)
+## ۵. بک‌اند (FastAPI اختصاصی — بدون Supabase)
 
-- **جداول**: `profiles`، `user_roles`، `products`، `addresses`، `favorites`، `orders`، `order_items`، `payments`، `refund_requests`
-- **RLS** روی همه جداول + پالیسی‌های مالکیت/ادمین
-- **تریگرها**: ساخت خودکار پروفایل+نقش customer هنگام ثبت‌نام، `updated_at` خودکار
-- **Storage**: bucket `product-images` با پالیسی‌های خواندن عمومی/نوشتن ادمین
+- **احراز هویت**: JWT خودِ سرویس (HS256) + رمزهای bcrypt در `public.users`؛ نقش‌ها از `public.user_roles`
+- **جداول**: `users`، `profiles`، `user_roles`، `products`، `product_variants`، `product_reviews`، `search_history`، `recently_viewed`، `addresses`، `favorites`، `orders`، `order_items`، `payments`، `refund_requests`، `coupons`، `coupon_redemptions`
+- **Storage**: MinIO با bucket `product-images` و لینک‌های امضاشده (`/storage/upload-url`، `/storage/sign`)
 - **شماره سفارش** خودکار (`order_number`) + کد پیگیری `SND-...`
-- **Server Functions** (TanStack Start): `getPaymentSession`، `completePayment`، `cancelOrder`، `requestRefund`، `resolveRefundRequest` — همه با اعتبارسنجی Zod و middleware احراز هویت
-- **دیتای اولیه (seed)**: ۲۰ محصول در ۵ دسته
+- **کسر موجودی تراکنشی** با `FOR UPDATE` و کاهش variant-aware — بدون oversell
+- **Schema افزودنی**: جداول/ستون‌های کوپن و کاتالوگ به‌صورت idempotent در استارتاپ ساخته می‌شوند (`app/db.py`)
+- **دیتای اولیه (seed)**: `seed_auth` (ادمین + مشتری)، `seed_products` (۲۰ محصول)، `seed_demo`، `seed_coupons`
+- **مستندات API**: http://localhost:8000/docs — جزئیات در `../backend/README.md`
 
 ---
 
@@ -76,10 +77,10 @@
 | ۶.۱ | کد تخفیف واقعی ندارد | `SANDE10` هاردکد در سبد خرید است؛ جدول coupon در DB وجود ندارد و **تخفیف به checkout هم پاس داده نمی‌شود** (همیشه `discount: 0`) |
 | ۶.۲ | درگاه پرداخت واقعی ندارد | فقط شبیه‌ساز است؛ درگاه ایرانی (زرین‌پال/آیدی‌پی/…) وصل نیست |
 | ۶.۳ | فرم تماس ذخیره نمی‌شود | صرفاً toast نمایشی |
-| ۶.۴ | جستجو ندارد | آیکون جستجو فقط به `/shop` لینک است |
-| ۶.۵ | نظرات و امتیاز محصول ندارد | هیچ سیستم review/rating وجود ندارد |
-| ۶.۶ | کسر موجودی هنگام خرید ندارد | `stock` نمایش داده می‌شود ولی هنگام ثبت سفارش کم نمی‌شود؛ کنترل موجودی/ناموجودی هم در add-to-cart نیست |
-| ۶.۷ | تنوع سایز/رنگ (variant) ندارد | موجودی کلی است، نه per-size/per-color |
+| ۶.۴ | جستجو (UI) ندارد | بک‌اند آماده: `GET /search` + `/search/suggest` + تاریخچه جستجو؛ فقط رابط کاربری در هدر باقی مانده (F3.1) |
+| ۶.۵ | نظرات و امتیاز (UI) ندارد | بک‌اند آماده: `GET/POST /products/{id}/reviews` با خلاصه امتیاز + پاسخ فروشنده؛ UI باقی مانده (F3.2) |
+| ۶.۶ | کسر موجودی در UI دیده نمی‌شود | بک‌اند هنگام ثبت سفارش موجودی را کم می‌کند؛ `POST /stock/check` هم هست. اتصال به add-to-cart باقی مانده (F3.5) |
+| ۶.۷ | تنوع سایز/رنگ (variant) در UI ندارد | بک‌اند آماده: `product_variants` + CRUD + موجودی per-combination؛ انتخاب‌گر variant در صفحه محصول باقی مانده (F3.2) |
 | ۶.۸ | اعلان (ایمیل/پیامک) ندارد | هیچ اعلانی برای ثبت سفارش، ارسال، لغو، بازپرداخت ارسال نمی‌شود |
 | ۶.۹ | فراموشی رمز عبور ندارد | فقط ورود/ثبت‌نام ساده |
 | ۶.۱۰ | UI مدیریت درخواست‌های بازپرداخت ندارد | سرور فانکشن `resolveRefundRequest` نوشته شده ولی هیچ صفحه ادمینی از آن استفاده نمی‌کند |

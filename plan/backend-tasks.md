@@ -44,10 +44,14 @@ Legend: `[ ]` todo · `[x]` done (audit file required) · audit links in `plan/a
   in `backend/.env.example`, `infra/.env.example`, `infra/docker-compose.yml`
   (startup failed with `ModuleNotFoundError: psycopg2`)
   → audit: [2026-09-19-sole-backend-no-supabase.md](audit/2026-09-19-sole-backend-no-supabase.md)
-- [ ] **B3.2 Refresh `backend/README.md`** — remove the Supabase auth story, document the
-  new routers, MinIO, and the bootstrap admin
-- [ ] **B3.3 Refresh `infra/README.md`** — drop `01-auth-shim.sql` and "Supabase stays
-  hosted"; document the sole-backend stack
+- [x] **B3.2 Refresh `backend/README.md`** — Supabase auth story removed; the sole-backend
+  architecture, own-JWT auth, all routers, the new catalog endpoints, the stock model,
+  catalog DDL and the test commands are documented.
+  → audit: [2026-09-20-catalog-backend-and-address-fix.md](audit/2026-09-20-catalog-backend-and-address-fix.md)
+- [x] **B3.3 Refresh `infra/README.md`** — dropped `01-auth-shim.sql` and "Supabase stays
+  hosted"; documents the sole-backend stack, MinIO-on-quay, presign host, idempotent
+  catalog DDL and the seed chain.
+  → audit: same as B3.2
 - [ ] **B3.4 Clean stale Supabase wording in code** — `app/db.py` docstring/comments,
   `app/models.py` if applicable
 - [x] **B3.6 Stack actually runs in Docker** — MinIO images moved to `quay.io`
@@ -67,9 +71,43 @@ Legend: `[ ]` todo · `[x]` done (audit file required) · audit links in `plan/a
   now pass one `detail` object (`{message, code, issues}`). Found during the first
   end-to-end Docker run.
   → audit: [2026-09-19-e2e-flow-docker.md](audit/2026-09-19-e2e-flow-docker.md)
-- [ ] **B3.5 Tests for the new routers** — auth (login/signup/me/roles), products CRUD +
-  soft-delete, orders lifecycle, addresses, favorites, admin stats; needs a DB fixture
-  (docker Postgres or testcontainers)
+- [x] **B3.5 Tests for the new routers** — `test_addresses.py` (the created_at
+  regression), `test_variants.py` (variant-stock resolver), and `tests/api_smoke.py`
+  (live end-to-end: logs in as customer + admin and exercises every route, reporting
+  5xx). Unit suite: 25 passed, ruff clean. A pytest DB fixture for router-level unit
+  tests is still open (smoke needs a running server).
+  → audit: same as B3.2
+
+## Milestone B4 — Catalog & Products backend (complete)
+
+Closes the backend half of `plan/feature-roadmap.md` §1. Idempotent DDL lives in
+`app/db.py` (`CATALOG_DDL`).
+
+- [x] **B4.1 Product merchandising** — `tags`, `badge`, `availability`
+  (`in_stock`/`coming_soon`/`preorder`), `available_at`, `low_stock_threshold`; reads
+  expose `avg_rating` + `review_count`
+  → audit: [2026-09-20-catalog-backend-and-address-fix.md](audit/2026-09-20-catalog-backend-and-address-fix.md)
+- [x] **B4.2 Catalog filters + sort** — `GET /products` gained `tag`, `badge`,
+  `availability`, `on_sale`, `size`, `color`, `min_price`, `max_price`, `sort`
+  (`new|price_asc|price_desc|popular|rating`)
+  → audit: same as B4.1
+- [x] **B4.3 Variants (size × color) with per-combination stock** — CRUD +
+  authoritative stock wired into `POST /stock/check` and checkout
+  → audit: same as B4.1
+- [x] **B4.4 Reviews & ratings + seller replies** — list/create/delete, admin
+  moderation, rating summary + distribution
+  → audit: same as B4.1
+- [x] **B4.5 Search autocomplete + history** — `GET /search/suggest`,
+  `GET/DELETE /search/history`, recorded on `GET /search`
+  → audit: same as B4.1
+- [x] **B4.6 Related / recommended / compare / recently viewed**
+  → audit: same as B4.1
+- [x] **B4.7 Low-stock inventory** — `GET /admin/inventory`, `/admin/inventory/low-stock`
+  → audit: same as B4.1
+- [ ] **B4.8 Product model dimension** — variants cover size × color only; add a
+  model/name dimension if the catalog needs it
+- [ ] **B4.9 Stock reservation with TTL** — hold stock during checkout instead of
+  decrementing only at order creation
 
 ## Ideas (not scheduled)
 

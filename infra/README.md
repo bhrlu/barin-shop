@@ -8,34 +8,32 @@ infra/
 ├── backend.Dockerfile      # FastAPI (python:3.12-slim, uvicorn --reload)
 ├── frontend.Dockerfile     # TanStack Start dev server (oven/bun, vite dev)
 ├── .env.example            # copy to .env and fill in
-└── initdb/                 # applied on FIRST postgres start only
-    ├── 01-auth-shim.sql    # local auth schema + roles so Supabase SQL applies
-    └── 02-public-schema.sql# the 4 Supabase migrations + 20-product seed
+└── initdb/
+    └── 02-public-schema.sql # the local schema + 20-product seed (applied on first start)
 ```
 
 ## What runs where
 
 | Service | Image | Port | Purpose |
 |---|---|---|---|
-| `postgres` | postgres:16-alpine | 5432 | Backend's database. Local mirror of the Supabase schema (products/orders/payments/coupons…) |
-| `minio` | minio/minio | 9000 (API) / 9001 (console) | S3-compatible object storage, `product-images` bucket auto-created |
-| `minio-init` | minio/mc | – | One-shot: creates the public-read bucket |
-| `db-init` | backend image | – | One-shot: coupon DDL + seeds SANDE10 / WELCOME500 |
-| `backend` | FastAPI | 8000 | Coupons, checkout, stock, payments, search — docs at `/docs` |
+| `postgres` | postgres:16-alpine | 5432 | The backend's database (`public.users` is a real table with bcrypt hashes) |
+| `minio` | quay.io/minio/minio | 9000 (API) / 9001 (console) | S3-compatible object storage |
+| `minio-init` | quay.io/minio/minio | – | One-shot: creates the public-read `product-images` bucket |
+| `db-init` | backend image | – | One-shot: `seed_auth → seed_products → seed_demo → seed_coupons` |
+| `backend` | FastAPI | 8000 | The sole backend — docs at `/docs` |
 | `frontend` | Vite dev server (Bun) | 5173 | The store UI with hot reload |
 
-## Supabase stays hosted (by design)
+## No Supabase
 
-Per the session-1 decision, auth/data/storage keep using the hosted Supabase
-project; the containers give the **backend** a real local Postgres and give
-both apps local ports. The frontend container still needs
-`VITE_SUPABASE_URL` + `VITE_SUPABASE_PUBLISHABLE_KEY` for login/product data.
+The FastAPI service is the **only** backend: it owns auth (own HS256 JWTs),
+data, and object storage (MinIO). The frontend talks to it directly via
+`VITE_API_URL`; there is no Supabase project, URL, or key in the stack.
 
 ## Quick start
 
 ```bash
-cp infra/.env.example infra/.env        # fill SUPABASE_* values
-docker compose -f infra/docker-compose.yml --env-file infra/.env up --build
+cp infra/.env.example infra/.env        # JWT_SECRET is required
+docker compose -f infra/docker-compose.yml up -d --build
 ```
 
 - Store: http://localhost:5173
@@ -56,16 +54,21 @@ If Lovable ever publishes it publicly, the override can be deleted.
 ## Notes & gotchas
 
 - **First run only:** `initdb/*.sql` runs when the `pgdata` volume is empty.
-  To re-apply from scratch: `docker compose down -v` (⚠ wipes local DB data).
-- **Coupon tables** are created idempotently by the backend at startup
-  (`app/db.py`), same as in production — `db-init` just also seeds coupons.
+  Re-apply from scratch with `docker compose -f infra/docker-compose.yml down -v`
+  (⚠ wipes local DB data).
+- **Schema:** base tables come from `infra/initdb/`. The backend adds the coupon
+  and catalog tables/columns **idempotently at startup** (`app/db.py`), so no
+  migration step is needed on an existing volume.
+- **MinIO image comes from `quay.io`** — MinIO stopped publishing free images on
+  Docker Hub in Oct 2025. `minio-init` reuses the server image's bundled `mc`
+  (the standalone `minio/mc` image is also gone).
+- **Presigning uses the browser host.** `MINIO_PUBLIC_ENDPOINT` (default
+  `localhost:9000`) is what gets signed; signing for the in-cluster `minio:9000`
+  would fail the browser with `SignatureDoesNotMatch`.
 - **Hot reload:** backend source (`../backend/app`) and frontend source
   (`../vogue-vintage-vibes`) are bind-mounted; the frontend image's
   `node_modules` is preserved via a named volume.
-- **Payments:** with the default `ZARINPAL_MERCHANT_ID` (zero UUID) the
-  backend stays in simulation mode — no real gateway calls.
-- **Local Postgres ≠ hosted Supabase:** users created in the hosted project
-  won't exist in the local `auth.users` shim. Backend endpoints called with
-  hosted-project JWTs still verify (same `SUPABASE_JWT_SECRET`) but role
-  lookup falls back to `customer` unless the user row is inserted locally.
+- **Payments:** with the default `ZARINPAL_MERCHANT_ID` (zero UUID) the backend
+  stays in simulation mode — no real gateway calls. The payment page also uses the
+  backend's simulated `payment-session` / `payment-complete` endpoints.
 - The stack is for **development**; no TLS, default passwords, published ports.

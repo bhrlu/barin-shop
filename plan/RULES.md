@@ -38,3 +38,24 @@ Backend additions must not change existing status strings
 (`paid/unpaid`, `pending/processing/shipped/delivered/cancelled`,
 `succeeded/failed`, `SND-…` references) or the cart money rules
 (۸۹٬۰۰۰ shipping, free ≥ ۲٬۰۰۰٬۰۰۰ tomans) without an explicit user decision.
+
+## Rule 5 — Update every affected doc at the end of each task
+
+An audit file alone is not enough. **Before a task is considered finished, update
+the other markdown that the change touches** — stale docs are treated as a bug.
+Walk this checklist and update (or consciously skip) each file:
+
+1. `plan/audit/YYYY-MM-DD-<slug>.md` — **new file** (Rule 1).
+2. `plan/backend-tasks.md` / `plan/frontend-tasks.md` — tick the task and add the
+   audit link; add any newly discovered task as a checkbox.
+3. `plan/session-log.md` — append the session section (Rule 3).
+4. `backend/README.md`, `infra/README.md`, `vogue-vintage-vibes/README.md` —
+   update when endpoints, setup steps, the stack, or scripts change.
+5. `vogue-vintage-vibes/FEATURES.md` and `plan/feature-roadmap.md` — update
+   feature status (✅/`[x]`/`[ ]`) when a capability is added or removed.
+6. `vogue-vintage-vibes/DESIGN_SYSTEM.md` — update when components, tokens, or
+   UI conventions change.
+7. `plan/README.md` — keep the folder index/legend accurate.
+
+If a change makes a doc wrong, fix it in the same task. If you deliberately leave
+one untouched, say so in the audit file under **What is NOT done / open**.

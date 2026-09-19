@@ -100,9 +100,10 @@ new session can pick up exactly where this one stopped. Legend: `[ ]` todo ·
 
 ## Milestone F3 — Catalog & Products UI (backend API ready)
 
-The catalog/product **backend API is complete and smoke-verified**
-(see `plan/feature-roadmap.md`). This milestone wires it into the UI. Nothing
-here needs new backend work except where explicitly noted.
+The catalog/product **backend API is complete and smoke-verified** — see
+[audit/2026-09-20-catalog-backend-and-address-fix.md](audit/2026-09-20-catalog-backend-and-address-fix.md)
+and `plan/feature-roadmap.md`. This milestone wires it into the UI. Nothing here
+needs new backend work except where explicitly noted.
 
 ### F3.0 API client + types (blocking prerequisite)
 

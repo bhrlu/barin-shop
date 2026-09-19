@@ -325,3 +325,58 @@ breaks.
   so no frontend change was needed.
 - The verification deliberately created dev data (two extra test customers,
   several orders, one MinIO object) — acceptable on the local dev stack.
+
+## Session 8 — 2026-09-20
+
+**Scope (user requests, in order):** (1) test all backend APIs and fix the 500 on
+add-address; (2) translate the feature list to English and add a todo list;
+(3) complete the backend API for Catalog & Products; (4) add a frontend todo
+list; (5) document the design system; (6) commit everything; (7) update all
+markdown docs, and codify a rule to do so after every task.
+
+### ✅ What was done
+
+1. **Fixed the reported 500.** `AddressOut.created_at` is `str`, but Postgres
+   returns a `datetime`; Pydantic v2 rejected it → 500 on `GET` and `POST
+   /addresses`. Reproduced against the schema, then isoformatted it in
+   `routers/addresses.py` (the pattern the other routers already used).
+2. **Full API test.** Brought up Postgres + MinIO, seeded, and wrote
+   `tests/api_smoke.py` — logs in as customer + admin and hits every route.
+   Result: **59 routes, 0 5xx**; the historical 500s in the container log are all
+   from before the fix.
+3. **Catalog & Products backend, complete.** Merchandising fields, extended
+   filters/sort, per-variant (size × color) stock wired into stock-check and
+   checkout, reviews + ratings + seller replies, search autocomplete + history,
+   related/recommended/compare, recently viewed, and low-stock inventory. New
+   tables/columns via idempotent startup DDL.
+4. **Verified variant authority end-to-end** — 0-stock variant → check `ok:false`
+   + checkout `409`; 2-stock → checkout succeeds and decrements to 1. Unit suite
+   **25 passed**, ruff clean.
+5. **Docs.** `plan/feature-roadmap.md` (English feature list + checklist),
+   `vogue-vintage-vibes/DESIGN_SYSTEM.md`, `plan/frontend-tasks.md` Milestone F3,
+   refreshed `backend/README.md` + `infra/README.md` + frontend README,
+   `FEATURES.md` catalog/gap rows, and this log. Audit:
+   `plan/audit/2026-09-20-catalog-backend-and-address-fix.md`.
+6. **Committed** all work as `e2bd3f4` (61 files). Added `.freebuff/` to
+   `.gitignore`.
+7. **New Rule 5** in `plan/RULES.md` — update every affected doc before a task is
+   considered finished.
+
+### ❌ What was NOT done
+
+- **No push** — the repo has **no git remote**, so the commit is local only.
+  Needs a remote URL (see the commit message / audit).
+- **No frontend wiring** for the new catalog endpoints — tracked as F3.
+- **Variants are size × color only**; the "model" dimension is not modeled.
+- **No stock reservation with TTL** — decrement happens at order creation.
+- B3.4 (stale Supabase wording in code comments) left open; B3.7 payment
+  authority persistence still open.
+
+### Decisions
+
+- **Commit locally, don't push** (user choice) — no remote configured.
+- **Exclude `.freebuff/`** from the repo (user choice) — added to `.gitignore`.
+- **Catalog DDL is additive at startup** rather than a migration, matching the
+  existing coupon-table mechanism, so existing volumes need no manual step.
+- **Variant stock is authoritative when present**, else the product aggregate is
+  used — keeps legacy products working while enabling per-combination stock.

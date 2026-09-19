@@ -1,22 +1,35 @@
-# Chic Threads Studio
+# SÂNDÉ — frontend (`vogue-vintage-vibes/`)
 
-This project was built with [Lovable](https://lovable.dev).
+The store UI: TanStack Start (React 19) + TypeScript + Tailwind CSS 4 +
+shadcn/ui, talking to the FastAPI backend in `../backend` (the sole backend — no
+Supabase).
 
-## Build with Lovable
+## Documents
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/7257d879-8075-4c86-aab1-317c3e9437c5).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+- [FEATURES.md](./FEATURES.md) — full feature list (Persian) and known gaps.
+- [DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md) — design tokens, component inventory,
+  and UI conventions. **Read this before adding UI.**
+- [src/routes/README.md](./src/routes/README.md) — file-based routing rules.
+- [AGENTS.md](./AGENTS.md) — Lovable sync note (don't rewrite pushed history).
 
 ## Development
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+This project uses **Bun** (`bun.lock`). You can also run it via the container
+stack in `../infra`.
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
+bun install
+bun run dev          # dev server on http://localhost:5173
+bun run build
+bun run lint
+bun run format
 ```
+
+The API base is read from `VITE_API_URL` (SSR fallback `VITE_BACKEND_URL`,
+default `http://localhost:8000`). See `src/lib/api.ts` — the single data layer
+for every backend endpoint.
+
+> `bun.lock` pins `@lovable.dev/vite-tanstack-config` to a Lovable-sandbox-only
+> tarball; `../infra/frontend.Dockerfile` overrides it for the public registry.
+> `vite.config.ts` is intentionally minimal — the Lovable config injects the
+> plugins, so don't add them manually.
