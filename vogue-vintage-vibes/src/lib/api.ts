@@ -34,6 +34,12 @@ export class ApiError extends Error {
   }
 }
 
+/** Normalise an optional repeatable query param into a list. */
+function asList(value: string | string[] | undefined): string[] {
+  if (!value) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
 function messageFrom(detail: unknown, fallback: string): string {
   if (typeof detail === "string") return detail;
   if (detail && typeof detail === "object" && "message" in detail) {
@@ -136,8 +142,9 @@ export type ProductListParams = {
   badge?: ProductBadge;
   availability?: Availability;
   on_sale?: boolean;
-  size?: string;
-  color?: string;
+  /** One value or many (OR within the facet), sent as repeated `size` params. */
+  size?: string | string[];
+  color?: string | string[];
   min_price?: number;
   max_price?: number;
   sort?: ProductSort;
@@ -261,6 +268,18 @@ export type Address = {
   created_at: string | null;
 };
 
+export type ContactMessage = {
+  id: string;
+  user_id: string | null;
+  name: string;
+  contact: string;
+  message: string;
+  status: string;
+  created_at: string | null;
+};
+
+export type ContactMessageStatus = "new" | "answered";
+
 export type OrderItem = {
   id: string;
   order_id: string;
@@ -286,6 +305,8 @@ export type Order = {
   total: number;
   shipping_address: Record<string, string>;
   note: string | null;
+  // admin-entered postal/courier code (F2.8); absent until an admin sets it
+  tracking_code: string | null;
   created_at: string;
   items: OrderItem[];
 };
@@ -306,6 +327,7 @@ export type CheckoutLine = { product_id: string; size: string; color: string; qu
 export type CheckoutAddress = {
   full_name: string;
   phone: string;
+  province?: string | null;
   city: string;
   line: string;
   postal_code?: string | null;
@@ -331,11 +353,16 @@ export type CouponValidation = {
   expires_at: string | null;
 };
 
+export type StockIssueReason =
+  "not_found" | "inactive" | "not_available" | "size_invalid" | "insufficient_stock";
+
 export type StockIssue = {
   product_id: string;
-  reason: "not_found" | "inactive" | "insufficient_stock";
+  reason: StockIssueReason;
   available: number | null;
 };
+
+export type StockCheckResult = { ok: boolean; subtotal: number; issues: StockIssue[] };
 
 export type AdminStats = {
   revenue: number;
@@ -408,8 +435,9 @@ export const api = {
     if (params.badge) qs.set("badge", params.badge);
     if (params.availability) qs.set("availability", params.availability);
     if (params.on_sale) qs.set("on_sale", "true");
-    if (params.size) qs.set("size", params.size);
-    if (params.color) qs.set("color", params.color);
+    // repeated params: the backend treats them as OR within the facet
+    for (const value of asList(params.size)) qs.append("size", value);
+    for (const value of asList(params.color)) qs.append("color", value);
     if (params.min_price != null) qs.set("min_price", String(params.min_price));
     if (params.max_price != null) qs.set("max_price", String(params.max_price));
     if (params.sort) qs.set("sort", params.sort);
@@ -451,17 +479,32 @@ export const api = {
     address: CheckoutAddress;
     coupon_code?: string | null;
   }) => request<CheckoutResult>("/checkout", { method: "POST", json: body }),
+  // `POST /stock/check` takes a bare JSON array of lines (not `{ lines }`) and
+  // needs no auth, so guests get the same validation as signed-in customers.
   stockCheck: (lines: CheckoutLine[]) =>
-    request<{ ok: boolean; subtotal: number; issues: StockIssue[] }>("/stock/check", {
-      method: "POST",
-      json: { lines },
-    }),
+    request<StockCheckResult>("/stock/check", { method: "POST", json: lines }),
 
   // --- addresses ---
   addresses: () => request<Address[]>("/addresses"),
   createAddress: (body: Omit<Address, "id" | "created_at">) =>
     request<Address>("/addresses", { method: "POST", json: body }),
+  updateAddress: (id: string, patch: Partial<Omit<Address, "id" | "created_at">>) =>
+    request<Address>(`/addresses/${id}`, { method: "PATCH", json: patch }),
   deleteAddress: (id: string) => request<void>(`/addresses/${id}`, { method: "DELETE" }),
+
+  // --- contact ---
+  // public: a guest can ask about a size or an order without an account
+  contact: (body: { name: string; contact: string; message: string }) =>
+    request<ContactMessage>("/contact", { method: "POST", json: body }),
+  // admin inbox (F2.1b)
+  adminContactMessages: (status?: ContactMessageStatus) =>
+    request<ContactMessage[]>(
+      status ? `/admin/contact-messages?status=${status}` : "/admin/contact-messages",
+    ),
+  markContactMessage: (id: string, status: ContactMessageStatus) =>
+    request<ContactMessage>(`/admin/contact-messages/${id}`, { method: "PATCH", json: { status } }),
+  deleteContactMessage: (id: string) =>
+    request<void>(`/admin/contact-messages/${id}`, { method: "DELETE" }),
 
   // --- favorites ---
   favorites: () => request<string[]>("/favorites"),
@@ -488,7 +531,7 @@ export const api = {
       method: "PATCH",
       json: { status, admin_note },
     }),
-  patchOrder: (id: string, patch: { status?: string; payment_status?: string }) =>
+  patchOrder: (id: string, patch: { status?: string; payment_status?: string; tracking_code?: string | null }) =>
     request<Order>(`/orders/${id}`, { method: "PATCH", json: patch }),
   paymentSession: (id: string) => request<PaymentSession>(`/orders/${id}/payment-session`),
   paymentComplete: (id: string, outcome: "success" | "failure") =>
@@ -574,6 +617,12 @@ export type ProductWrite = {
   is_new: boolean;
   stock: number;
   active: boolean;
+  // merchandising / availability (defaults applied by the backend)
+  tags: string[];
+  badge: ProductBadge | null;
+  availability: Availability;
+  available_at: string | null;
+  low_stock_threshold: number;
 };
 
 export { API_URL };

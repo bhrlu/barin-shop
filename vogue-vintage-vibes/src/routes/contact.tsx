@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Clock, Mail, MapPin, Phone } from "lucide-react";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,8 +24,39 @@ export const Route = createFileRoute("/contact")({
   component: ContactPage,
 });
 
+const empty = { name: "", contact: "", message: "" };
+
 function ContactPage() {
+  const [form, setForm] = useState(empty);
   const [sent, setSent] = useState(false);
+
+  const submit = useMutation({
+    mutationFn: () => api.contact(form),
+    onSuccess: () => {
+      setForm(empty);
+      setSent(true);
+      toast.success("پیام شما ثبت شد");
+    },
+    onError: () => toast.error("ارسال پیام ناموفق بود؛ لطفاً دوباره تلاش کنید."),
+  });
+
+  const field = (key: keyof typeof empty, label: string, minLength: number) => (
+    <div>
+      <Label htmlFor={key}>{label}</Label>
+      <Input
+        id={key}
+        value={form[key]}
+        required
+        minLength={minLength}
+        // the API rejects anything shorter, so fail here instead of in a toast
+        onChange={(event) => {
+          setSent(false);
+          setForm({ ...form, [key]: event.target.value });
+        }}
+        className="mt-2 rounded-none"
+      />
+    </div>
+  );
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6">
@@ -37,28 +70,49 @@ function ContactPage() {
           className="space-y-5"
           onSubmit={(event) => {
             event.preventDefault();
-            setSent(true);
-            toast.success("پیام شما ثبت شد (نمایشی)");
+            submit.mutate();
           }}
         >
+          {field("name", "نام", 2)}
           <div>
-            <Label htmlFor="name">نام</Label>
-            <Input id="name" required className="mt-2 rounded-none" />
-          </div>
-          <div>
-            <Label htmlFor="email">ایمیل یا شماره تماس</Label>
-            <Input id="email" required className="mt-2 rounded-none" />
+            <Label htmlFor="contact">ایمیل یا شماره تماس</Label>
+            <Input
+              id="contact"
+              value={form.contact}
+              required
+              minLength={5}
+              onChange={(event) => {
+                setSent(false);
+                setForm({ ...form, contact: event.target.value });
+              }}
+              className="mt-2 rounded-none"
+            />
           </div>
           <div>
             <Label htmlFor="message">پیام</Label>
-            <Textarea id="message" required rows={5} className="mt-2 rounded-none" />
+            <Textarea
+              id="message"
+              value={form.message}
+              required
+              minLength={5}
+              rows={5}
+              onChange={(event) => {
+                setSent(false);
+                setForm({ ...form, message: event.target.value });
+              }}
+              className="mt-2 rounded-none"
+            />
           </div>
-          <Button type="submit" className="h-11 rounded-none px-8 text-sm tracking-widest">
-            ارسال پیام
+          <Button
+            type="submit"
+            disabled={submit.isPending}
+            className="h-11 rounded-none px-8 text-sm tracking-widest"
+          >
+            {submit.isPending ? "در حال ارسال…" : "ارسال پیام"}
           </Button>
           {sent && (
             <p className="text-xs text-muted-foreground">
-              این فرم نمایشی است و پیام جایی ذخیره نمی‌شود.
+              پیام شما ثبت شد. اگر ایمیل یا شماره‌ی درست وارد کرده باشید، پاسخ می‌دهیم.
             </p>
           )}
         </form>

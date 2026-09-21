@@ -2,20 +2,36 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Pencil, Plus, Trash2 } from "lucide-react";
-import { api } from "@/lib/api";
+import { Layers, Pencil, Plus, Trash2 } from "lucide-react";
+import { api, type Availability, type ProductBadge } from "@/lib/api";
 import { useCatalog, type AdminProduct } from "@/lib/catalog";
 import { categories, categoryTitle } from "@/data/products";
-import { formatToman, toFa } from "@/lib/format";
+import { formatFaDate, formatToman, toFa } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ProductImageManager } from "@/components/admin/ProductImageManager";
+import { VariantEditor } from "@/components/admin/VariantEditor";
 
 export const Route = createFileRoute("/_authenticated/admin/products")({
   component: AdminProducts,
 });
+
+const BADGES: { value: ProductBadge | ""; label: string }[] = [
+  { value: "", label: "بدون نشان" },
+  { value: "sale", label: "حراج" },
+  { value: "new", label: "جدید" },
+  { value: "exclusive", label: "ویژه" },
+  { value: "coming_soon", label: "به‌زودی" },
+  { value: "preorder", label: "پیش‌خرید" },
+];
+
+const AVAILABILITIES: { value: Availability; label: string }[] = [
+  { value: "in_stock", label: "موجود" },
+  { value: "coming_soon", label: "به‌زودی" },
+  { value: "preorder", label: "پیش‌خرید" },
+];
 
 type FormState = {
   id?: string;
@@ -31,6 +47,11 @@ type FormState = {
   stock: string;
   is_new: boolean;
   active: boolean;
+  tags: string;
+  badge: ProductBadge | "";
+  availability: Availability;
+  available_at: string;
+  low_stock_threshold: string;
 };
 
 const emptyForm: FormState = {
@@ -46,7 +67,20 @@ const emptyForm: FormState = {
   stock: "25",
   is_new: true,
   active: true,
+  tags: "",
+  badge: "",
+  availability: "in_stock",
+  available_at: "",
+  low_stock_threshold: "5",
 };
+
+/** `available_at` is a date input value (`YYYY-MM-DD`); the API takes ISO strings. */
+function toDateInput(iso: string | null): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
 
 function toForm(product: AdminProduct): FormState {
   return {
@@ -63,6 +97,11 @@ function toForm(product: AdminProduct): FormState {
     stock: String(product.stock),
     is_new: product.isNew ?? true,
     active: product.active ?? true,
+    tags: product.tags.join(", "),
+    badge: product.badge ?? "",
+    availability: product.availability ?? "in_stock",
+    available_at: toDateInput(product.availableAt),
+    low_stock_threshold: String(product.lowStockThreshold ?? 5),
   };
 }
 
@@ -91,6 +130,15 @@ function parsePayload(form: FormState) {
     stock: Number(form.stock),
     is_new: form.is_new,
     active: form.active,
+    tags: form.tags
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean),
+    badge: form.badge === "" ? null : form.badge,
+    availability: form.availability,
+    // only meaningful for coming_soon / preorder; cleared otherwise
+    available_at: form.availability === "in_stock" || !form.available_at ? null : form.available_at,
+    low_stock_threshold: Number(form.low_stock_threshold) || 0,
   };
 }
 
@@ -98,6 +146,7 @@ function AdminProducts() {
   const { all, isLoading } = useCatalog();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<FormState | null>(null);
+  const [variantsFor, setVariantsFor] = useState<string | null>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["catalog"] });
 
@@ -230,6 +279,64 @@ function AdminProducts() {
               />
             </div>
           </div>
+          <div>
+            <Label>برچسب‌ها (با کاما)</Label>
+            <Input
+              value={form.tags}
+              onChange={(e) => setForm({ ...form, tags: e.target.value })}
+              placeholder="کتان, تابستانی"
+              className="mt-2 bg-background"
+            />
+          </div>
+          <div>
+            <Label>نشان محصول</Label>
+            <select
+              value={form.badge}
+              onChange={(e) => setForm({ ...form, badge: e.target.value as FormState["badge"] })}
+              className="mt-2 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+            >
+              {BADGES.map((badge) => (
+                <option key={badge.value} value={badge.value}>
+                  {badge.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label>وضعیت عرضه</Label>
+            <select
+              value={form.availability}
+              onChange={(e) => setForm({ ...form, availability: e.target.value as Availability })}
+              className="mt-2 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+            >
+              {AVAILABILITIES.map((availability) => (
+                <option key={availability.value} value={availability.value}>
+                  {availability.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label>تاریخ عرضه (برای به‌زودی / پیش‌خرید)</Label>
+            <Input
+              type="date"
+              dir="ltr"
+              disabled={form.availability === "in_stock"}
+              value={form.available_at}
+              onChange={(e) => setForm({ ...form, available_at: e.target.value })}
+              className="mt-2 bg-background disabled:opacity-50"
+            />
+          </div>
+          <div>
+            <Label>آستانه هشدار موجودی کم</Label>
+            <Input
+              dir="ltr"
+              inputMode="numeric"
+              value={form.low_stock_threshold}
+              onChange={(e) => setForm({ ...form, low_stock_threshold: e.target.value })}
+              className="mt-2 bg-background"
+            />
+          </div>
           <div className="md:col-span-2">
             <Label>جنس</Label>
             <Input
@@ -274,35 +381,69 @@ function AdminProducts() {
         <p className="text-sm text-muted-foreground">در حال بارگذاری…</p>
       ) : (
         <ul className="divide-y divide-border rounded-3xl border border-border">
-          {all.map((product) => (
-            <li key={product.id} className="flex flex-wrap items-center gap-4 p-4 text-sm">
-              <img src={product.images[0]} alt="" className="size-14 rounded-xl object-cover" />
-              <div className="flex-1">
-                <p>{product.name}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {categoryTitle(product.category)} · موجودی {toFa(product.stock)}
-                  {!product.active && " · غیرفعال"}
-                </p>
-              </div>
-              <span>{formatToman(product.price)} تومان</span>
-              <button
-                type="button"
-                onClick={() => setForm(toForm(product))}
-                aria-label="ویرایش"
-                className="text-muted-foreground hover:text-terracotta"
-              >
-                <Pencil className="size-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => remove.mutate(product.id)}
-                aria-label="حذف"
-                className="text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 className="size-4" />
-              </button>
-            </li>
-          ))}
+          {all.map((product) => {
+            const lowStock = product.stock > 0 && product.stock <= product.lowStockThreshold;
+            const availableAt = formatFaDate(product.availableAt);
+            return (
+              <li key={product.id} className="p-4 text-sm">
+                <div className="flex flex-wrap items-center gap-4">
+                  <img src={product.images[0]} alt="" className="size-14 rounded-xl object-cover" />
+                  <div className="flex-1">
+                    <p>{product.name}</p>
+                    <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span>
+                        {categoryTitle(product.category)} · موجودی {toFa(product.stock)}
+                      </span>
+                      {product.availability !== "in_stock" && (
+                        <span className="rounded-full bg-sage/25 px-2 py-0.5 text-sage-deep">
+                          {AVAILABILITIES.find((a) => a.value === product.availability)?.label}
+                          {availableAt && ` · از ${availableAt}`}
+                        </span>
+                      )}
+                      {product.badge && (
+                        <span className="rounded-full bg-terracotta/10 px-2 py-0.5 text-terracotta">
+                          {BADGES.find((b) => b.value === product.badge)?.label}
+                        </span>
+                      )}
+                      {lowStock && <span className="text-terracotta">موجودی کم</span>}
+                      {!product.active && <span>غیرفعال</span>}
+                    </p>
+                  </div>
+                  <span>{formatToman(product.price)} تومان</span>
+                  <button
+                    type="button"
+                    onClick={() => setVariantsFor(variantsFor === product.id ? null : product.id)}
+                    aria-label="تنوع‌های سایز و رنگ"
+                    aria-expanded={variantsFor === product.id}
+                    className="text-muted-foreground hover:text-sage-deep"
+                  >
+                    <Layers className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm(toForm(product))}
+                    aria-label="ویرایش"
+                    className="text-muted-foreground hover:text-terracotta"
+                  >
+                    <Pencil className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => remove.mutate(product.id)}
+                    aria-label="حذف"
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
+                {variantsFor === product.id && (
+                  <div className="mt-4">
+                    <VariantEditor product={product} />
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

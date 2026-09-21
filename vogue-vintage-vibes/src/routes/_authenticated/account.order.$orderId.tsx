@@ -73,6 +73,14 @@ function OrderStatusPage() {
 
       <section className="rounded-3xl border border-border bg-sand/40 p-6 sm:p-8">
         {cancelled ? <p className="text-sm text-terracotta">این سفارش لغو شده است.</p> : null}
+        {!cancelled && data.tracking_code ? (
+          <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+            کد رهگیری مرسوله:
+            <span className="rounded-md bg-background px-2 py-1 font-mono tracking-wider text-foreground">
+              {toFa(data.tracking_code)}
+            </span>
+          </p>
+        ) : null}
         <ol className="mt-2 grid gap-6 sm:grid-cols-4">
           {STEPS.map((step, index) => {
             const done = !cancelled && doneMap[step.key];

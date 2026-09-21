@@ -39,8 +39,8 @@ const SORTS: { key: ProductSort; label: string }[] = [
 
 type ShopSearch = {
   category?: CategoryId;
-  size?: string;
-  color?: string;
+  size?: string[];
+  color?: string[];
   maxPrice?: number;
   sort?: ProductSort;
   tag?: string;
@@ -53,6 +53,24 @@ type ShopSearch = {
 const str = (value: unknown): string | undefined =>
   typeof value === "string" && value.trim() ? value.trim() : undefined;
 
+/**
+ * `?size=M&size=L` reaches the router as `["M","L"]` and `?size=M` as `"M"`;
+ * both are normalised to a deduped list (undefined when nothing is selected).
+ */
+const list = (value: unknown): string[] | undefined => {
+  const raw = Array.isArray(value) ? value : value == null ? [] : [value];
+  const items = raw.map((item) => str(item)).filter((item): item is string => Boolean(item));
+  return items.length ? Array.from(new Set(items)) : undefined;
+};
+
+/** Adds/removes one value in a multi-select facet. */
+const toggle = (current: string[] | undefined, value: string): string[] | undefined => {
+  const next = current?.includes(value)
+    ? current.filter((item) => item !== value)
+    : [...(current ?? []), value];
+  return next.length ? next : undefined;
+};
+
 export const Route = createFileRoute("/shop")({
   validateSearch: (search: Record<string, unknown>): ShopSearch => {
     const category = search["category"];
@@ -60,10 +78,12 @@ export const Route = createFileRoute("/shop")({
     const badge = str(search["badge"]);
     const availability = str(search["availability"]);
     const maxPrice = Number(search["maxPrice"]);
+    const size = list(search["size"]);
+    const color = list(search["color"]);
     return {
       ...(categories.some((c) => c.id === category) ? { category: category as CategoryId } : {}),
-      ...(str(search["size"]) ? { size: str(search["size"]) as string } : {}),
-      ...(str(search["color"]) ? { color: str(search["color"]) as string } : {}),
+      ...(size ? { size } : {}),
+      ...(color ? { color } : {}),
       ...(Number.isFinite(maxPrice) && maxPrice > 0 ? { maxPrice } : {}),
       ...(sort && SORTS.some((s) => s.key === sort) ? { sort: sort as ProductSort } : {}),
       ...(str(search["tag"]) ? { tag: str(search["tag"]) as string } : {}),
@@ -154,11 +174,15 @@ function SearchResults({ query }: { query: string }) {
 /** A patch where a key may be cleared with `undefined`. */
 type ShopSearchPatch = { [K in keyof ShopSearch]?: ShopSearch[K] | undefined };
 
-/** Removes empty values so links never carry `?size=undefined`. */
+/** Removes empty values so links never carry `?size=undefined` or `?size=`. */
 function clean(next: ShopSearchPatch): ShopSearch {
   return Object.fromEntries(
     Object.entries(next).filter(
-      ([, value]) => value !== undefined && value !== false && value !== "",
+      ([, value]) =>
+        value !== undefined &&
+        value !== false &&
+        value !== "" &&
+        !(Array.isArray(value) && value.length === 0),
     ),
   ) as ShopSearch;
 }
@@ -193,8 +217,8 @@ function CatalogPage({ search }: { search: ShopSearch }) {
   );
   const hasFilters = Boolean(
     search.category ||
-    search.size ||
-    search.color ||
+    search.size?.length ||
+    search.color?.length ||
     search.maxPrice != null ||
     search.tag ||
     search.badge ||
@@ -259,36 +283,45 @@ function CatalogPage({ search }: { search: ShopSearch }) {
           </div>
 
           <div>
-            <p className="mb-3 text-xs tracking-[0.2em] text-muted-foreground">سایز</p>
+            <p className="mb-3 text-xs tracking-[0.2em] text-muted-foreground">
+              سایز <span className="tracking-normal">(چند انتخابی)</span>
+            </p>
             <div className="flex flex-wrap gap-2">
-              {allSizes.map((size) => (
-                <Link
-                  key={size}
-                  to="/shop"
-                  search={clean({ ...search, size: search.size === size ? undefined : size })}
-                  className={cn(
-                    "border px-3 py-1 text-xs transition-colors",
-                    search.size === size
-                      ? "border-foreground bg-foreground text-background"
-                      : "border-border text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {toFa(size)}
-                </Link>
-              ))}
+              {allSizes.map((size) => {
+                const active = search.size?.includes(size) ?? false;
+                return (
+                  <Link
+                    key={size}
+                    to="/shop"
+                    search={clean({ ...search, size: toggle(search.size, size) })}
+                    aria-pressed={active}
+                    className={cn(
+                      "border px-3 py-1 text-xs transition-colors",
+                      active
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-border text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {toFa(size)}
+                  </Link>
+                );
+              })}
             </div>
           </div>
 
           <div>
-            <p className="mb-3 text-xs tracking-[0.2em] text-muted-foreground">رنگ</p>
+            <p className="mb-3 text-xs tracking-[0.2em] text-muted-foreground">
+              رنگ <span className="tracking-normal">(چند انتخابی)</span>
+            </p>
             <div className="space-y-2">
               {allColors.map((color) => {
-                const active = search.color === color.name;
+                const active = search.color?.includes(color.name) ?? false;
                 return (
                   <Link
                     key={color.name}
                     to="/shop"
-                    search={clean({ ...search, color: active ? undefined : color.name })}
+                    search={clean({ ...search, color: toggle(search.color, color.name) })}
+                    aria-pressed={active}
                     className="flex w-full items-center gap-3 text-sm"
                   >
                     <span

@@ -17,7 +17,11 @@ export const Route = createFileRoute("/_authenticated/admin")({
 const tabs = [
   { to: "/admin", label: "داشبورد", exact: true },
   { to: "/admin/products", label: "محصولات", exact: false },
+  { to: "/admin/inventory", label: "انبار", exact: false },
   { to: "/admin/orders", label: "سفارش‌ها", exact: false },
+  { to: "/admin/refunds", label: "بازپرداخت‌ها", exact: false },
+  { to: "/admin/messages", label: "پیام‌ها", exact: false },
+  { to: "/admin/reviews", label: "نظرات", exact: false },
   { to: "/admin/users", label: "کاربران", exact: false },
 ] as const;
 

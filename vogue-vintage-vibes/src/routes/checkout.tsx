@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ShieldCheck } from "lucide-react";
 import { api, ApiError, type StockIssue } from "@/lib/api";
@@ -7,6 +8,7 @@ import { formatToman, toFa } from "@/lib/format";
 import { useCart } from "@/lib/cart";
 import { useAuth } from "@/lib/auth";
 import { useCatalog } from "@/lib/catalog";
+import { stockIssueLabel } from "@/lib/stock-issues";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,6 +37,20 @@ function CheckoutPage() {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const shipping = subtotal >= FREE_SHIPPING_FROM ? 0 : SHIPPING;
+
+  // saved addresses pre-fill the form; the default one is picked automatically
+  // and the customer can switch to another (or back to a blank form)
+  const { data: savedAddresses } = useQuery({
+    queryKey: ["addresses"],
+    queryFn: () => api.addresses(),
+    enabled: Boolean(user),
+  });
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  const saved = savedAddresses ?? [];
+  const picked = pickedId
+    ? (saved.find((address) => address.id === pickedId) ?? null)
+    : (saved.find((address) => address.is_default) ?? null);
+  const [pickedFirst, ...pickedRest] = (picked?.receiver ?? "").trim().split(/\s+/);
 
   if (lines.length === 0) {
     return (
@@ -76,6 +92,7 @@ function CheckoutPage() {
                 address: {
                   full_name: `${data.get("firstName")} ${data.get("lastName")}`,
                   phone: String(data.get("phone") ?? ""),
+                  province: String(data.get("province") ?? "") || null,
                   city: String(data.get("city") ?? ""),
                   line: String(data.get("address") ?? ""),
                   postal_code: String(data.get("postal") ?? ""),
@@ -96,14 +113,16 @@ function CheckoutPage() {
                   ? ((detail as { issues?: StockIssue[] }).issues ?? [])
                   : [];
               if (issues.length) {
+                // each reason has its own copy: a deactivated variant or an
+                // unreleased product is not a stock count problem
                 const message = issues
                   .map((issue) => {
                     const product = byId(issue.product_id);
                     const name = product?.name ?? issue.product_id;
-                    return `${name} (موجودی: ${issue.available ?? 0})`;
+                    return `${name} — ${stockIssueLabel(issue)}`;
                   })
                   .join("، ");
-                toast.error(`موجودی کافی نیست: ${message}`);
+                toast.error(`برخی اقلام قابل سفارش نیستند: ${message}`);
               } else {
                 toast.error(error instanceof Error ? error.message : "ثبت سفارش ناموفق بود");
               }
@@ -112,50 +131,124 @@ function CheckoutPage() {
             }
           }}
         >
-          <div className="grid gap-5 sm:grid-cols-2">
-            <div>
-              <Label htmlFor="firstName">نام</Label>
-              <Input id="firstName" name="firstName" required className="mt-2 rounded-none" />
+          {saved.length > 0 && (
+            <div className="bg-sand p-4">
+              <p className="text-xs text-muted-foreground">آدرس‌های ذخیره‌شده</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {saved.map((address) => (
+                  <button
+                    key={address.id}
+                    type="button"
+                    aria-pressed={picked?.id === address.id}
+                    onClick={() => setPickedId(address.id)}
+                    className={`border px-3 py-1.5 text-xs transition-colors ${
+                      picked?.id === address.id
+                        ? "border-terracotta bg-background"
+                        : "border-border text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {address.title}
+                    {address.is_default ? " · پیش‌فرض" : ""}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  aria-pressed={picked === null}
+                  onClick={() => setPickedId("none")}
+                  className={`border px-3 py-1.5 text-xs transition-colors ${
+                    picked === null
+                      ? "border-terracotta bg-background"
+                      : "border-border text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  آدرس جدید
+                </button>
+              </div>
+            </div>
+          )}
+          {/* remount on switch so the uncontrolled fields take the new defaults */}
+          <div key={picked?.id ?? "new"} className="space-y-5">
+            <div className="grid gap-5 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="firstName">نام</Label>
+                <Input
+                  id="firstName"
+                  name="firstName"
+                  required
+                  defaultValue={pickedFirst ?? ""}
+                  className="mt-2 rounded-none"
+                />
+              </div>
+              <div>
+                <Label htmlFor="lastName">نام خانوادگی</Label>
+                <Input
+                  id="lastName"
+                  name="lastName"
+                  required
+                  defaultValue={pickedRest.join(" ")}
+                  className="mt-2 rounded-none"
+                />
+              </div>
+            </div>
+            <div className="grid gap-5 sm:grid-cols-3">
+              <div>
+                <Label htmlFor="phone">شماره تماس</Label>
+                <Input
+                  id="phone"
+                  name="phone"
+                  required
+                  inputMode="tel"
+                  defaultValue={picked?.phone ?? ""}
+                  className="mt-2 rounded-none"
+                />
+              </div>
+              <div>
+                <Label htmlFor="province">استان</Label>
+                <Input
+                  id="province"
+                  name="province"
+                  defaultValue={picked?.province ?? ""}
+                  className="mt-2 rounded-none"
+                />
+              </div>
+              <div>
+                <Label htmlFor="city">شهر</Label>
+                <Input
+                  id="city"
+                  name="city"
+                  required
+                  defaultValue={picked?.city ?? ""}
+                  className="mt-2 rounded-none"
+                />
+              </div>
             </div>
             <div>
-              <Label htmlFor="lastName">نام خانوادگی</Label>
-              <Input id="lastName" name="lastName" required className="mt-2 rounded-none" />
-            </div>
-          </div>
-          <div className="grid gap-5 sm:grid-cols-2">
-            <div>
-              <Label htmlFor="phone">شماره تماس</Label>
-              <Input
-                id="phone"
-                name="phone"
+              <Label htmlFor="address">نشانی کامل</Label>
+              <Textarea
+                id="address"
+                name="address"
                 required
-                inputMode="tel"
+                rows={3}
+                defaultValue={picked?.line ?? ""}
                 className="mt-2 rounded-none"
               />
             </div>
-            <div>
-              <Label htmlFor="city">شهر</Label>
-              <Input id="city" name="city" required className="mt-2 rounded-none" />
-            </div>
-          </div>
-          <div>
-            <Label htmlFor="address">نشانی کامل</Label>
-            <Textarea id="address" name="address" required rows={3} className="mt-2 rounded-none" />
-          </div>
-          <div className="grid gap-5 sm:grid-cols-2">
-            <div>
-              <Label htmlFor="postal">کد پستی</Label>
-              <Input
-                id="postal"
-                name="postal"
-                required
-                inputMode="numeric"
-                className="mt-2 rounded-none"
-              />
-            </div>
-            <div>
-              <Label htmlFor="note">یادداشت سفارش (اختیاری)</Label>
-              <Input id="note" name="note" className="mt-2 rounded-none" />
+            <div className="grid gap-5 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="postal">کد پستی</Label>
+                <Input
+                  id="postal"
+                  name="postal"
+                  required
+                  inputMode="numeric"
+                  defaultValue={picked?.postal_code ?? ""}
+                  className="mt-2 rounded-none"
+                />
+              </div>
+              <div>
+                <Label htmlFor="note">یادداشت سفارش (اختیاری)</Label>
+                <Input id="note" name="note" className="mt-2 rounded-none" />
+              </div>
             </div>
           </div>
           {user ? (

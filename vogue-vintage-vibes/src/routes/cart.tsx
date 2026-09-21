@@ -1,11 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { Minus, Plus, Trash2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { AlertTriangle, Minus, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
+import { api, type StockIssue } from "@/lib/api";
 import { useCatalog } from "@/lib/catalog";
 import { formatToman, toFa } from "@/lib/format";
-import { useCart } from "@/lib/cart";
+import { useCart, type CartLine } from "@/lib/cart";
+import { stockIssueMessage } from "@/lib/stock-issues";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -25,11 +27,61 @@ export const Route = createFileRoute("/cart")({
 const SHIPPING = 89000;
 const FREE_SHIPPING_FROM = 2000000;
 
+/**
+ * Attach each reported issue to a cart line.
+ *
+ * `StockIssue` carries the product id but not the size/colour, so when a product
+ * occupies a single line the issue is attached there. When the same product is in
+ * several lines the issue goes to the lines its `available` count cannot satisfy,
+ * which keeps a valid size/colour from being flagged by a sibling's shortage.
+ */
+function issuesForLines(lines: CartLine[], issues: StockIssue[]): (StockIssue | undefined)[] {
+  const byProduct = new Map<string, StockIssue[]>();
+  for (const issue of issues) {
+    byProduct.set(issue.product_id, [...(byProduct.get(issue.product_id) ?? []), issue]);
+  }
+  const lineCount = new Map<string, number>();
+  for (const line of lines) {
+    lineCount.set(line.productId, (lineCount.get(line.productId) ?? 0) + 1);
+  }
+
+  return lines.map((line) => {
+    const candidates = byProduct.get(line.productId);
+    if (!candidates?.length) return undefined;
+    if (lineCount.get(line.productId) === 1) return candidates[0];
+    return candidates.find(
+      (issue) => issue.available == null || issue.available <= 0 || line.quantity > issue.available,
+    );
+  });
+}
+
 function CartPage() {
   const { lines, subtotal, setQuantity, remove } = useCart();
   const { byId } = useCatalog();
   const [code, setCode] = useState("");
   const [discount, setDiscount] = useState(0);
+
+  // `POST /stock/check` — authoritative, variant-aware stock for the whole cart.
+  // The query key includes every line and quantity, so any edit re-validates;
+  // React Query keeps the previous result rendered while the new one is in flight.
+  const stockKey = lines
+    .map((line) => `${line.productId}:${line.size}:${line.color}:${line.quantity}`)
+    .join("|");
+  const stock = useQuery({
+    queryKey: ["cart-stock", stockKey],
+    enabled: lines.length > 0,
+    queryFn: () =>
+      api.stockCheck(
+        lines.map((line) => ({
+          product_id: line.productId,
+          size: line.size,
+          color: line.color,
+          quantity: line.quantity,
+        })),
+      ),
+  });
+  const issues = issuesForLines(lines, stock.data?.issues ?? []);
+  const blocked = stock.data ? !stock.data.ok : false;
 
   const shipping = subtotal === 0 || subtotal >= FREE_SHIPPING_FROM ? 0 : SHIPPING;
   const total = Math.max(0, subtotal - discount) + shipping;
@@ -76,9 +128,32 @@ function CartPage() {
         <ul className="divide-y divide-border border-y border-border">
           {lines.map((line, index) => {
             const product = byId(line.productId);
-            if (!product) return null;
+            const issue = issues[index];
+            const lineKey = `${line.productId}-${line.size}-${line.color}`;
+
+            // A line whose product is gone from the active catalog used to
+            // render nothing at all, leaving it impossible to remove.
+            if (!product) {
+              return (
+                <li key={lineKey} className="flex items-center gap-4 py-6">
+                  <div className="flex-1">
+                    <h2 className="font-display text-lg">محصول حذف‌شده</h2>
+                    <p className="mt-1 text-xs text-terracotta">
+                      {issue ? stockIssueMessage(issue) : "این محصول دیگر در فروشگاه نیست."}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => remove(index)}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="size-3.5" /> حذف
+                  </button>
+                </li>
+              );
+            }
             return (
-              <li key={`${line.productId}-${line.size}-${line.color}`} className="flex gap-4 py-6">
+              <li key={lineKey} className="flex gap-4 py-6">
                 <Link to="/product/$id" params={{ id: product.id }} className="w-24 shrink-0">
                   <img
                     src={product.images[0]}
@@ -94,6 +169,12 @@ function CartPage() {
                   <p className="mt-1 text-xs text-muted-foreground">
                     سایز {toFa(line.size)} · رنگ {line.color}
                   </p>
+                  {issue && (
+                    <p className="mt-2 flex items-center gap-1.5 text-xs text-terracotta">
+                      <AlertTriangle className="size-3.5 shrink-0" />
+                      {stockIssueMessage(issue, product)}
+                    </p>
+                  )}
                   <div className="mt-4 flex items-center gap-4">
                     <div className="flex items-center border border-border">
                       <button
@@ -154,6 +235,24 @@ function CartPage() {
             </div>
           </dl>
 
+          {stock.isFetching && (
+            <p className="mt-3 text-[11px] text-muted-foreground">در حال بررسی موجودی…</p>
+          )}
+          {stock.isError && (
+            <p className="mt-3 text-[11px] text-muted-foreground">
+              بررسی موجودی انجام نشد؛ پیش از پرداخت دوباره تلاش می‌شود.
+            </p>
+          )}
+          {blocked && (
+            <div className="mt-4 flex items-start gap-2 border border-terracotta/40 bg-terracotta/5 p-3 text-xs text-terracotta">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+              <span>
+                موجودی این اقلام تغییر کرده است. تعداد یا ترکیب‌های ناموجود را اصلاح کنید تا بتوانید
+                سفارش را تکمیل کنید.
+              </span>
+            </div>
+          )}
+
           <div className="mt-6 flex gap-2">
             <Input
               value={code}
@@ -166,12 +265,21 @@ function CartPage() {
             </Button>
           </div>
 
-          <Link
-            to="/checkout"
-            className="mt-6 block bg-foreground py-3 text-center text-sm tracking-widest text-background transition-opacity hover:opacity-90"
-          >
-            تکمیل خرید
-          </Link>
+          {blocked ? (
+            <span
+              aria-disabled="true"
+              className="mt-6 block cursor-not-allowed bg-foreground/35 py-3 text-center text-sm tracking-widest text-background"
+            >
+              تکمیل خرید
+            </span>
+          ) : (
+            <Link
+              to="/checkout"
+              className="mt-6 block bg-foreground py-3 text-center text-sm tracking-widest text-background transition-opacity hover:opacity-90"
+            >
+              تکمیل خرید
+            </Link>
+          )}
         </aside>
       </div>
     </div>
