@@ -172,23 +172,41 @@ Gaps the dev spec names that have no backend task yet. Only the parts that are n
 already covered by B2.1/B2.2/B2.5 — read the spec first (Rule 0), but the repo's
 architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
 
-- [ ] **B5.1 Admin audit log** — `audit_logs` table + writes on privileged
-  mutations (product price/stock changes, order status changes, refund resolution,
-  role changes) with admin id, old/new values and IP. Spec BE-04.
-- [ ] **B5.2 KPI aggregation endpoint** — `GET /admin/stats?range=today|7d|30d|all`
+- [x] **B5.1 Admin audit log** — `audit_logs` table (idempotent `AUDIT_DDL`) +
+  `app/services/audit.py::record_audit` wired into the privileged mutations:
+  order status/payment/tracking changes, cancel, refund resolution (incl. bank
+  code), product/variant/coupon create-update-delete with old→new values, review
+  moderation. Admin-only `GET /admin/audit-logs` with action/entity/admin filters.
+  Spec BE-04. IP capture and DB-level tamper-resistance split off (below).
+  → audit: [2026-09-21-backend-b51-audit-log.md](audit/2026-09-21-backend-b51-audit-log.md)
+- [ ] **B5.1a Audit IP capture** — thread the request object through the routers
+  so `record_audit` can populate `ip_address` (column exists, always NULL today).
+- [ ] **B5.1b Audit tamper-resistance at the DB level** — REVOKE UPDATE/DELETE on
+  `audit_logs` for the app role (append-only) in `infra/initdb` or startup DDL.
+- [x] **B5.2 KPI aggregation endpoint** — `GET /admin/kpis?range=today|7d|30d|all`
   returning gross/net revenue, paid order count, AOV, pending refunds and low-stock
-  count, replacing the client-side aggregation the dashboard does today. Spec BE-09;
-  unblocks the charts in F2.6.
-- [ ] **B5.3 Refund bank-tracking fields** — `refund_requests` needs the
-  `bank_tracking_code`, `resolved_by`, `resolved_at` columns the spec's approval
-  flow (FE-06/F2.4) expects; today only `status` + `admin_note` are recorded
-  (`infra/initdb/02-public-schema.sql`). While there, reconcile the vocabulary: the
-  DDL default is `requested` while the spec and `PATCH /refunds/{id}` speak
-  `pending/approved/rejected/refunded` — decide one set **without** changing what
-  existing rows already store.
-- [ ] **B5.4 Granular staff roles** — `super_admin` / `order_manager` / `support`
+  count, plus daily revenue series + status breakdown and deltas vs the preceding
+  window; replaces the client-side aggregation the dashboard did. Spec BE-09;
+  consumed by F2.6.
+  → audit: [2026-09-21-b52-f26-kpi-endpoint-dashboard-charts.md](audit/2026-09-21-b52-f26-kpi-endpoint-dashboard-charts.md)
+- [x] **B5.3 Refund bank-tracking fields** — `refund_requests` gained
+  `bank_tracking_code`, `resolved_by` (FK → users) and `resolved_at`
+  (idempotent `REFUND_DDL` in `app/db.py`). Vocabulary reconciled: new rows are
+  inserted as `pending` explicitly and a startup UPDATE normalizes legacy
+  `requested` rows; settled states are untouched. `PATCH /refunds/{id}` now
+  requires the bank code when settling (`refunded`), records the resolver and
+  timestamp on every resolution, and `GET /admin/refunds` carries the claimant's
+  name/email. F2.4's dialog takes the required Paya/Satna code; [BE-03]/[FE-06]
+  are now satisfied end-to-end. Smoke: 130 checks, 0 failed.
+  → audit: [2026-09-21-backend-b53-refund-bank-tracking.md](audit/2026-09-21-backend-b53-refund-bank-tracking.md)
+- [x] **B5.4 Granular staff roles** — `super_admin` / `order_manager` / `support`
   alongside the current binary `admin`/`customer`, enforced per route. Spec BE-04
   (security rule: roles stay in their own table, never on the user row).
+  `ROLE_DDL` extends the enum; `require_staff(capability)` guards every staff
+  route via `ROLE_CAPABILITIES`; `PUT /admin/users/{id}/roles` manages role sets
+  (audited as `update_user_roles`); demo staff accounts seeded. Smoke: 156
+  checks, 0 failed — capability matrix asserted end-to-end.
+  → audit: [2026-09-21-backend-b54-granular-staff-roles.md](audit/2026-09-21-backend-b54-granular-staff-roles.md)
 
 ## Ideas (not scheduled)
 

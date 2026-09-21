@@ -35,7 +35,7 @@ tokens, component inventory, and the conventions to follow.
 | Package manager | **Bun** (`bun.lock`, `bunfig.toml`) | repo |
 | `@tanstack/react-table` v8 | **not installed** — target for the admin data grid ([FE-02]) | spec |
 | `react-hook-form` + `zod` | installed; only the unused shadcn `ui/form.tsx` wrapper imports RHF, nothing imports `zod` — target | spec |
-| `recharts` | installed, unused — target for the KPI dashboard ([FE-03]) | spec |
+| `recharts` | used by the admin dashboard since F2.6 (area + donut, token-coloured) | repo |
 | Supabase / Lovable Cloud / `createServerFn` | **not part of this project** | spec-only, see §5 |
 
 - **Language / direction:** Persian, RTL. `<html lang="fa" dir="rtl">` in
@@ -207,18 +207,19 @@ sizes: `default | sm | lg | icon`. `asChild` supported via Radix `Slot`.
 
 ### 3.3 Admin panel: spec target vs today (**target**, spec B2 + B3)
 
-The spec describes a sidebar-shell back-office. This repo has a tab shell
-(`admin.tsx` + `admin.*` routes) and the individual screens it lists are partly
-missing. Mapping:
+The spec describes a sidebar-shell back-office. The shell itself now matches it
+(F4.2: `admin.tsx` renders the right `w-64` sidebar + topbar, with per-role tab
+gating from B5.4); the remaining rows below track the individual screens.
+Mapping:
 
 | Spec module | Spec target | Today |
 |---|---|---|
-| [FE-01] `admin/AdminLayout.tsx` | `w-64` right sidebar, 18px lucide icons, terracotta active edge, topbar with `Cmd+K` search + avatar/role/logout | **missing** — `admin.tsx` renders a horizontal tab bar; guard is the `_authenticated` route + an inline `isAdmin` check that renders a Persian permission notice (not a redirect) |
+| [FE-01] `admin/AdminLayout.tsx` | `w-64` right sidebar, 18px lucide icons, terracotta active edge, topbar with `Cmd+K` search + avatar/role/logout | **exists** (`admin.tsx`, F4.2): sticky topbar (h-16, blur) with quick search → `/shop?q=`, role badge («مدیر ارشد» / «مدیر» / «مدیر سفارش‌ها» / «پشتیبانی») + logout; right sidebar in a rounded card (desktop) / right-side Sheet (mobile); 18px lucide icons, active `bg-terracotta/10`, per-tab badges fed by `/admin/kpis`; navigation is **role-gated** per `ROLE_TAB_KEYS` (mirrors backend `ROLE_CAPABILITIES`, B5.4). Spec's breadcrumb header and avatar are not built |
 | [FE-02] `admin/AdminDataTable.tsx` | `@tanstack/react-table` v8, server-side pagination/sort/filter, bulk-action bar, CSV/Excel export | **missing** (no react-table installed, no pagination — F2.5) |
-| [FE-03] `admin.index.tsx` | 4 KPI cards with MoM deltas, weekly sales area chart, order-status donut, urgent-actions callout | 6 plain stat cards + latest orders (`adminStats`); charts unused (F2.6) |
+| [FE-03] `admin.index.tsx` | 4 KPI cards with MoM deltas, weekly sales area chart, order-status donut, urgent-actions callout | **exists** (F2.6 + B5.2): 4 KPI cards with period-over-period delta badges, terracotta revenue area chart, status donut with legend, amber urgent-actions callout, range selector (امروز/۷/۳۰/همه); latest orders kept via `adminStats` |
 | [FE-04] `admin.products.tsx` | Stock colour alerts (>10 / 1–9 / 0), `is_active` toggle with optimistic update, size×colour matrix generator, image manager | product CRUD + merchandising fields + `VariantEditor` (F3.6); no optimistic toggle, no dedicated editor route |
-| [FE-05] `admin.orders.tsx` + `OrderDetailSheet.tsx` | `Sheet side="left"` detail, 4-step stepper, postal tracking input, **print stylesheet invoice**, copy-address | list with status/payment selects + a per-row postal tracking input saved via `PATCH /orders/{id}` (F2.8, `orders.tracking_code`) and a copy-address action; no drawer/stepper/print CSS yet (F4.4) |
-| [FE-06] `admin.refunds.tsx` + `RefundActionDialog.tsx` | Tabs (pending/settled/all), claim cards with Sheba + copy, approve/reject dialog with bank tracking code | **exists** (`admin.refunds.tsx`, F2.4): the three tabs, terracotta-edge quote cards, approve/reject/settle dialog with admin note — no bank-tracking input until B5.3 adds the column |
+| [FE-05] `admin.orders.tsx` + `OrderDetailSheet.tsx` | `Sheet side="left"` detail, 4-step stepper, postal tracking input, **print stylesheet invoice**, copy-address | **exists** (`admin.orders.tsx` + `components/admin/OrderDetailDrawer.tsx`, F4.4): per-row «مشاهده و پردازش» opens the left Sheet with the 4-step stepper (terracotta circles + advance button), receiver box with copy + method, itemised breakdown with signed thumbnails + totals, tracking input, cancel action, and «چاپ فاکتور رسمی» → portalled A4 invoice via the global print block; the list keeps selects + tracking (F2.8) |
+| [FE-06] `admin.refunds.tsx` + `RefundActionDialog.tsx` | Tabs (pending/settled/all), claim cards with Sheba + copy, approve/reject dialog with bank tracking code | **exists** (`admin.refunds.tsx`, F2.4 + B5.3): the three tabs, terracotta-edge quote cards with claimant info, approve/reject/settle dialog where settlement requires the Paya/Satna bank code (backend-enforced); settled cards show the code + date. No Sheba column exists |
 | [FE-07] `admin.coupons.tsx` | Ticket-styled coupon cards, usage progress bar, Jalali date pickers | **missing** — coupon CRUD exists in the API |
 | [FE-08] `admin.users.tsx` | Avatar + tier badge, drawer tabs (orders/addresses/favorites), LTV, role change with confirmation | flat list with roles, order count, spend |
 
@@ -451,21 +452,23 @@ if (!data?.length) {
    (`useCatalog()`/`productQuery`), so only `categories`, `categoryTitle` and the
    `CategoryId` union are really used. The legacy local `Product` type carries the
    catalog fields optionally (`tags`, `badge`, `availability`, `avgRating`, …).
-5. **The spec's admin surface is mostly unbuilt** — no sidebar shell, data grid,
-   order drawer, invoice printing, refunds or coupons screen (§3.3, F4.x). The spec
-   also assumes libraries this repo has not installed (`@tanstack/react-table`) or
-   installed-but-unused (`recharts`, RHF, zod).
+5. **The spec's admin surface is mostly built** — sidebar shell (F4.2), order
+   drawer + invoice printing (F4.4), refunds centre (F2.4/B5.3) exist; still
+   missing: the data grid (`@tanstack/react-table`, F4.3), coupons manager (F4.5)
+   and CRM 360 (F4.8/F4.6). `recharts` is now used (F2.6); RHF/zod remain unused.
 6. **Leftover dependency.** `@supabase/supabase-js` remains in `package.json`
    (no imports) — kept only to avoid lockfile churn.
 7. **Error/404 copy is English** (`__root.tsx`) despite the Persian UI.
-8. **No print stylesheet**, so no A4/A5 invoice printing ([FE-05]) — and the spec's
-   `font-mono`/`bg-muted`/`rounded-noneless` details need the token work in §2.5
-   before they are used.
+8. **Print stylesheet exists** (F4.4): `styles.css` carries the `@media print`
+   block — while the order drawer is open, `body[data-order-print-open]` hides the
+   app and shows only the portalled `#__se_invoice_root` invoice (A4 `@page`, no
+   nav/buttons/backgrounds); Ctrl+P elsewhere prints normally.
 9. **The two "backend ready, screen missing" admin inboxes are built** — the
    contact inbox is `/admin/messages` (F2.1b, with `PATCH
    /admin/contact-messages/{id}` to mark answered) and the refunds centre is
-   `/admin/refunds` (F2.4). Both are plain card lists in the tab shell; the spec's
-   drawer/dialog chrome (and the refund bank-tracking field) stays open for F4.x/B5.3.
+   `/admin/refunds` (F2.4 + B5.3, with the required bank-tracking code on
+   settlement). Both are plain card lists in the tab shell; the spec's drawer
+   chrome stays open for F4.x.
 10. **Province is free text everywhere** — both the address book and the checkout
    shipping box take a plain string; the spec implies a province list (and real
    carrier rates need one). No task logged yet — it belongs with shipping rates.

@@ -106,17 +106,22 @@ new session can pick up exactly where this one stopped. Legend: `[ ]` todo ·
   → audit: [2026-09-21-frontend-f21b-f24-f28-admin-inbox-refunds-tracking.md](audit/2026-09-21-frontend-f21b-f24-f28-admin-inbox-refunds-tracking.md)
 - [x] **F2.4 Admin refund-requests page** — new `/admin/refunds` tab: tabs
   (در انتظار بررسی / تسویه‌شده / همه) per spec [FE-06], claim cards with the
-  reason in the terracotta-edge quote box, settlement amount in rose mono, and a
+  reason in the terracotta-edge quote box, claimant name/email, and a
   `RefundActionDialog` (approve / reject / settle) wired to `PATCH /refunds/{id}`
-  (settle flips the order's payment status server-side). Bank tracking-code input
-  is missing until B5.3 adds the column.
-  → audit: same file as F2.1b
+  (settle flips the order's payment status server-side). Settlement requires the
+  Paya/Satna bank tracking code (backend enforces it since B5.3) and settled
+  cards show the code + settlement date.
+  → audit: same file as F2.1b; bank-code UI in [2026-09-21-backend-b53-refund-bank-tracking.md](audit/2026-09-21-backend-b53-refund-bank-tracking.md)
 - [ ] **F2.3 Forgot password** — **backend work needed** (this line used to say
   "Supabase reset email flow"; there is no Supabase any more and `auth.py` has no
   reset endpoint). Add a reset-token endpoint + email to `backend-tasks.md` first,
   then the UI.
 - [ ] **F2.5 Pagination for shop & admin lists**
-- [ ] **F2.6 Charts for admin dashboard** — recharts is installed but unused
+- [x] **F2.6 Charts for admin dashboard** — `/admin` now has a range selector
+  (امروز/۷/۳۰/همه), four KPI cards with delta badges, a recharts revenue area
+  chart, an order-status donut with legend, an amber urgent-actions callout, and
+  the latest-orders list — all fed by `GET /admin/kpis?range=` (B5.2).
+  → audit: [2026-09-21-b52-f26-kpi-endpoint-dashboard-charts.md](audit/2026-09-21-b52-f26-kpi-endpoint-dashboard-charts.md)
 - [x] **F2.7 Default address in checkout** — saved addresses are offered above the
   shipping box (default pre-selected, «آدرس جدید» clears it) and pre-fill
   name/phone/province/city/address/postal code; the account tab shows a «پیشفرض»
@@ -290,16 +295,29 @@ conflict (DESIGN_SYSTEM.md §5).
   semantics table (DESIGN_SYSTEM.md §2.3 + §7.2) for order/payment/refund state,
   replacing the uniform terracotta/sand chips; label always names the status, colour
   is secondary. Spec B0.2/B4.2.
-- [ ] **F4.2 Admin shell** — sidebar layout (`[FE-01]`): right `w-64` sidebar with
+- [x] **F4.2 Admin shell** — sidebar layout (`[FE-01]`): right `w-64` sidebar with
   lucide icons, active terracotta edge, mobile sheet, topbar with breadcrumbs +
   quick search + role badge, replacing the tab bar in `admin.tsx`. Spec B3/[FE-01].
+  Done (F4.2): sticky topbar (quick search → `/shop?q=`, role badge, logout),
+  desktop sidebar card + mobile Sheet, 18px icons, active tint, KPI-fed badges on
+  orders/refunds; **tabs are role-gated** per B5.4 (`ROLE_TAB_KEYS` mirrors
+  backend capabilities — support sees داشبورد/پیام‌ها/نظرات only, order_manager
+  adds fulfillment). Breadcrumbs/avatar/command-palette deferred — see audit.
+  → audit: [2026-09-21-frontend-f42-admin-shell-role-gating.md](audit/2026-09-21-frontend-f42-admin-shell-role-gating.md)
 - [ ] **F4.3 Reusable admin data grid** (`[FE-02]`) — search, filter chips, sort,
   pagination, bulk actions, copy-to-clipboard for tracking codes/phones. Needs a
   **decision to install `@tanstack/react-table`**; overlaps F2.5 (pagination).
-- [ ] **F4.4 Order detail drawer + invoice printing** (`[FE-05]`) — `Sheet` with the
+- [x] **F4.4 Order detail drawer + invoice printing** (`[FE-05]`) — `Sheet` with the
   fulfilment stepper, customer address box with copy, itemised breakdown, postal
   tracking input (F2.8) and a `@media print` A4/A5 invoice (no print stylesheet
   exists yet).
+  Done (F4.4): `OrderDetailDrawer.tsx` — left Sheet, 4-step terracotta stepper on
+  the live `pending → processing → shipped → delivered` lifecycle, receiver box +
+  copy, signed item thumbnails + totals, tracking field, cancel; «چاپ فاکتور
+  رسمی» portals the invoice to `<body>` and the new `styles.css` print block
+  prints only it (A4, no chrome). Spec's «تأیید پرداخت» step label adapted to the
+  live statuses (Rule 4) — see audit.
+  → audit: [2026-09-21-frontend-f44-order-drawer-invoice-printing.md](audit/2026-09-21-frontend-f44-order-drawer-invoice-printing.md)
 - [ ] **F4.5 Coupons manager** (`[FE-07]`) — ticket-style cards, usage progress,
   active toggle, Jalali date pickers on top of the existing `/coupons` CRUD.
   Customer-side refunds page stays **F2.4**; charts stay **F2.6**; KPI deltas need

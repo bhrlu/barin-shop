@@ -19,7 +19,7 @@ backend/
 │   ├── security.py        # HS256 JWT + bcrypt password hashing
 │   ├── auth.py            # CurrentUser / AdminUser / OptionalUser dependencies
 │   ├── schemas.py         # pydantic request/response models
-│   ├── seed_auth.py       # bootstrap admin + demo customer
+│   ├── seed_auth.py       # bootstrap admin + demo customer + demo staff (order_manager / support)
 │   ├── seed_products.py   # 20-product catalog + browse tags (idempotent)
 │   ├── seed_demo.py       # demo addresses/favorites/orders
 │   ├── seed_coupons.py    # SANDE10 + WELCOME500
@@ -36,7 +36,7 @@ cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env          # then fill DATABASE_URL + JWT_SECRET
-python -m app.seed_auth       # bootstrap admin + demo customer
+python -m app.seed_auth       # bootstrap admin + demo customer + demo staff
 python -m app.seed_products   # 20 catalog products + tags
 python -m app.seed_coupons    # starter coupons
 uvicorn app.main:app --reload --port 8000
@@ -52,10 +52,14 @@ Docs at http://localhost:8000/docs.
 
 The service issues **its own HS256 JWTs** via `/auth/login` (bcrypt-hashed
 passwords in `public.users`). Every user endpoint requires
-`Authorization: Bearer <token>`; the role is resolved from `public.user_roles`
+`Authorization: Bearer <token>`; roles are resolved from `public.user_roles`
 (DB is source of truth, token claim is the fallback). Admin routes return 403 for
-non-admins. `OptionalUser` resolves a caller when present but stays anonymous
-otherwise (used to personalise search history).
+callers without the route's capability. Staff authorization is capability-based
+(B5.4): routes declare `require_staff("orders")`-style deps and
+`app/services/roles.py::ROLE_CAPABILITIES` maps capabilities → staff roles
+(`admin`/`super_admin` full; `order_manager` fulfillment/catalog/coupons;
+`support` inbox/reviews/stats). `OptionalUser` resolves a caller when present but
+stays anonymous otherwise (used to personalise search history).
 
 ## API summary
 
@@ -100,8 +104,11 @@ Admin:
 | POST/PATCH/DELETE | `/products/{id}/variants` · `/variants/{id}` | variant stock CRUD |
 | GET/PATCH | `/admin/reviews` · `/reviews/{id}` | moderation + seller reply |
 | GET | `/admin/inventory` · `/admin/inventory/low-stock` | stock health / alerts |
-| GET | `/admin/stats` · `/users` · `/orders` · `/payments` · `/refunds` | dashboards |
-| PATCH | `/refunds/{id}` | resolve a refund request |
+| GET | `/admin/stats` · `/users` · `/orders` · `/payments` · `/refunds` | dashboards (refunds carry the claimant's name/email) |
+| GET | `/admin/kpis?range=today\|7d\|30d\|all` | KPI aggregation: gross/net revenue, paid orders, AOV, pending refunds, low-stock, daily revenue series, status breakdown, deltas |
+| GET | `/admin/audit-logs` | audit trail (B5.1): filters `action`, `entity_type`, `entity_id`, `admin_id`; written automatically on privileged mutations |
+| PUT | `/admin/users/{id}/roles` | set a user's staff roles `super_admin`/`order_manager`/`support` (B5.4, audited) |
+| PATCH | `/refunds/{id}` | resolve a refund request — settling (`refunded`) **requires** `bank_tracking_code` (Paya/Satna); every resolution records `resolved_by` + `resolved_at` |
 | GET/DELETE | `/admin/contact-messages` | contact inbox (`?status=new`), delete a message |
 | PATCH | `/admin/contact-messages/{id}` | mark a message `answered` (or reopen it as `new`) |
 | POST/GET/PATCH | `/coupons` · `/coupons/{id}` · `/coupons/generate` | coupon CRUD |

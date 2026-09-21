@@ -1183,3 +1183,187 @@ retroactively edited — this session entry supersedes it.
   by SRI hashes at build time.
 - **Kept the same base image and CMD** — the change is the removal of one RUN
   step, nothing else.
+
+---
+
+## Session 21 — 2026-09-21
+
+**Scope (user request):** B5.3 — refund bank-tracking fields — the next open
+backend task. Completes the settlement half of the F2.4 refunds centre.
+Audit: `plan/audit/2026-09-21-backend-b53-refund-bank-tracking.md`.
+
+### ✅ What was done
+
+- **Schema (idempotent `REFUND_DDL`):** `refund_requests` gained
+  `bank_tracking_code`, `resolved_by` (FK → users) and `resolved_at`; a startup
+  UPDATE normalizes legacy `requested` rows to `pending` (new rows insert
+  `pending` explicitly). New `RefundRequest` ORM model documents the shape.
+- **API:** `PATCH /refunds/{id}` requires a non-blank bank code when settling
+  (422 otherwise), stores it via COALESCE (re-settlement updates, never wipes)
+  and stamps `resolved_by` + `resolved_at` on every resolution;
+  `GET /admin/refunds` now carries the claimant's name/email.
+- **UI (F2.4 completion):** the settlement dialog takes the required Paya/Satna
+  code (dir=ltr, mono, button disabled while empty — mirroring the backend);
+  claim cards show the claimant; settled cards show the code + settlement date.
+- **Cleanup:** deleted the stale `vogue-vintage-vibes/package-lock.json` (npm
+  artifact from this morning's broken install; `bun.lock` is the only lockfile).
+- **Verified:** pytest 39 passed, ruff clean, tsc clean, vite build passes, live
+  smoke **130 routes/checks, 0 failed** (full refund flow asserted end-to-end).
+- **Docs:** backend-tasks (B5.3 ticked), frontend-tasks (F2.4 updated), audit,
+  backend/README, FEATURES ۶.۱۰, DESIGN_SYSTEM §3.3, plan/README, this log.
+
+### ❌ Explicitly not done
+
+- Sheba/card-number capture ([FE-06] pictures one) — no column, no task.
+- SMS/email on settlement (B2.1) and the admin audit-log entry for the
+  resolution (B5.1) — both still open.
+- `admin_notes` (spec plural) not renamed — the existing `admin_note` column is
+  the contract (Rule 4).
+
+### Decisions
+
+- **Bank code required server-side, not just in the UI.** [FE-06] calls it
+  required; enforcing it in `resolve_refund` means no client can settle an
+  untraceable refund, and the disabled button merely mirrors the 422.
+- **COALESCE for the code** so correcting a typo on re-settlement works without
+  a settlement ever losing its code.
+- **Vocabulary normalization is one UPDATE, not a constraint** — a CHECK
+  constraint would break rows the running store already holds (Rule 4); the
+  UPDATE only rewrites the exact legacy value.
+- **User choice from the spec's two options (Rule 0.4):** the plan docs now
+  describe `pending` as the canonical initial state; the DDL default stays
+  `requested` in infra (untouched per Rule 4) but nothing inserts it any more.
+
+---
+
+## Session 22 — 2026-09-21
+
+**Scope (user request):** the ADMIN-*.md files are the spec epics; the main task
+lists pointed at B5.2 + F2.6 (FE-09/FE-03) as the next unblocked pair, shipped
+as one unit since F2.6 was blocked on B5.2.
+Audit: `plan/audit/2026-09-21-b52-f26-kpi-endpoint-dashboard-charts.md`.
+
+### ✅ What was done
+
+- **B5.2** — `GET /admin/kpis?range=today|7d|30d|all`: gross/net revenue, paid
+  orders, AOV, pending refunds, low-stock (per-product threshold), a daily
+  revenue series (paid, non-cancelled), a status breakdown, and deltas vs the
+  preceding window (`all` → null deltas). Unknown range → 422.
+  Found live: asyncpg refuses `CAST($1 AS interval)` — the whitelisted interval
+  literal is inlined instead.
+- **F2.6** — `/admin` rewritten: range selector, 4 KPI cards with delta badges,
+  recharts revenue area chart (terracotta gradient, Persian tooltip), status
+  donut with token-driven colours + legend, amber urgent-actions callout
+  (links to refunds/inventory), skeletons, latest-orders preserved via the
+  existing `adminStats` query.
+- **Verified:** pytest 39 passed, ruff clean, tsc clean, vite build passes,
+  live smoke **138 routes/checks, 0 failed** (KPI block-shape + 8-point series
+  asserted).
+- **Docs:** both task lists ticked, audit, backend/README endpoint table,
+  DESIGN_SYSTEM note, plan/README, this log.
+
+### ❌ Explicitly not done
+
+- F4.x admin shell/data-grid chrome — dashboard stays in the tab shell.
+- B5.1 audit log (next backend epic), B2.2 sales reports (gap ۶.۱۲ unchanged).
+- Chart lazy-loading for the admin chunk — perf follow-up only.
+
+### Decisions
+
+- **Deltas compare window vs preceding window** (7d vs previous 7d), not
+  calendar months — matches the range selector; the spec's MoM badge intent is
+  preserved visually.
+- **Low-stock uses each product's own threshold** (spec's flat «<5» is the
+  default) — the repo's per-product column is the better rule.
+- **Series interval inlined from the whitelist** rather than a bound parameter;
+  the whitelist makes it injection-safe and the comment in the code says why.
+
+---
+
+## Session 23 — 2026-09-21
+
+**Scope (user request):** B5.1 — admin audit log with writes on privileged
+mutations (spec BE-04).
+Audit: `plan/audit/2026-09-21-backend-b51-audit-log.md`.
+
+### ✅ What was done
+
+- **Schema:** idempotent `AUDIT_DDL` — `audit_logs(admin_id FK→users, action,
+  entity_type, entity_id, old_values JSONB, new_values JSONB, ip_address,
+  created_at)` + created_at and (entity_type, entity_id) indexes.
+- **Service:** `app/services/audit.py::record_audit` — inserts on the caller's
+  session so the entry commits atomically with its mutation; a failing audit
+  insert logs and rolls back instead of breaking the request. Closed ACTIONS
+  vocabulary.
+- **Wired:** orders (status / payment_status / tracking_code with real old→new
+  captured before the UPDATE), cancel, refund resolution (bank code + note),
+  product & variant & coupon CUD (tracked fields old→new), review moderation
+  and admin deletions. Customer review deletions deliberately not audited.
+- **Read API:** `GET /admin/audit-logs` (admin-only; filters action /
+  entity_type / entity_id / admin_id; joined admin_email/admin_name).
+- **Verified:** pytest 39 passed, ruff clean, live smoke 0 failed (audit
+  entries appear with admin identity; entity filter works; customer gets 403).
+- **Docs:** B5.1 ticked + two follow-up checkboxes (B5.1a IP capture, B5.1b
+  DB-level append-only), audit, backend/README, plan/README, this log.
+
+### ❌ Explicitly not done
+
+- IP capture (B5.1a) and DB tamper-resistance (B5.1b) — split off as checkboxes.
+- No admin UI for the trail (belongs to F4.x shell work).
+- Role changes not auditable until B5.4 exists.
+
+### Decisions
+
+- **Audit insert shares the mutation's transaction** — an admin action must
+  never exist without its trail entry (and vice versa); `record_audit` failing
+  logs rather than raises so the audit layer can never take down a legit
+  mutation.
+- **One entry per changed facet on PATCH /orders** (status / payment /
+  tracking separately) instead of one blob — the trail reads like a story of
+  the order's lifecycle.
+- **`admin_id` nullable + ON DELETE SET NULL** so deleting a user never breaks
+  the historical trail.
+
+## Session 24 — 2026-09-21 — B5.4 granular staff roles (spec BE-04)
+
+**Done**
+- `ROLE_DDL` (autocommit, idempotent): `app_role` enum + `super_admin`/`order_manager`/`support`; legacy `admin` keeps full staff access (Rule 4).
+- `app/services/roles.py`: `ROLE_CAPABILITIES` capability map + `resolve_roles`/`resolve_role`.
+- `app/auth.py`: `AuthUser.roles` (set), `require_staff(capability)` factory, `Staff*` aliases; corrected `require_admin` docstring.
+- Per-route guards swapped in: orders (orders/refunds), admin (stats/users/audit/orders/refunds), contact (inbox), coupons, products (catalog), reviews.
+- `PUT /admin/users/{id}/roles` — full-replacement role set, admin-only, audited (`update_user_roles` + `user` entity type) — closes B5.1's "role changes not auditable" open item.
+- `seed_auth.py`: demo staff `ordermgr@sande.local` / `support@sande.local` (`staff1234`).
+- Frontend `auth.tsx`: admin shell accepts all staff roles (per-tab gating stays F4.2).
+
+**Verification** — pytest 39 passed; ruff clean; live smoke **156 checks, 0 failed** (self-grant 403, grant → capability matrix asserted, support blocked from fulfillment but reaching inbox, audit trail shows old/new roles, demote → 403); tsc + vite build clean.
+
+**Not done / open** — F4.2 per-tab UI gating; `super_admin` has no unique power yet (tiers into B5.1b); no role-list endpoint (users list carries roles).
+
+**Decisions** — capability matrix is ours (spec names roles only): order_manager owns fulfillment/refunds/catalog/coupons; support owns inbox/reviews/stats; users/audit admin-only. `storage` stays on coarse `AdminUser` (upload surface, tightened later if needed).
+
+## Session 25 — 2026-09-21 — F4.2 admin shell + per-tab role gating (spec FE-01)
+
+**Done**
+- `admin.tsx` rewritten from the tab bar to the [FE-01] shell: sticky blurred topbar (quick search → `/shop?q=`, Persian role badge, logout), right `w-64` sidebar (rounded card on desktop, right-side Sheet on mobile), 18px lucide icons with active terracotta tint, «بازگشت به فروشگاه» link.
+- Per-tab role gating (`ROLE_TAB_KEYS`) mirroring backend `ROLE_CAPABILITIES` from B5.4: admin/super_admin → all 8 tabs; order_manager → + fulfillment/catalog; support → dashboard/messages/reviews; unknown roles degrade safely. API stays the authority — this is navigation, not security.
+- Live badges on سفارش‌ها (pending+processing) and بازپرداخت‌ها (pending) from `adminKpis("all")`, Persian digits, 60s refetch, 403-tolerant.
+- Gate flash fixed (render nothing while auth `loading`).
+
+**Verification** — tsc clean; vite build passes; live role matrix re-checked (support: orders 403/inbox 200/kpis 200; order_manager: 200/200/200 — the UI matrix matches API enforcement exactly).
+
+**Not done / open** — topbar breadcrumbs; `Cmd+K` command palette (input navigates to shop search; needs `command` primitive); admin avatar; route-level `beforeLoad` guards for direct URL access to hidden tabs (data calls 403 gracefully today).
+
+**Decisions** — sidebar styled as a rounded-border card per repo B0.4 widget conventions instead of the spec's hard `border-l` rail; messages/reviews tabs added to the spec's nav list since those routes now exist.
+
+## Session 26 — 2026-09-21 — F4.4 order detail drawer + invoice printing (spec FE-05)
+
+**Done**
+- New `components/admin/OrderDetailDrawer.tsx`: left Sheet with the 4-step fulfilment stepper (terracotta circles, advance button over the live `pending → processing → shipped → delivered` lifecycle), receiver box with «کپی آدرس گیرنده» + method, itemised breakdown with `resolveImageUrls`-signed thumbnails and totals, tracking input (F2.8), «لغو سفارش».
+- Invoice printing: «چاپ فاکتور رسمی» — the invoice DOM portals to `#__se_invoice_root` on `<body>`; the new `styles.css` `@media print` block hides the app while `body[data-order-print-open]` is set and prints only the A4 invoice (`@page A4; margin: 14mm`, no nav/buttons/backgrounds). Portal + attribute exist only while the drawer is open, so normal printing elsewhere is unaffected.
+- `admin.orders.tsx`: per-order «مشاهده و پردازش» opens the drawer; drawer's order object re-resolved from the refetched list (never stale); invalidation now covers the KPI queries.
+
+**Verification** — tsc clean; vite build passes; live endpoints all already smoke-covered (156 checks). Manual: stepper advance, address copy, tracking save/clear, print preview shows only the invoice.
+
+**Not done / open** — payment-status toggle inside the drawer (list select still the tool); tax/company-registration fields on the invoice (no data model); A5 variant; print type scale.
+
+**Decisions** — stepper labels mapped to the live lifecycle instead of the spec's «تأیید پرداخت» wording (Rule 4: status strings untouchable); pending can advance while unpaid (status/payment independent, as elsewhere); invoice portalled to body rather than hidden-by-CSS-in-place (reliable across Radix overlays).

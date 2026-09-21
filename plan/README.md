@@ -42,7 +42,13 @@ plan/
     ├── 2026-09-21-design-system-spec-merge.md
     ├── 2026-09-21-backend-frontend-nonadmin-contacts-addresses-payments.md
     ├── 2026-09-21-frontend-f27b-edit-address.md
-    └── 2026-09-21-frontend-f21b-f24-f28-admin-inbox-refunds-tracking.md
+    ├── 2026-09-21-frontend-f21b-f24-f28-admin-inbox-refunds-tracking.md
+    ├── 2026-09-21-backend-b53-refund-bank-tracking.md
+    ├── 2026-09-21-b52-f26-kpi-endpoint-dashboard-charts.md
+    ├── 2026-09-21-backend-b51-audit-log.md
+    ├── 2026-09-21-backend-b54-granular-staff-roles.md
+    ├── 2026-09-21-frontend-f42-admin-shell-role-gating.md
+    └── 2026-09-21-frontend-f44-order-drawer-invoice-printing.md
 ```
 
 The two `ADMIN-*.md` files hold the back-office task split (epics [BE-01]… and

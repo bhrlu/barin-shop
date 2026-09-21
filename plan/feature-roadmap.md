@@ -78,12 +78,13 @@ Unchecked items are not yet implemented.
 
 ## 8. Admin Panel
 - ✅ Dashboard, product management with image gallery, order management, user list
-- [ ] Daily/monthly sales reports with charts
+- [x] Daily/monthly sales reports with charts — **KPI endpoint + charts done (B5.2/F2.6)**
 - [ ] Best-sellers, top customers, and inventory reports
 - [ ] Excel/CSV export of orders
-- [ ] Refund request management (approve/reject)
-- [ ] Review and discount-code management
-- [ ] Multiple roles (manager, warehouse, support)
+- [x] Refund request management (approve/reject) — **done (F2.4/B5.3, with bank-tracking settlement)**
+- [x] Order detail drawer with fulfilment stepper + printable invoice — **done (F4.4: A4 print, app hidden while printing)**
+- [x] Review and discount-code management — **reviews UI done (admin.reviews); coupon CRUD in API, manager UI is F4.5**
+- [x] Multiple roles (manager, warehouse, support) — **granular staff roles + per-route enforcement done (B5.4); role-gated admin shell (F4.2)**
 
 ## 9. Infrastructure & Experience
 - [ ] Dark mode
