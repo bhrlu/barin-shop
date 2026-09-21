@@ -42,6 +42,7 @@ from app.schemas import (
     ProductVariantUpdateIn,
 )
 from app.security import decode_access_token
+from app.services.catalog_filters import split_multi
 from app.services.roles import resolve_role
 
 log = logging.getLogger(__name__)
@@ -132,8 +133,14 @@ async def list_products(
     badge: str | None = None,
     availability: str | None = None,
     on_sale: bool = False,
-    size: str | None = None,
-    color: str | None = None,
+    size: Annotated[
+        list[str] | None,
+        Query(description="repeatable and/or comma-separated sizes, e.g. ?size=M,L&size=XL"),
+    ] = None,
+    color: Annotated[
+        list[str] | None,
+        Query(description="repeatable and/or comma-separated colour names"),
+    ] = None,
     min_price: int | None = Query(default=None, ge=0),
     max_price: int | None = Query(default=None, ge=0),
     sort: SortKey = "new",
@@ -163,15 +170,32 @@ async def list_products(
         params["availability"] = availability
     if on_sale:
         conditions.append("p.old_price IS NOT NULL")
-    if size:
-        conditions.append(":size = ANY(p.sizes)")
-        params["size"] = size
-    if color:
+    # Size and colour are OR within their own facet and AND across facets. When
+    # both are given the match is resolved **per combination**: at least one
+    # requested size × colour pair must still be purchasable, so a pair the admin
+    # deactivated with a variant row does not count as offered.
+    sizes = split_multi(size)
+    colors = split_multi(color)
+    if sizes and colors:
+        conditions.append(
+            "EXISTS (SELECT 1 FROM unnest(p.sizes) AS s "
+            "CROSS JOIN LATERAL jsonb_array_elements(p.colors) AS c "
+            "WHERE s = ANY(:sizes) AND c->>'name' = ANY(:colors) "
+            "  AND NOT EXISTS (SELECT 1 FROM public.product_variants v "
+            "                  WHERE v.product_id = p.id AND v.size = s "
+            "                    AND v.color = c->>'name' AND NOT v.active))"
+        )
+        params["sizes"] = sizes
+        params["colors"] = colors
+    elif sizes:
+        conditions.append("p.sizes && CAST(:sizes AS text[])")
+        params["sizes"] = sizes
+    elif colors:
         conditions.append(
             "EXISTS (SELECT 1 FROM jsonb_array_elements(p.colors) c "
-            "WHERE c->>'name' = :color)"
+            "WHERE c->>'name' = ANY(:colors))"
         )
-        params["color"] = color
+        params["colors"] = colors
     if min_price is not None:
         conditions.append("p.price >= :min_price")
         params["min_price"] = min_price

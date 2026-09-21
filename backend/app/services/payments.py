@@ -12,11 +12,17 @@ If no real merchant id is configured, the module runs in simulation mode so the
 flow is testable end-to-end without credentials (mirrors the current frontend
 simulator, but with real DB records).
 
-Status conventions match the existing Supabase data:
+Status conventions match the existing data:
   orders.payment_status: unpaid | paid | refunded
   orders.status:         pending | processing | shipped | delivered | cancelled
   payments.status:       pending | succeeded | failed
   references:            SND-{order_number}-{6 digits}
+
+The gateway **authority** lives in its own `payments.authority` column and is never
+overwritten; `reference` starts as the authority too (so a pending row reads the way
+it always did) and becomes the `SND-…` reference on success. `verify_and_finalize`
+looks the session up by authority and is idempotent, so a repeat callback or a
+second `/payments/verify` reports `already_paid` instead of failing to find the row.
 """
 
 import logging
@@ -186,8 +192,9 @@ async def start_payment(
     # remember the session: pending payments row keyed by authority
     await session.execute(
         text(
-            "INSERT INTO public.payments (order_id, user_id, amount, method, status, reference) "
-            "VALUES (:oid, :uid, :amount, 'online', 'pending', :authority)"
+            "INSERT INTO public.payments "
+            "(order_id, user_id, amount, method, status, reference, authority) "
+            "VALUES (:oid, :uid, :amount, 'online', 'pending', :authority, :authority)"
         ),
         {"oid": str(order_id), "uid": str(user_id), "amount": amount, "authority": authority},
     )
@@ -200,12 +207,21 @@ async def start_payment(
 
 
 async def verify_and_finalize(session: AsyncSession, authority: str, ok: bool) -> PaymentVerify:
-    """Called from the gateway callback. Finalizes order + payment rows."""
+    """Called from the gateway callback. Finalizes order + payment rows.
+
+    Idempotent: a session that already succeeded reports `already_paid` (with the
+    reference it stored) instead of being an unknown session, so a duplicated
+    gateway callback or a client that also POSTs `/payments/verify` is harmless.
+    The `reference = :authority` branch keeps rows created before the `authority`
+    column existed readable.
+    """
     pay = (
         await session.execute(
             text(
-                "SELECT id, order_id, user_id, amount, status FROM public.payments "
-                "WHERE reference = :authority AND status = 'pending' "
+                "SELECT id, order_id, user_id, amount, status, reference "
+                "FROM public.payments "
+                "WHERE authority = :authority "
+                "   OR (authority IS NULL AND reference = :authority) "
                 "ORDER BY created_at DESC LIMIT 1"
             ),
             {"authority": authority},
@@ -214,6 +230,22 @@ async def verify_and_finalize(session: AsyncSession, authority: str, ok: bool) -
 
     if pay is None:
         raise PaymentError("unknown_session", "جلسه پرداخت پیدا نشد")
+
+    # already finalized → report it instead of reprocessing (or 400-ing)
+    if pay["status"] == "succeeded":
+        return PaymentVerify(
+            status="already_paid",
+            reference=pay["reference"],
+            amount=int(pay["amount"]),
+            order_id=str(pay["order_id"]),
+        )
+    if pay["status"] == "failed":
+        return PaymentVerify(
+            status="failed",
+            reference=None,
+            amount=int(pay["amount"]),
+            order_id=str(pay["order_id"]),
+        )
 
     order = (
         await session.execute(

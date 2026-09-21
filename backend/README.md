@@ -66,7 +66,7 @@ Public / customer:
 | GET | `/health` | – | liveness (used by the compose healthcheck) |
 | POST | `/auth/signup` · `/auth/login` | – | register / sign in → token |
 | GET/PATCH | `/auth/me` | user | profile read / update |
-| GET | `/products` | optional | catalog list — filters `category, tag, badge, availability, on_sale, size, color, min_price, max_price` + `sort` |
+| GET | `/products` | optional | catalog list — filters `category, tag, badge, availability, on_sale, size, color, min_price, max_price` + `sort`. `size`/`color` are **multi-value** (repeatable and/or comma-separated) |
 | GET | `/products/compare?ids=` | – | side-by-side comparison |
 | GET | `/products/{id}` | – | one product (with `avg_rating`, `review_count`) |
 | GET | `/products/{id}/related` · `/recommendations` | – | discovery |
@@ -76,17 +76,19 @@ Public / customer:
 | POST | `/products/{id}/view` · GET `/recently-viewed` | user | view tracking |
 | GET | `/search?q=` · `/search/suggest` | optional | search (name, description, material, category, tags) + autocomplete |
 | GET/DELETE | `/search/history` | user | recent searches |
-| POST | `/stock/check` | – | pre-check cart lines (variant-aware) |
+| POST | `/stock/check` | – | pre-check cart lines (availability-gated, variant-aware) |
 | POST | `/coupons/validate` | user | validate a code against a subtotal |
 | POST | `/checkout` | user | create order (stock-locked, coupon applied) |
 | GET | `/orders` · `/orders/{id}` | user | my orders / one order |
 | POST | `/orders/{id}/cancel` · `/refunds` | user | cancel / refund request |
+| PATCH | `/orders/{id}` | admin | status + payment status + shipment tracking code (`tracking_code`; empty string clears) |
 | GET | `/orders/{id}/payment-session` | user | simulated gateway session |
 | POST | `/orders/{id}/payment-complete` | user | simulated gateway callback |
 | GET | `/payments/mine` | user | payment history |
 | POST | `/payments/start` · `/payments/verify` | user | real Zarinpal session / verify |
-| GET | `/payments/zarinpal/callback` | – | gateway return (redirects to the frontend) |
-| GET/POST/DELETE | `/addresses` | user | address book |
+| GET | `/payments/zarinpal/callback` | – | gateway return (redirects to the frontend; idempotent) |
+| GET/POST/PATCH/DELETE | `/addresses` | user | address book (at most one `is_default`; `PATCH` edits and/or moves the default) |
+| POST | `/contact` | – | store a contact-form message (guest-friendly) |
 | GET/POST | `/favorites` · `/favorites/{id}` | user | wishlist |
 | POST | `/storage/upload-url` · `/storage/sign` | admin / user | MinIO presign |
 
@@ -100,6 +102,8 @@ Admin:
 | GET | `/admin/inventory` · `/admin/inventory/low-stock` | stock health / alerts |
 | GET | `/admin/stats` · `/users` · `/orders` · `/payments` · `/refunds` | dashboards |
 | PATCH | `/refunds/{id}` | resolve a refund request |
+| GET/DELETE | `/admin/contact-messages` | contact inbox (`?status=new`), delete a message |
+| PATCH | `/admin/contact-messages/{id}` | mark a message `answered` (or reopen it as `new`) |
 | POST/GET/PATCH | `/coupons` · `/coupons/{id}` · `/coupons/generate` | coupon CRUD |
 
 ## Search model
@@ -122,13 +126,57 @@ otherwise the product's aggregate stock applies. Checkout locks rows `FOR UPDATE
 and decrements with a guarded `UPDATE … WHERE stock >= qty` so nothing can
 oversell. Shared by `POST /stock/check` and checkout via `app/services/variants.py`.
 
+### Availability gate
+
+`products.availability` (`in_stock` / `coming_soon` / `preorder`) is a **hard
+gate** checked before stock in both `POST /stock/check` and checkout: anything
+other than `in_stock` is rejected with reason `not_available`, whatever the stock
+says. Preorder is intentionally not orderable yet (the order schema has no
+preorder fulfilment flag); enabling it means relaxing
+`app/services/availability.py` and adding that flag — nothing else assumes it.
+
+Every rejected line reports a `reason` from one closed set (`app/schemas.py`):
+`not_found`, `inactive`, `not_available`, `size_invalid`, `insufficient_stock`.
+`/stock/check` returns them directly; checkout returns them inside the
+`stock_conflict` 409 payload, and the frontend keeps one copy of the Persian
+copy for both (`src/lib/stock-issues.ts`).
+
+## Payment sessions
+
+`POST /payments/start` writes a pending `payments` row and keeps the gateway
+**authority in its own `payments.authority` column** (`reference` starts as the
+authority, so a pending row reads exactly as before, and becomes the `SND-…`
+reference on success). `verify_and_finalize` looks the session up by authority and
+is **idempotent**: a repeated gateway callback or a second `POST /payments/verify`
+reports `already_paid` (HTTP 200 / a redirect to the same order page) instead of
+failing to find the row. Rows written before the column existed are still found
+through the `reference = authority` fallback.
+
+## Address book
+
+A customer has **at most one default address**: the first one created becomes the
+default, an explicit `is_default` moves the flag, `PATCH /addresses/{id}` edits
+fields and/or promotes, and deleting the default promotes the most recent
+survivor. `GET /addresses` returns defaults first so the checkout pre-fill is
+deterministic, and `POST /checkout` stores the shipping address (including the
+optional `province`) in `orders.shipping_address`.
+
+### Catalog facets
+
+`size` and `color` accept repeated and/or comma-separated values
+(`?size=M&size=L`, `?size=M,L` — both normalised by
+`app/services/catalog_filters.py`). Values are OR within a facet and AND across
+facets, resolved **per combination**: when both are given, at least one requested
+size × colour pair must still be purchasable, so a pair the admin deactivated with
+a variant row is not counted as offered.
+
 ## Catalog DDL
 
 The coupon **and** catalog tables/columns are created idempotently on startup
 (`app/db.py`), so a fresh database and an already-seeded one both converge. The
 base schema comes from `infra/initdb/`; this service owns only the additive
-columns and the `coupons`, `product_variants`, `product_reviews`,
-`search_history`, `recently_viewed` tables.
+columns (including `payments.authority`) and the `coupons`, `product_variants`,
+`product_reviews`, `search_history`, `recently_viewed`, `contact_messages` tables.
 
 ## Tests
 

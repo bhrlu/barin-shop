@@ -83,9 +83,9 @@ async def zarinpal_callback(
         log.warning("payment callback failed: %s", exc)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, exc.message_fa) from exc
 
-    # The order comes straight from the verify result: once the payment row is
-    # finalized its `reference` is the SND-... code, not the authority any more,
-    # so looking the payment up by authority here would always miss.
+    # The order comes straight from the verify result rather than a second lookup,
+    # so the callback is a single transaction and a repeat call (now idempotent,
+    # `status=already_paid`) still redirects to the right order page.
     if result.order_id is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "سفارش پیدا نشد")
 

@@ -19,6 +19,7 @@ from app.routers import (
     admin,
     auth,
     checkout,
+    contact,
     coupons,
     favorites,
     health,
@@ -42,8 +43,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="SÂNDÉ Backend",
-    description="Auth · Catalog · Coupons · Payments · Stock · Storage (MinIO)",
-    version="0.2.0",
+    description="Auth · Catalog · Coupons · Payments · Stock · Storage (MinIO) · Contact",
+    version="0.3.0",
     lifespan=lifespan,
 )
 
@@ -71,6 +72,7 @@ app.include_router(admin.router)
 app.include_router(storage.router)
 app.include_router(search.router)
 app.include_router(stock.router)
+app.include_router(contact.router)
 app.include_router(coupons.router)
 app.include_router(checkout.router)
 app.include_router(payments.router)

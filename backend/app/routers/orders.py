@@ -2,7 +2,7 @@
 
 - GET /orders            — the caller's orders with items
 - GET /orders/{id}       — one order (owner or admin)
-- PATCH /orders/{id}     — admin status updates
+- PATCH /orders/{id}     — admin status updates + shipment tracking code
 - POST /orders/{id}/cancel        — customer cancel (pre-shipment only)
 - POST /orders/{id}/refunds       — customer refund request (cancelled+paid)
 - PATCH /refunds/{requestId}      — admin resolves a refund request
@@ -27,6 +27,7 @@ router = APIRouter(tags=["orders"])
 class OrderPatch(BaseModel):
     status: str | None = None
     payment_status: str | None = None
+    tracking_code: str | None = Field(default=None, max_length=60)
 
 
 class CancelOut(BaseModel):
@@ -56,6 +57,7 @@ class PaymentSessionOut(BaseModel):
     order_number: str
     total: int
     payment_status: str
+    # the simulated gateway's session code, unrelated to the shipment tracking code
     tracking_code: str
 
 
@@ -74,7 +76,8 @@ _ALLOWED_PAYMENT_STATUS = {"unpaid", "paid", "refunded"}
 
 _ORDER_SELECT = (
     "SELECT o.id, o.order_number, o.user_id, o.status, o.payment_status, o.payment_method, "
-    "o.subtotal, o.discount, o.shipping, o.total, o.shipping_address, o.note, o.created_at, "
+    "o.subtotal, o.discount, o.shipping, o.total, o.shipping_address, o.note, "
+    "o.tracking_code, o.created_at, "
     "COALESCE(json_agg(json_build_object("
     "'id', i.id, 'order_id', i.order_id, 'product_id', i.product_id, 'name', i.name, "
     "'price', i.price, 'size', i.size, 'color', i.color, 'image', i.image, "
@@ -139,6 +142,10 @@ async def patch_order(
     if body.payment_status:
         sets.append("payment_status = :pstatus")
         params["pstatus"] = body.payment_status
+    if body.tracking_code is not None:
+        # empty string clears the code, mirroring PATCH /addresses semantics
+        sets.append("tracking_code = :tracking")
+        params["tracking"] = body.tracking_code.strip() or None
     if not sets:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "چیزی برای به‌روزرسانی نیست")
 

@@ -94,9 +94,136 @@ def main() -> int:
         "province": "تهران", "city": "تهران", "postal_code": "1998765432",
         "line": "خیابان تست، پلاک ۱", "is_default": False,
     })
+    second = call("POST", "/addresses", customer, json={
+        "title": "دفتر", "receiver": "آزمون دوم", "phone": "09120000001",
+        "province": "تهران", "city": "تهران", "postal_code": "1998765433",
+        "line": "خیابان تست، پلاک ۲", "is_default": True,
+    })
     if created is not None and created.status_code == 201:
-        call("DELETE", f"/addresses/{created.json()['id']}", customer)
+        first_id = created.json()["id"]
+        second_ok = second is not None and second.status_code == 201
+        second_id = second.json()["id"] if second_ok and second is not None else None
+
+        # exactly one default, and it is the one just created as default
+        listed = call("GET", "/addresses", customer)
+        if listed is not None and listed.status_code == 200:
+            defaults = [a["id"] for a in listed.json() if a["is_default"]]
+            check(
+                "only one default address",
+                defaults == ([second_id] if second_id else defaults),
+                f"defaults={defaults}",
+            )
+
+        # PATCH moves the default to the other address
+        patched = call(
+            "PATCH", f"/addresses/{first_id}", customer,
+            json={"is_default": True, "title": "خانهٔ من"},
+        )
+        if patched is not None and patched.status_code == 200:
+            body = patched.json()
+            check(
+                "PATCH address sets fields + default",
+                body["is_default"] is True and body["title"] == "خانهٔ من",
+                f"is_default={body['is_default']} title={body['title']}",
+            )
+            listed = call("GET", "/addresses", customer)
+            if listed is not None and listed.status_code == 200:
+                defaults = [a["id"] for a in listed.json() if a["is_default"]]
+                check("PATCH keeps a single default", defaults == [first_id], str(defaults))
+
+        # the account's edit form sends fields only (F2.7b), so it must not touch
+        # the flag — otherwise saving an edit would demote the default address
+        fields_only = call(
+            "PATCH", f"/addresses/{first_id}", customer,
+            json={
+                "title": "خانهٔ ویرایش‌شده", "receiver": "آزمون ویرایش",
+                "phone": "09120000009", "province": "البرز", "city": "کرج",
+                "postal_code": "1998765439", "line": "خیابان تست، پلاک ۳",
+            },
+        )
+        if fields_only is not None and fields_only.status_code == 200:
+            body = fields_only.json()
+            check(
+                "PATCH fields only edits without touching is_default",
+                body["is_default"] is True
+                and body["city"] == "کرج"
+                and body["receiver"] == "آزمون ویرایش",
+                f"is_default={body['is_default']} city={body['city']} receiver={body['receiver']}",
+            )
+
+        # deleting the default promotes the remaining address
+        call("DELETE", f"/addresses/{first_id}", customer)
+        if second_id:
+            listed = call("GET", "/addresses", customer)
+            if listed is not None and listed.status_code == 200:
+                rest = [a for a in listed.json() if a["id"] == second_id]
+                check(
+                    "deleting the default promotes the successor",
+                    bool(rest) and rest[0]["is_default"] is True,
+                    f"successor={rest}",
+                )
+            call("DELETE", f"/addresses/{second_id}", customer)
+        call("PATCH", f"/addresses/{uuid4()}", customer, json={"is_default": True})  # 404
     call("DELETE", f"/addresses/{uuid4()}", customer)  # expected 404
+
+    # --- contact form persistence ---
+    sent = call(
+        "POST",
+        "/contact",
+        json={
+            "name": "آزمون تماس",
+            "contact": "smoke@example.com",
+            "message": "این پیام از اسکریپت اسموک است.",
+        },
+    )
+    if sent is not None and sent.status_code == 201:
+        message_id = sent.json()["id"]
+        inbox = call("GET", "/admin/contact-messages", admin)
+        listed = (inbox.json() if inbox is not None and inbox.status_code == 200 else []) or []
+        check(
+            "stored contact message is readable by an admin",
+            any(m["id"] == message_id for m in listed),
+            f"messages={len(listed)}",
+        )
+        call("DELETE", f"/admin/contact-messages/{message_id}", admin)
+    call("POST", "/contact", json={"name": "x", "contact": "y", "message": "z"})  # 422
+
+    # --- contact inbox mark-answered (F2.1b) ---
+    sent2 = call(
+        "POST",
+        "/contact",
+        json={
+            "name": "آزمون پاسخ",
+            "contact": "answerme@example.com",
+            "message": "این پیام باید پاسخ‌داده‌شده علامت بخورد.",
+        },
+    )
+    if sent2 is not None and sent2.status_code == 201:
+        msg2 = sent2.json()["id"]
+        marked = call(
+            "PATCH", f"/admin/contact-messages/{msg2}", admin, json={"status": "answered"}
+        )
+        check(
+            "PATCH /admin/contact-messages/{id} marks answered",
+            marked is not None
+            and marked.status_code == 200
+            and marked.json().get("status") == "answered",
+            f"{marked.status_code if marked else 0} {marked.text[:80] if marked else ''}",
+        )
+        inbox2 = call("GET", "/admin/contact-messages?status=answered", admin)
+        listed2 = (inbox2.json() if inbox2 is not None and inbox2.status_code == 200 else []) or []
+        check(
+            "answered message appears under ?status=answered",
+            any(m["id"] == msg2 for m in listed2),
+            f"answered={len(listed2)}",
+        )
+        bad = call("PATCH", f"/admin/contact-messages/{msg2}", admin, json={"status": "bogus"})
+        check(
+            "PATCH /admin/contact-messages/{id} rejects unknown status",
+            bad is not None and bad.status_code == 422,
+            f"{bad.status_code if bad else 0}",
+        )
+        call("DELETE", f"/admin/contact-messages/{msg2}", admin)
 
     # --- favorites ---
     call("GET", "/favorites", customer)
@@ -107,6 +234,22 @@ def main() -> int:
     call("GET", "/products?sort=price_asc&on_sale=true")
     call("GET", "/products?availability=in_stock&sort=rating")
     call("GET", "/products?category=tshirt&size=M")
+
+    # multi-value facets: repeated params and comma-separated values must agree
+    flat = call("GET", "/products?size=M")
+    repeat = call("GET", "/products?size=M&size=L")
+    comma = call("GET", "/products?size=M,L")
+    if all(r is not None and r.status_code == 200 for r in (flat, repeat, comma)):
+        n_flat = len(flat.json())
+        n_repeat = len(repeat.json())
+        n_comma = len(comma.json())
+        check(
+            "multi-size: repeated == comma and OR widens",
+            n_repeat == n_comma and n_repeat >= n_flat,
+            f"M={n_flat} M+L={n_repeat}/{n_comma}",
+        )
+    call("GET", "/products?size=M,L&color=کرم")
+    call("GET", "/products?size=")  # empty facet value must not 500
     call("GET", f"/products/compare?ids={pid}")
     call("GET", f"/products/{pid}/related")
     call("GET", f"/products/{pid}/recommendations")
@@ -151,6 +294,49 @@ def main() -> int:
     )
     call("POST", "/coupons/generate", admin)
 
+    # --- availability guard (B4.11) ---
+    # Toggle the first product to coming_soon and back: both the stock pre-check
+    # and checkout must reject it. The original value is restored either way.
+    original = call("GET", f"/products/{pid}").json()["availability"]
+    guard_size = prods[0]["sizes"][0] if prods[0]["sizes"] else "M"
+    guard_color = prods[0]["colors"][0]["name"] if prods[0]["colors"] else "x"
+    guard_line = {
+        "product_id": pid,
+        "size": guard_size,
+        "color": guard_color,
+        "quantity": 1,
+    }
+    call("PATCH", f"/products/{pid}", admin, json={"availability": "coming_soon"})
+    guarded = call("POST", "/stock/check", json=[guard_line])
+    if guarded is not None and guarded.status_code == 200:
+        reasons = [i.get("reason") for i in guarded.json().get("issues", [])]
+        check("coming_soon rejected by /stock/check", reasons == ["not_available"], str(reasons))
+    guarded_order = call(
+        "POST",
+        "/checkout",
+        customer,
+        json={
+            "lines": [guard_line],
+            "address": {
+                "full_name": "آزمون",
+                "phone": "09120000000",
+                "city": "تهران",
+                "line": "خیابان تست، پلاک ۱",
+            },
+        },
+    )
+    if guarded_order is not None:
+        detail = guarded_order.json().get("detail", {})
+        check(
+            "coming_soon rejected by /checkout (409 stock_conflict/not_available)",
+            guarded_order.status_code == 409
+            and isinstance(detail, dict)
+            and detail.get("code") == "stock_conflict"
+            and [i.get("reason") for i in detail.get("issues", [])] == ["not_available"],
+            f"{guarded_order.status_code} {detail}",
+        )
+    call("PATCH", f"/products/{pid}", admin, json={"availability": original})
+
     # --- checkout (creates a real order for the customer) ---
     order_id = None
     color = prods[0]["colors"][0]["name"] if prods[0]["colors"] else "x"
@@ -166,6 +352,7 @@ def main() -> int:
             "address": {
                 "full_name": "آزمون",
                 "phone": "09120000000",
+                "province": "تهران",
                 "city": "تهران",
                 "line": "خیابان تست، پلاک ۱",
                 "postal_code": "1998765432",
@@ -180,9 +367,53 @@ def main() -> int:
     if not order_id and orders is not None and orders.status_code == 200 and orders.json():
         order_id = orders.json()[0]["id"]
     if order_id:
-        call("GET", f"/orders/{order_id}", customer)
+        order_detail = call("GET", f"/orders/{order_id}", customer)
+        if order_detail is not None and order_detail.status_code == 200:
+            addr = order_detail.json().get("shipping_address") or {}
+            check(
+                "checkout keeps province + postal code in shipping_address",
+                addr.get("province") == "تهران" and addr.get("postal_code") == "1998765432",
+                str(addr),
+            )
         call("GET", f"/orders/{order_id}/payment-session", customer)
-        call("POST", "/payments/start", customer, json={"order_id": order_id})
+        started = call("POST", "/payments/start", customer, json={"order_id": order_id})
+        authority = (
+            started.json()["authority"]
+            if started is not None and started.status_code == 200
+            else None
+        )
+
+        # Gateway return, then the *same* authority again: B3.7 — the authority has
+        # its own column now, so the repeat is an idempotent `already_paid`
+        # (redirect / 200) instead of a 400 "session not found".
+        def gateway_callback(auth: str):
+            return httpx.get(
+                BASE + "/payments/zarinpal/callback",
+                params={"authority": auth},
+                follow_redirects=False,
+                timeout=15,
+            )
+
+        if authority:
+            first_cb = gateway_callback(authority)
+            check("gateway callback verifies (3xx)", 300 <= first_cb.status_code < 400,
+                  f"{first_cb.status_code}")
+            repeat_cb = gateway_callback(authority)
+            check(
+                "repeat gateway callback is idempotent (not 400)",
+                repeat_cb.status_code < 400,
+                f"{repeat_cb.status_code} {repeat_cb.text[:120]}",
+            )
+            verified = call("POST", "/payments/verify", customer, params={"authority": authority})
+            if verified is not None:
+                check(
+                    "POST /payments/verify on a settled session → already_paid",
+                    verified.status_code == 200
+                    and verified.json().get("status") == "already_paid",
+                    f"{verified.status_code} {verified.text[:120]}",
+                )
+
+        # the simulated in-app path still works on an order the gateway settled
         call("POST", f"/orders/{order_id}/payment-complete", customer, json={"outcome": "success"})
     call("POST", "/payments/verify", customer, params={"authority": "unknown-authority"})
     call("GET", "/payments/mine", customer)
@@ -192,6 +423,46 @@ def main() -> int:
     call("GET", "/admin/users", admin)
     call("GET", "/admin/refunds", admin)
     call("GET", "/admin/orders", admin)
+    check(
+        "admin orders carry tracking_code",
+        all("tracking_code" in o for o in (call("GET", "/admin/orders", admin).json() or [])),
+        "",
+    )
+    if order_id:
+        tracking24 = "249028345612345678901234"
+        track = call("PATCH", f"/orders/{order_id}", admin, json={"tracking_code": tracking24})
+        check(
+            "PATCH /orders/{id} saves tracking_code",
+            track is not None
+            and track.status_code == 200
+            and track.json().get("tracking_code") == tracking24,
+            f"{track.status_code if track else 0} {track.text[:80] if track else ''}",
+        )
+        customer_view = call("GET", f"/orders/{order_id}", customer)
+        check(
+            "customer order shows tracking_code",
+            customer_view is not None
+            and customer_view.status_code == 200
+            and customer_view.json().get("tracking_code") == tracking24,
+            "",
+        )
+        cleared = call("PATCH", f"/orders/{order_id}", admin, json={"tracking_code": ""})
+        cleared_value = (
+            cleared.json().get("tracking_code")
+            if cleared is not None and cleared.status_code == 200
+            else "?"
+        )
+        check(
+            "empty tracking_code clears the field",
+            cleared is not None and cleared.status_code == 200 and cleared_value is None,
+            f"{cleared_value}",
+        )
+        forbidden = call("PATCH", f"/orders/{order_id}", customer, json={"tracking_code": "hack"})
+        check(
+            "customer cannot set tracking_code",
+            forbidden is not None and forbidden.status_code == 403,
+            f"{forbidden.status_code if forbidden else 0}",
+        )
     call("GET", "/admin/payments", admin)
 
     # --- storage ---

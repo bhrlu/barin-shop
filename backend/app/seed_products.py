@@ -1,11 +1,10 @@
 """Seed the 20-product starter catalog (idempotent).
 
-Source of truth: the frontend's Supabase migration
-(`vogue-vintage-vibes/supabase/migrations/20260810233223_*.sql`), which in turn
-mirrors `vogue-vintage-vibes/src/data/products.ts`. Keeping this as a backend
-seed (rather than only in `infra/initdb/02-public-schema.sql`) means a database
-that was not created by the compose initdb — e.g. one pointed at directly via
-`DATABASE_URL` — still gets the same catalog.
+The catalog is the same 20 products as `infra/initdb/02-public-schema.sql`, which
+is the schema the compose stack creates; `vogue-vintage-vibes/src/data/products.ts`
+still mirrors it on the frontend. Keeping this as a backend seed (rather than only
+in the initdb SQL) means a database that was not created by the compose initdb —
+e.g. one pointed at directly via `DATABASE_URL` — still gets the same catalog.
 
 Run from backend/:
     python -m app.seed_products

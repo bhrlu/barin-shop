@@ -1,8 +1,11 @@
-"""Async SQLAlchemy engine/session and idempotent startup DDL for the coupon tables.
+"""Async SQLAlchemy engine/session and the idempotent startup DDL.
 
-The app connects directly to the Supabase Postgres database (service role = bypasses RLS).
-Existing Supabase tables (products, orders, ...) are modelled in app/models.py but are
-NOT created by this app; only the coupon tables are auto-created idempotently on startup.
+The app connects straight to the Postgres instance described by `DATABASE_URL`
+with a role that owns the schema (there is no Supabase and no RLS any more).
+Base tables (products, orders, ...) come from `infra/initdb/`; this module owns
+only the **additive** tables and columns the API needs on top of them, created
+idempotently on startup so a fresh database and an already-seeded one converge
+with no manual migration step.
 """
 
 from collections.abc import AsyncIterator
@@ -24,10 +27,10 @@ SessionLocal = async_sessionmaker(engine, expire_on_commit=False, autoflush=Fals
 
 
 # --- Coupon tables DDL (idempotent) -----------------------------------------
-# The coupon tables are the one part of the schema the API owns itself; the rest
-# comes from the migrations. Created on startup so a fresh database works with no
-# manual step. Kept idempotent because `seed_coupons` runs this too, and the
-# compose db-init job can run before the API has ever booted.
+# Coupons were the first part of the schema the API owned itself. Created on
+# startup so a fresh database works with no manual step. Kept idempotent because
+# `seed_coupons` runs this too, and the compose db-init job can run before the API
+# has ever booted.
 COUPON_DDL = [
     """
     CREATE TABLE IF NOT EXISTS public.coupons (
@@ -147,12 +150,63 @@ CATALOG_DDL = [
 ]
 
 
+# --- Payments DDL (idempotent) -----------------------------------------------
+# `payments.reference` used to double as the gateway authority while a session was
+# pending and then be overwritten with the `SND-…` code on success, which made a
+# repeat callback unfindable (it looked the row up by authority). The authority
+# now has its own column, and a one-off backfill copies it out of `reference` for
+# the rows created before that.
+# --- Order shipment tracking (idempotent) ------------------------------------
+# Admin-entered postal / courier tracking code (Iran Post / Tipax, F2.8). NULL
+# until an admin sets it; shown on the customer's order page once present.
+TRACKING_DDL = [
+    "ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS tracking_code TEXT",
+]
+
+
+PAYMENT_DDL = [
+    "ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS authority TEXT",
+    (
+        "UPDATE public.payments SET authority = reference "
+        "WHERE authority IS NULL AND status = 'pending' AND reference IS NOT NULL"
+    ),
+    "CREATE INDEX IF NOT EXISTS payments_authority_idx ON public.payments(authority)",
+]
+
+
+# --- Contact messages (idempotent) -------------------------------------------
+# The public contact form used to be display-only. `user_id` stays NULL for a
+# guest submission; `contact` holds whatever the sender left (email or phone).
+CONTACT_DDL = [
+    """
+    CREATE TABLE IF NOT EXISTS public.contact_messages (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+      name TEXT NOT NULL,
+      contact TEXT NOT NULL,
+      message TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'new',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+    """,
+    (
+        "CREATE INDEX IF NOT EXISTS contact_messages_created_idx "
+        "ON public.contact_messages(created_at DESC)"
+    ),
+]
+
+
 async def startup_ddl() -> None:
     async with engine.begin() as conn:
-        for stmt in COUPON_DDL:
-            await conn.execute(text(stmt))
-        for stmt in CATALOG_DDL:
-            await conn.execute(text(stmt))
+        for statements in (
+            COUPON_DDL,
+            CATALOG_DDL,
+            TRACKING_DDL,
+            PAYMENT_DDL,
+            CONTACT_DDL,
+        ):
+            for stmt in statements:
+                await conn.execute(text(stmt))
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:

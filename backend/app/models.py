@@ -1,9 +1,9 @@
-"""SQLAlchemy models mirroring the existing Supabase schema (+ new coupon tables).
+"""SQLAlchemy models for the base schema (products, orders, users, …).
 
 Only the columns this backend actually reads/writes are declared. Constraints
-(FKs, uniques, defaults) already live in the Supabase database, so no ForeignKey
-declarations are needed here — the app never runs DDL for these tables except the
-idempotent coupon DDL in app/db.py.
+(FKs, uniques, defaults) already live in the database — the base schema comes from
+`infra/initdb/` and the API only adds its own tables/columns through the idempotent
+DDL lists in `app/db.py` — so no ForeignKey declarations are needed here.
 """
 
 from datetime import datetime
@@ -133,6 +133,8 @@ class Order(Base):
     total: Mapped[int] = mapped_column(Integer, default=0)
     shipping_address: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # admin-entered postal/courier tracking code (F2.8); NULL until set
+    tracking_code: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

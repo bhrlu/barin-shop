@@ -1,8 +1,8 @@
 """Own auth endpoints: signup, signin, and current-user profile.
 
-Replaces Supabase Auth. Passwords are bcrypt-hashed; sessions are HS256 JWTs
-issued by this service. On signup the profile row and default 'customer' role
-are created in the same transaction (mirrors the old handle_new_user trigger).
+The store's own auth (it replaced Supabase Auth). Passwords are bcrypt-hashed;
+sessions are HS256 JWTs issued by this service. On signup the profile row and the
+default 'customer' role are created in the same transaction.
 """
 
 import logging

@@ -60,6 +60,8 @@ class CartLine(BaseModel):
 class CheckoutAddress(BaseModel):
     full_name: str = Field(min_length=2, max_length=120)
     phone: str = Field(min_length=4, max_length=20)
+    # optional so older payloads (and saved-address pre-fills) stay valid
+    province: str | None = Field(default=None, max_length=80)
     city: str = Field(min_length=2, max_length=80)
     line: str = Field(min_length=5, max_length=500)
     postal_code: str | None = None
@@ -172,8 +174,21 @@ class StockCheckRequest(BaseModel):
 
 
 class StockIssue(BaseModel):
+    """One rejected cart line.
+
+    `reason` is a closed set shared with checkout's `stock_conflict` payload and
+    with the frontend's message map, so the UI can explain every rejection:
+      not_found           — product does not exist
+      inactive            — product or its size×color variant is deactivated
+      not_available       — `availability` is coming_soon / preorder
+      size_invalid        — the size is not offered by this product
+      insufficient_stock  — not enough units for the requested quantity
+    """
+
     product_id: str
-    reason: Literal["not_found", "inactive", "insufficient_stock"]
+    reason: Literal[
+        "not_found", "inactive", "not_available", "size_invalid", "insufficient_stock"
+    ]
     available: int | None = None
 
 
@@ -346,8 +361,52 @@ class AddressIn(BaseModel):
     is_default: bool = False
 
 
+class AddressUpdateIn(BaseModel):
+    """Partial address edit; every field is optional.
+
+    `is_default` is honoured with a single-default guarantee: setting it true
+    clears the flag on the caller's other addresses (`routers/addresses.py`).
+    """
+
+    title: str | None = Field(default=None, min_length=1, max_length=40)
+    receiver: str | None = Field(default=None, min_length=2, max_length=120)
+    phone: str | None = Field(default=None, min_length=4, max_length=20)
+    province: str | None = Field(default=None, min_length=2, max_length=80)
+    city: str | None = Field(default=None, min_length=2, max_length=80)
+    postal_code: str | None = None
+    line: str | None = Field(default=None, min_length=5, max_length=500)
+    is_default: bool | None = None
+
+
 class AddressOut(AddressIn):
     id: UUID
+    created_at: str | None = None
+
+
+# --- contact ----------------------------------------------------------------------
+
+class ContactMessageIn(BaseModel):
+    """Public contact form. `contact` is whatever the sender left us — an email
+    address or a phone number — so no format is enforced beyond a sane length."""
+
+    name: str = Field(min_length=2, max_length=120)
+    contact: str = Field(min_length=5, max_length=120)
+    message: str = Field(min_length=5, max_length=2000)
+
+
+class ContactMessageStatusIn(BaseModel):
+    """Admin inbox update — only these two states exist today."""
+
+    status: Literal["new", "answered"]
+
+
+class ContactMessageOut(BaseModel):
+    id: UUID
+    user_id: UUID | None = None
+    name: str
+    contact: str
+    message: str
+    status: str
     created_at: str | None = None
 
 

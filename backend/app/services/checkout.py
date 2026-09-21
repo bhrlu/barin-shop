@@ -2,7 +2,7 @@
 
 All operations run inside ONE database transaction:
   1. Lock product rows FOR UPDATE (prevents oversell under concurrency)
-  2. Validate stock, activity and size membership; use server-side prices
+  2. Validate activity, availability, size membership and stock; server-side prices
   3. Create order (pending/unpaid) + order_items
   4. Validate + record coupon redemption
   5. Decrement stock with a guarded UPDATE ... WHERE stock >= qty
@@ -16,6 +16,7 @@ from uuid import UUID
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.availability import availability_issue
 from app.services.coupons import (
     CouponError,
     count_user_redemptions,
@@ -57,7 +58,7 @@ async def create_order(
     rows = (
         await session.execute(
             text(
-                "SELECT id, name, price, sizes, images, stock, active "
+                "SELECT id, name, price, sizes, images, stock, active, availability "
                 "FROM public.products WHERE id = ANY(:ids) ORDER BY id FOR UPDATE"
             ),
             {"ids": product_ids},
@@ -72,7 +73,7 @@ async def create_order(
         for_update=True,
     )
 
-    # 2) Validate stock / activity / size; fill authoritative name/price/image
+    # 2) Validate activity / availability / size / stock; fill authoritative name/price/image
     issues: list[dict] = []
     for line in lines:
         p = products.get(line["product_id"])
@@ -81,6 +82,12 @@ async def create_order(
             continue
         if not p["active"]:
             issues.append({"product_id": line["product_id"], "reason": "inactive", "available": 0})
+            continue
+        not_available = availability_issue(p)
+        if not_available is not None:
+            issues.append(
+                {"product_id": line["product_id"], "reason": not_available, "available": 0}
+            )
             continue
         if p["sizes"] and line["size"] not in (p["sizes"] or []):
             issues.append(
@@ -138,6 +145,7 @@ async def create_order(
     shipping_address = {
         "full_name": address["full_name"],
         "phone": address["phone"],
+        "province": address.get("province"),
         "city": address["city"],
         "line": address["line"],
         "postal_code": address.get("postal_code"),

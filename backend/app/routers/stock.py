@@ -1,7 +1,10 @@
 """Stock pre-check endpoint — validates cart lines before checkout.
 
 Per-variant (size × color) stock wins when a variant row exists; otherwise the
-product's aggregate stock applies. Shares `app.services.variants` with checkout.
+product's aggregate stock applies. `availability` is a hard gate before any of
+that: a `coming_soon`/`preorder` product is never orderable. Shares
+`app.services.variants` and `app.services.availability` with checkout, so the
+pre-check and the order always agree.
 """
 
 from fastapi import APIRouter, HTTPException, status
@@ -9,6 +12,7 @@ from sqlalchemy import text
 
 from app.auth import DbSession
 from app.schemas import StockCheckLine, StockCheckOut, StockIssue
+from app.services.availability import availability_issue
 from app.services.variants import load_variants, variant_stock
 
 router = APIRouter(prefix="/stock", tags=["stock"])
@@ -24,8 +28,8 @@ async def check(body: list[StockCheckLine], session: DbSession) -> StockCheckOut
     rows = (
         await session.execute(
             text(
-                "SELECT id, price, sizes, stock, active FROM public.products "
-                "WHERE id = ANY(:ids)"
+                "SELECT id, price, sizes, stock, active, availability "
+                "FROM public.products WHERE id = ANY(:ids)"
             ),
             {"ids": product_ids},
         )
@@ -46,11 +50,17 @@ async def check(body: list[StockCheckLine], session: DbSession) -> StockCheckOut
         if not p["active"]:
             issues.append(StockIssue(product_id=line.product_id, reason="inactive", available=0))
             continue
+        not_available = availability_issue(p)
+        if not_available is not None:
+            issues.append(
+                StockIssue(product_id=line.product_id, reason=not_available, available=0)
+            )
+            continue
         if p["sizes"] and line.size not in (p["sizes"] or []):
             issues.append(
                 StockIssue(
                     product_id=line.product_id,
-                    reason="insufficient_stock",
+                    reason="size_invalid",
                     available=int(p["stock"]),
                 )
             )

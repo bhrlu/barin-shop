@@ -1,6 +1,5 @@
-"""Storage endpoints backed by MinIO (S3-compatible).
-
-Replaces Supabase Storage for the product-images bucket:
+"""Storage endpoints backed by MinIO (S3-compatible) — the product-images bucket
+the store uses instead of the former Supabase Storage:
 - POST /storage/upload-url  → presigned PUT URL the browser uploads to directly
 - POST /storage/sign        → presigned GET URLs for stored references (uploads/…)
 
