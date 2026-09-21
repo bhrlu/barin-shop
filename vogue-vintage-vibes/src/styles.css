@@ -192,3 +192,26 @@
 @utility rule-terracotta {
   border-color: color-mix(in oklab, var(--terracotta) 35%, transparent);
 }
+
+/* ---- Print: official invoice (F4.4 / spec FE-05) --------------------------
+ * When the admin order drawer is open, printing produces ONLY the A4/A5
+ * invoice: the app is hidden via body[data-order-print-open] and the drawer's
+ * #__se_invoice_root portal becomes the whole page. No nav, chrome, buttons or
+ * background colors. The portal is mounted/unmounted with the drawer, so
+ * Ctrl+P outside the drawer prints normally. */
+#__se_invoice_root {
+  display: none;
+}
+
+@media print {
+  body[data-order-print-open="true"] > *:not(#__se_invoice_root) {
+    display: none !important;
+  }
+  #__se_invoice_root {
+    display: block !important;
+  }
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+}

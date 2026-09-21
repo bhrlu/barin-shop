@@ -91,7 +91,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       loading,
-      isAdmin: user?.role === "admin",
+      // B5.4: any staff role opens the admin shell (per-tab gating is F4.2)
+      isAdmin: ["admin", "super_admin", "order_manager", "support"].includes(
+        user?.role ?? "",
+      ),
       profile: user
         ? { full_name: user.full_name, phone: user.phone, avatar_url: user.avatar_url }
         : null,

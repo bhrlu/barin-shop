@@ -364,6 +364,26 @@ export type StockIssue = {
 
 export type StockCheckResult = { ok: boolean; subtotal: number; issues: StockIssue[] };
 
+export type KpiRange = "today" | "7d" | "30d" | "all";
+
+export type AdminKpis = {
+  range: KpiRange;
+  grossRevenue: number;
+  netRevenue: number;
+  paidOrders: number;
+  aov: number;
+  pendingRefunds: number;
+  lowStock: number;
+  deltas: {
+    grossRevenue: number | null;
+    netRevenue: number | null;
+    paidOrders: number | null;
+    aov: number | null;
+  };
+  series: { date: string; revenue: number }[];
+  statusBreakdown: { status: string; count: number }[];
+};
+
 export type AdminStats = {
   revenue: number;
   orderCount: number;
@@ -399,6 +419,13 @@ export type RefundRequest = {
   reason: string;
   status: string;
   admin_note: string | null;
+  // spec [BE-03]: Paya/Satna code recorded at settlement, plus who/when
+  bank_tracking_code: string | null;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  // claimant contact details (admin list only)
+  user_email: string | null;
+  user_name: string | null;
   created_at: string;
 };
 
@@ -526,10 +553,19 @@ export const api = {
       `/orders/${id}/refunds`,
       { method: "POST", json: { reason } },
     ),
-  resolveRefund: (requestId: string, status: string, admin_note?: string) =>
+  resolveRefund: (
+    requestId: string,
+    status: string,
+    admin_note?: string,
+    bank_tracking_code?: string,
+  ) =>
     request<{ ok: boolean }>(`/refunds/${requestId}`, {
       method: "PATCH",
-      json: { status, admin_note },
+      json: {
+        status,
+        admin_note,
+        bank_tracking_code: bank_tracking_code || null,
+      },
     }),
   patchOrder: (id: string, patch: { status?: string; payment_status?: string; tracking_code?: string | null }) =>
     request<Order>(`/orders/${id}`, { method: "PATCH", json: patch }),
@@ -545,6 +581,8 @@ export const api = {
 
   // --- admin ---
   adminStats: () => request<AdminStats>("/admin/stats"),
+  adminKpis: (range: KpiRange = "30d") =>
+    request<AdminKpis>(`/admin/kpis?range=${range}`),
   adminUsers: () => request<AdminUser[]>("/admin/users"),
   adminOrders: () => request<Order[]>("/admin/orders"),
   adminPayments: () => request<PaymentRecord[]>("/admin/payments"),

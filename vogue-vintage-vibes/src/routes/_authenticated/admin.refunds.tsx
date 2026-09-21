@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
 export const Route = createFileRoute("/_authenticated/admin/refunds")({
@@ -41,10 +42,9 @@ type Resolution = "approved" | "rejected" | "refunded";
 
 const isSettled = (status: string) => status === "rejected" || status === "refunded";
 
-/** The admin action dialog: approve / reject / settle with an admin note.
- * Spec [FE-06] asks for a required bank tracking code on settlement — the
- * backend has no column for it yet (B5.3), so settlement today records the
- * note only; the input appears once the column lands. */
+/** The admin action dialog ([FE-06]): approve / reject / settle. The Paya/Satna
+ * bank tracking code is **required for settlement** — the backend 422s without
+ * it, and the disabled button mirrors that rule. */
 function RefundActionDialog({
   request,
   onClose,
@@ -54,10 +54,16 @@ function RefundActionDialog({
 }) {
   const queryClient = useQueryClient();
   const [note, setNote] = useState("");
+  const [bankCode, setBankCode] = useState(request.bank_tracking_code ?? "");
 
   const resolve = useMutation({
-    mutationFn: (input: { id: string; status: Resolution; admin_note?: string }) =>
-      api.resolveRefund(input.id, input.status, input.admin_note),
+    mutationFn: (input: {
+      id: string;
+      status: Resolution;
+      admin_note?: string;
+      bank_tracking_code?: string;
+    }) =>
+      api.resolveRefund(input.id, input.status, input.admin_note, input.bank_tracking_code),
     onSuccess: (_, variables) => {
       void queryClient.invalidateQueries({ queryKey: ["admin-refunds"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
@@ -67,13 +73,15 @@ function RefundActionDialog({
           ? "درخواست رد شد"
           : variables.status === "approved"
             ? "درخواست تأیید شد"
-            : "بازپرداخت ثبت شد",
+            : "بازپرداخت با کد رهگیری بانکی ثبت شد",
       );
       onClose();
     },
     onError: (error) =>
       toast.error(error instanceof ApiError ? error.message : "ثبت نتیجه انجام نشد"),
   });
+
+  const bankRequired = bankCode.trim().length === 0;
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -92,6 +100,29 @@ function RefundActionDialog({
         ) : (
           <p className="text-xs text-muted-foreground">دلیلی ثبت نشده است.</p>
         )}
+
+        <div className="space-y-1.5">
+          <label
+            htmlFor="refund-bank-code"
+            className="text-xs text-muted-foreground"
+          >
+            کد رهگیری بانکی (پایا/ساتنا)
+            <span className="text-terracotta"> *</span>
+          </label>
+          <Input
+            id="refund-bank-code"
+            value={bankCode}
+            onChange={(e) => setBankCode(e.target.value)}
+            maxLength={60}
+            dir="ltr"
+            required
+            placeholder="کد پیگیری بانک"
+            className="font-mono tracking-wider"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            برای ثبت بازگشت وجه الزامی است؛ بدون آن پول از دید بانک قابل ردیابی نیست.
+          </p>
+        </div>
 
         <Textarea
           value={note}
@@ -123,8 +154,16 @@ function RefundActionDialog({
           <Button
             type="button"
             className="flex-1"
-            disabled={resolve.isPending}
-            onClick={() => resolve.mutate({ id: request.id, status: "refunded", admin_note: note })}
+            disabled={resolve.isPending || bankRequired}
+            title={bankRequired ? "کد رهگیری بانکی الزامی است" : undefined}
+            onClick={() =>
+              resolve.mutate({
+                id: request.id,
+                status: "refunded",
+                admin_note: note,
+                bank_tracking_code: bankCode.trim(),
+              })
+            }
           >
             تأیید و ثبت بازگشت وجه
           </Button>
@@ -135,9 +174,10 @@ function RefundActionDialog({
 }
 
 /**
- * Admin refund-requests centre (F2.4): reads `GET /admin/refunds` and resolves
- * claims with `PATCH /refunds/{id}` (approved / rejected / refunded — settling
- * also flips the order's payment status to `refunded` server-side).
+ * Admin refund-requests centre (F2.4 + B5.3): reads `GET /admin/refunds` and
+ * resolves claims with `PATCH /refunds/{id}` (approved / rejected / refunded).
+ * Settlement requires the bank tracking code and records the resolver and
+ * timestamp server-side ([BE-03]).
  */
 function AdminRefunds() {
   const [tab, setTab] = useState<Tab>("pending");
@@ -198,7 +238,8 @@ function AdminRefunds() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-sm">
-                      سفارش <span className="font-mono tracking-wider">#{toFa(request.order_number)}</span>
+                      سفارش{" "}
+                      <span className="font-mono tracking-wider">#{toFa(request.order_number)}</span>
                       <span
                         className={`ms-2 inline-block rounded-full px-2 py-0.5 text-[11px] ${
                           request.status === "refunded"
@@ -212,8 +253,9 @@ function AdminRefunds() {
                       </span>
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
+                      {request.user_name || "مشتری"}
+                      {request.user_email ? ` · ${request.user_email}` : ""} ·{" "}
                       {formatFaDate(request.created_at)}
-                      {request.admin_note ? ` · یادداشت: ${request.admin_note}` : ""}
                     </p>
                   </div>
                   <p className="font-mono text-sm font-bold text-rose-600">
@@ -227,10 +269,22 @@ function AdminRefunds() {
                   </blockquote>
                 ) : null}
 
-                <div className="mt-3">
-                  {settled ? (
-                    <span className="text-xs text-muted-foreground">به این درخواست رسیدگی شده است.</span>
-                  ) : (
+                {settled ? (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    به این درخواست رسیدگی شده است
+                    {request.status === "refunded" && request.bank_tracking_code ? (
+                      <>
+                        {" "}
+                        · کد رهگیری بانکی:{" "}
+                        <span className="font-mono tracking-wider text-foreground">
+                          {toFa(request.bank_tracking_code)}
+                        </span>
+                      </>
+                    ) : null}
+                    {request.resolved_at ? ` · ${formatFaDate(request.resolved_at)}` : ""}
+                  </p>
+                ) : (
+                  <div className="mt-3">
                     <button
                       type="button"
                       onClick={() => setActive(request)}
@@ -238,8 +292,8 @@ function AdminRefunds() {
                     >
                       رسیدگی به درخواست
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
               </li>
             );
           })}
