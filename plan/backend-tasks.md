@@ -52,8 +52,11 @@ Legend: `[ ]` todo · `[x]` done (audit file required) · audit links in `plan/a
   hosted"; documents the sole-backend stack, MinIO-on-quay, presign host, idempotent
   catalog DDL and the seed chain.
   → audit: same as B3.2
-- [ ] **B3.4 Clean stale Supabase wording in code** — `app/db.py` docstring/comments,
-  `app/models.py` if applicable
+- [x] **B3.4 Clean stale Supabase wording in code** — `app/db.py`, `app/models.py`,
+  `routers/auth.py`, `routers/storage.py`, `seed_products.py`: every remaining
+  Supabase reference now describes the FastAPI + own-JWT + MinIO reality
+  (`grep -ri supabase backend/app backend/tests` → nothing).
+  → audit: [2026-09-21-backend-frontend-nonadmin-contacts-addresses-payments.md](audit/2026-09-21-backend-frontend-nonadmin-contacts-addresses-payments.md)
 - [x] **B3.6 Stack actually runs in Docker** — MinIO images moved to `quay.io`
   (Docker Hub publishing stopped Oct 2025), `minio-init` reuses the bundled `mc`,
   and the 7 runtime bugs it exposed are fixed (password hashing was fully broken;
@@ -61,10 +64,14 @@ Legend: `[ ]` todo · `[x]` done (audit file required) · audit links in `plan/a
   `/admin/stats` FILTER placement; MinIO presign int-vs-timedelta + host/region;
   payment callback always 404ing).
   → audit: [2026-09-19-docker-stack-up-and-runtime-fixes.md](audit/2026-09-19-docker-stack-up-and-runtime-fixes.md)
-- [ ] **B3.7 Persist the payment authority** — a repeat Zarinpal callback returns
-  400 instead of `already_paid`, because `reference` is overwritten with the
-  `SND-…` code during verification. Needs an authority column (schema change
-  decision) or an equivalent lookup path.
+- [x] **B3.7 Persist the payment authority** — a repeat Zarinpal callback returned
+  400 instead of `already_paid`, because `reference` was overwritten with the
+  `SND-…` code during verification. `payments.authority` (+ index) is now created
+  on startup, `verify_and_finalize` looks the session up by authority (with a
+  `reference = :authority` fallback for pre-column rows) and reports
+  `already_paid` for a settled session, and the callback reads the order from the
+  verify result so the repeat still redirects correctly.
+  → audit: same as B3.4
 - [x] **B3.8 Fix `HTTPException` with two `detail`s** — coupon/stock failures raised
   `HTTPException(code, message, detail={...})`, so every checkout error returned a
   **500** instead of a clean 4xx. `routers/checkout.py` and `routers/payments.py`
@@ -77,6 +84,32 @@ Legend: `[ ]` todo · `[x]` done (audit file required) · audit links in `plan/a
   5xx). Unit suite: 25 passed, ruff clean. A pytest DB fixture for router-level unit
   tests is still open (smoke needs a running server).
   → audit: same as B3.2
+- [x] **B3.9 `POST /contact` + admin inbox endpoints** — `contact_messages` table
+  (idempotent DDL in `app/db.py`), public `POST /contact` (guest-friendly,
+  `user_id` NULL, name ≥ 2 / contact ≥ 5 / message ≥ 5), and
+  `GET /admin/contact-messages?status=` + `DELETE /admin/contact-messages/{id}`.
+  The storefront form is wired (F2.1); the admin inbox screen is **F2.1b**.
+  → audit: [2026-09-21-backend-frontend-nonadmin-contacts-addresses-payments.md](audit/2026-09-21-backend-frontend-nonadmin-contacts-addresses-payments.md)
+- [x] **B3.10 Address book: single default + `PATCH`** — at most one `is_default`
+  per customer (first address becomes it, an explicit flag moves it, deleting the
+  default promotes the newest survivor) and `PATCH /addresses/{id}` edits fields
+  and/or moves the default. `CheckoutAddress` also gained the optional `province`
+  the spec's shipping box asks for, and it is stored in `orders.shipping_address`.
+  → audit: same as B3.9
+- [x] **B3.12 Shipment tracking code on orders** — additive `orders.tracking_code`
+  column (idempotent `TRACKING_DDL` in `app/db.py`), accepted by
+  `PATCH /orders/{id}` (admin-only; empty string clears it) and returned in every
+  order payload. The payment-session `tracking_code` is a different, pre-existing
+  value and is untouched. Smoke asserts save / customer-visibility / clear / 403.
+  → audit: [2026-09-21-frontend-f21b-f24-f28-admin-inbox-refunds-tracking.md](audit/2026-09-21-frontend-f21b-f24-f28-admin-inbox-refunds-tracking.md)
+- [x] **B3.13 Mark a contact message answered** — `PATCH
+  /admin/contact-messages/{id}` (`status`: `new` | `answered`, validated with a
+  `Literal` schema) so the F2.1b inbox can work through its backlog; unknown
+  statuses 422. Smoke asserts mark + `?status=answered` filter + 422.
+  → audit: same as B3.12
+- [ ] **B3.11 Spam guard for the public contact endpoint** — `POST /contact` is an
+  unauthenticated write with no rate limit, honeypot or captcha. Decide the
+  approach (per-IP throttle vs honeypot field) before opening a public deploy.
 
 ## Milestone B4 — Catalog & Products backend (complete)
 
@@ -112,20 +145,50 @@ Closes the backend half of `plan/feature-roadmap.md` §1. Idempotent DDL lives i
   rows that have none, and `tests/api_smoke.py` asserts tag hits + tag
   suggestions.
   → audit: [2026-09-20-backend-search-tags.md](audit/2026-09-20-backend-search-tags.md)
-- [ ] **B4.12 Multi-value catalog filters** — `GET /products` accepts a single
-  `size` and a single `color`, so the shop sidebar is single-select (F3.3). Accept
-  repeated or comma-separated values (and consider dropping the AND semantics
-  trap: a size+colour pair should ideally mean "this combination exists").
-- [ ] **B4.11 Enforce `availability` in stock-check and checkout** — the
-  storefront (F3.2) disables add-to-cart for `coming_soon`/`preorder`, but
-  `app/services/checkout.py` validates only stock/activity/size, so a direct API
-  call can still order an unreleased product. Add the guard to `stock/check` and
-  checkout (and decide whether `preorder` should be orderable with a different
-  fulfilment note).
+- [x] **B4.12 Multi-value catalog filters** — `GET /products` now takes `size`
+  and `color` as repeatable and/or comma-separated lists
+  (`app/services/catalog_filters.py::split_multi`), OR within a facet and AND
+  across facets, resolved **per combination** so a variant-deactivated pair is not
+  advertised. The shop sidebar is multi-select (F3.3c).
+  → audit: [2026-09-21-backend-b411-b412-availability-multifacet.md](audit/2026-09-21-backend-b411-b412-availability-multifacet.md)
+- [x] **B4.11 Enforce `availability` in stock-check and checkout** — new
+  `app/services/availability.py` gate, applied before stock in both
+  `POST /stock/check` and checkout; `preorder` is blocked too (user decision).
+  `StockIssue.reason` is now a documented closed set including `not_available` and
+  `size_invalid`.
+  → audit: same as B4.12
+- [ ] **B4.13 Preorder fulfilment flag** — `preorder` products can never be
+  ordered while `orders` has no preorder marker. Add the flag + relax
+  `availability_issue()` if the store wants to take preorders (depends on the
+  fulfilment/notification story, B2.1).
 - [ ] **B4.8 Product model dimension** — variants cover size × color only; add a
   model/name dimension if the catalog needs it
 - [ ] **B4.9 Stock reservation with TTL** — hold stock during checkout instead of
   decrementing only at order creation
+
+## Milestone B5 — Spec-only backend work (from `design/SANDE_FULL_DEV_SPEC.md`)
+
+Gaps the dev spec names that have no backend task yet. Only the parts that are not
+already covered by B2.1/B2.2/B2.5 — read the spec first (Rule 0), but the repo's
+architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
+
+- [ ] **B5.1 Admin audit log** — `audit_logs` table + writes on privileged
+  mutations (product price/stock changes, order status changes, refund resolution,
+  role changes) with admin id, old/new values and IP. Spec BE-04.
+- [ ] **B5.2 KPI aggregation endpoint** — `GET /admin/stats?range=today|7d|30d|all`
+  returning gross/net revenue, paid order count, AOV, pending refunds and low-stock
+  count, replacing the client-side aggregation the dashboard does today. Spec BE-09;
+  unblocks the charts in F2.6.
+- [ ] **B5.3 Refund bank-tracking fields** — `refund_requests` needs the
+  `bank_tracking_code`, `resolved_by`, `resolved_at` columns the spec's approval
+  flow (FE-06/F2.4) expects; today only `status` + `admin_note` are recorded
+  (`infra/initdb/02-public-schema.sql`). While there, reconcile the vocabulary: the
+  DDL default is `requested` while the spec and `PATCH /refunds/{id}` speak
+  `pending/approved/rejected/refunded` — decide one set **without** changing what
+  existing rows already store.
+- [ ] **B5.4 Granular staff roles** — `super_admin` / `order_manager` / `support`
+  alongside the current binary `admin`/`customer`, enforced per route. Spec BE-04
+  (security rule: roles stay in their own table, never on the user row).
 
 ## Ideas (not scheduled)
 

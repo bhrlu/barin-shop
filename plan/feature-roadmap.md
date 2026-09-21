@@ -30,6 +30,7 @@ Unchecked items are not yet implemented.
 
 ## 2. Cart & Checkout
 - ✅ Persistent cart
+- ✅ Saved addresses with a single default — add / edit in place / delete, offered and pre-filled in checkout (F2.7 + F2.7b, B3.10)
 - [ ] Guest cart (no sign-up required)
 - [ ] Real discount codes (percent/fixed, usage limits, expiry, minimum purchase)
 - [ ] Shipping cost by province/weight and tax calculation
@@ -69,6 +70,7 @@ Unchecked items are not yet implemented.
 
 ## 7. Support & Returns
 - ✅ Refund request submission (infrastructure ready, UI half-done)
+- ✅ Contact form that stores messages (`POST /contact` + `contact_messages`, F2.1/B3.9); the admin inbox screen is still missing (F2.1b)
 - [ ] Full product return process (step by step)
 - [ ] Live chat / support tickets
 - [ ] FAQ
@@ -110,15 +112,18 @@ Endpoints noted in `code` already exist and are verified working.
 - [x] Low-stock alerts (`GET /admin/inventory`, `GET /admin/inventory/low-stock`)
 
 ### Quick wins — backend already exists, only UI wiring needed
-- [ ] **Catalog UI wiring** → admin variant editor, admin inventory/low-stock screen, admin review moderation (product page F3.2; shop server-side filters, card ratings, compare view F3.3; recently-viewed rail F3.4)
+- [x] **Catalog UI wiring** → admin variant editor, admin inventory/low-stock screen, admin review moderation (product page F3.2; shop server-side filters, card ratings, compare view F3.3; recently-viewed rail F3.4; admin screens F3.6)
 - [ ] **Admin coupon management screen** → `GET/POST /coupons`, `PATCH /coupons/{id}`, `POST /coupons/generate`
 - [ ] **Complete refund UI** → customer request in order detail + admin approve/reject screen → `POST /orders/{id}/refunds`, `PATCH /refunds/{id}`, `GET /admin/refunds`
 - [x] **Search box UI** → `GET /search` (F3.1: `HeaderSearch.tsx` + `/shop?q=`, with tag matching since F3.1b)
-- [ ] **Stock check before checkout** → wire `api.stockCheck` into the cart
-- [ ] **Multi-value size/colour filters** → the sidebar is single-select until `GET /products` accepts more than one value (B4.12)
-- [ ] **Enforce availability in the API** → `coming_soon`/`preorder` products are blocked in the UI (F3.2) but not by `checkout`/`stock/check` (B4.11)
+- [x] **Stock check before checkout** → `api.stockCheck` wired into the cart (F3.5: per-line issues, checkout blocked until the cart validates)
+- [x] **Multi-value size/colour filters** → `GET /products` takes repeatable/comma-separated `size`/`color` (B4.12) and the shop chips are multi-select (F3.3c)
+- [x] **Enforce availability in the API** → `coming_soon`/`preorder` are rejected by `stock/check` and checkout with reason `not_available` (B4.11); preorder needs an order flag to become orderable (B4.13)
 - [ ] **Admin payments list** → `GET /admin/payments`
 - [x] **Single-product fetch** → product page uses `GET /products/{id}` (F3.2)
+- [x] **Contact form persistence** → `POST /contact` stores the message and `GET/DELETE /admin/contact-messages` reads it (B3.9 + F2.1); the admin inbox screen is F2.1b
+- [x] **Default address in checkout** → saved addresses pre-fill the shipping box, `PATCH /addresses/{id}` moves the single default (F2.7 + B3.10)
+- [x] **Idempotent payment callback** → `payments.authority` + `already_paid` on a repeat callback/verify (B3.7)
 
 ### Core commerce gaps
 - [ ] Real Zarinpal gateway (replace simulated flow) → `POST /payments/start`, `POST /payments/verify`, `GET /payments/zarinpal/callback`

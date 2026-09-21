@@ -72,9 +72,15 @@ new session can pick up exactly where this one stopped. Legend: `[ ]` todo ·
 - [x] **F1.5 Search bar** — header search opens `GET /search` results (dropdown or
   `/shop?q=`), wired in `SiteHeader.tsx` + `shop.tsx` query param. Done as F3.1.
   → audit: [2026-09-20-frontend-f31-search.md](audit/2026-09-20-frontend-f31-search.md)
-- [ ] **F1.6 Live stock in product page & cart** — use `POST /stock/check` on
-  add-to-cart; show "only N left" when stock ≤ 3; disable add when 0
-- [ ] **F1.7 Stock decrement shown to admin** — admin products page reflects real stock after backend-decremented orders
+- [x] **F1.6 Live stock in product page & cart** — per-combination stock on the
+  product page (F3.2) plus a `POST /stock/check` re-validation of the whole cart
+  on open/edit (F3.5), with per-line issues and a blocked checkout.
+  → audit: [2026-09-21-frontend-f35-f36-cart-stock-admin.md](audit/2026-09-21-frontend-f35-f36-cart-stock-admin.md)
+- [x] **F1.7 Stock decrement shown to admin** — the admin product list reads
+  `useCatalog()` (refetched on focus and invalidated by every admin mutation) and
+  F3.6 added an explicit live view: `/admin/inventory` counters + low-stock report
+  and per-variant stock in the variant editor.
+  → audit: same file as F1.6
 - [ ] **F1.9 Lovable preview tooling** — `reportLovableError`/`error-capture` kept
   (no Supabase dependency); revisit once the app runs outside Lovable.
 
@@ -85,19 +91,49 @@ new session can pick up exactly where this one stopped. Legend: `[ ]` todo ·
 - **Google / OAuth login** is gone with Supabase; needs a backend OAuth flow or a
   third-party auth provider before it can return.
 
-## Milestone F2 — Gaps from FEATURES.md part 6 (not started)
+## Milestone F2 — Gaps from FEATURES.md part 6 (in progress — F2.1, F2.7 done)
 
 > ℹ️ The Supabase-vs-backend blocker that used to sit here is resolved: Session 6
-> cut the whole frontend over to the FastAPI backend (see the F1 tracker).
-
-- [ ] **F2.1 Contact form persistence** — save via backend (needs backend endpoint) or Supabase table
-- [ ] **F2.2 Reviews & ratings** — schema + UI on product page
-- [ ] **F2.3 Forgot password** — Supabase reset email flow
-- [ ] **F2.4 Admin refund-requests page** — use existing `resolveRefundRequest` server fn
+> cut the whole frontend over to the FastAPI backend (see the F1 tracker).- [x] **F2.1 Contact form persistence** — the form is real now: controlled inputs,
+  `api.contact()` → `POST /contact` (which stores the message), min-length
+  attributes matching the API, Persian success/error toasts. Backend in B3.9.
+  → audit: [2026-09-21-backend-frontend-nonadmin-contacts-addresses-payments.md](audit/2026-09-21-backend-frontend-nonadmin-contacts-addresses-payments.md)
+- [x] **F2.1b Admin contact inbox** — new `/admin/messages` tab: filter chips
+  (همه / پاسخ‌داده‌نشده / پاسخ‌داده‌شده), Persian Jalali dates, copy-to-clipboard on
+  the sender's contact, mark answered/reopen and delete. Backend: a
+  `PATCH /admin/contact-messages/{id}` endpoint was added for the answered flag
+  (new smoke assertions cover mark/filter/422).
+  → audit: [2026-09-21-frontend-f21b-f24-f28-admin-inbox-refunds-tracking.md](audit/2026-09-21-frontend-f21b-f24-f28-admin-inbox-refunds-tracking.md)
+- [x] **F2.4 Admin refund-requests page** — new `/admin/refunds` tab: tabs
+  (در انتظار بررسی / تسویه‌شده / همه) per spec [FE-06], claim cards with the
+  reason in the terracotta-edge quote box, settlement amount in rose mono, and a
+  `RefundActionDialog` (approve / reject / settle) wired to `PATCH /refunds/{id}`
+  (settle flips the order's payment status server-side). Bank tracking-code input
+  is missing until B5.3 adds the column.
+  → audit: same file as F2.1b
+- [ ] **F2.3 Forgot password** — **backend work needed** (this line used to say
+  "Supabase reset email flow"; there is no Supabase any more and `auth.py` has no
+  reset endpoint). Add a reset-token endpoint + email to `backend-tasks.md` first,
+  then the UI.
 - [ ] **F2.5 Pagination for shop & admin lists**
 - [ ] **F2.6 Charts for admin dashboard** — recharts is installed but unused
-- [ ] **F2.7 Default address in checkout** — suggest saved addresses; mark `is_default`
-- [ ] **F2.8 Shipment tracking number** — admin enters tracking code; shown in order status stepper
+- [x] **F2.7 Default address in checkout** — saved addresses are offered above the
+  shipping box (default pre-selected, «آدرس جدید» clears it) and pre-fill
+  name/phone/province/city/address/postal code; the account tab shows a «پیشفرض»
+  badge, can move the flag, and can create an address as default. Backend
+  (`PATCH /addresses/{id}` + single-default invariant) in B3.10.
+  → audit: [2026-09-21-backend-frontend-nonadmin-contacts-addresses-payments.md](audit/2026-09-21-backend-frontend-nonadmin-contacts-addresses-payments.md)
+- [x] **F2.7b Edit a saved address** — each card has a «ویرایش» action that opens an
+  inline pre-filled form (shared `AddressFields` with the create form, unique ids via
+  a `prefix`), saving with a **fields-only** patch so an edit can never move the
+  default flag. Smoke asserts `PATCH fields only edits without touching is_default`.
+  → audit: [2026-09-21-frontend-f27b-edit-address.md](audit/2026-09-21-frontend-f27b-edit-address.md)
+- [x] **F2.8 Shipment tracking number** — admin enters the postal/courier code in
+  the order row (F2.8 input in `admin.orders.tsx`, saved via `PATCH /orders/{id}`;
+  empty input clears it), and the customer order page shows «کد رهگیری مرسوله» in
+  the stepper box. Backend: additive `orders.tracking_code` column (`TRACKING_DDL`)
+  + PATCH support; the payment-session `tracking_code` is unrelated and unchanged.
+  → audit: same file as F2.1b
 
 ## Milestone F3 — Catalog & Products UI (backend API ready)
 
@@ -171,9 +207,10 @@ needs new backend work except where explicitly noted.
 - [x] Show `tags` and `badge` (special offer / new)
 - [x] Single-product fetch → the page now uses `GET /products/{id}` instead of
   reading the whole catalog (`useCatalog().byId`)
-- [ ] **F3.2b Availability is UI-only** — `checkout` / `stock/check` ignore
-  `coming_soon`/`preorder`, so the API still accepts an order for an unreleased
-  product. Backend work → `backend-tasks.md` **B4.11**
+- [x] **F3.2b Availability is UI-only** — fixed in the API: `coming_soon` and
+  `preorder` are rejected by `POST /stock/check` and checkout with reason
+  `not_available` (B4.11).
+  → audit: [2026-09-21-backend-b411-b412-availability-multifacet.md](audit/2026-09-21-backend-b411-b412-availability-multifacet.md)
 
 ### F3.3 Catalog listing / shop (`shop.tsx`, `ProductCard.tsx`) — DONE
 
@@ -190,8 +227,10 @@ needs new backend work except where explicitly noted.
   cap 4; new route added to `routeTree.gen.ts`)
 - [x] **F3.3b card structure** — `ProductCard` root became a wrapper div so the
   compare toggle is not a `<button>` inside the product `<a>`
-- [ ] **F3.3c multi-select size/color** — blocked on the backend accepting more
-  than one value per param (`backend-tasks.md` **B4.12**)
+- [x] **F3.3c multi-select size/color** — the sidebar chips now toggle, the URL
+  carries repeated values (`?size=M&size=L`) and `api.products()` sends them
+  repeatedly; B4.12 accepts both shapes.
+  → audit: same file as F3.2b
 
 ### F3.4 Recently viewed — DONE
 
@@ -204,27 +243,67 @@ needs new backend work except where explicitly noted.
   browsing is not remembered; decide whether a localStorage rail should merge
   with the account list after sign-in (`GET /recently-viewed` has no DELETE either)
 
-### F3.5 Cart (`cart.tsx`)
+### F3.5 Cart (`cart.tsx`) — DONE
 
-- [ ] Wire `POST /stock/check` on add-to-cart / cart open; surface per-line issues
-  and per-variant availability
+→ audit: [2026-09-21-frontend-f35-f36-cart-stock-admin.md](audit/2026-09-21-frontend-f35-f36-cart-stock-admin.md)
 
-### F3.6 Admin
+- [x] Wire `POST /stock/check` on add-to-cart / cart open; surface per-line issues
+  and per-variant availability — `api.stockCheck()` now posts the bare array the
+  backend expects (the old `{lines:…}` body was a dormant 422), the query is keyed
+  on the full cart signature so every edit re-validates, and checkout is blocked
+  while `ok: false`. Add-to-cart keeps the variant-aware local rule (F3.2).
+- [ ] **F3.5b Re-check on focus** — a cart left open keeps its last result until an
+  edit (checkout still re-validates server-side, so this is stale UI only)
 
-- [ ] Product editor (`admin.products.tsx`): fields for `tags`, `badge`,
-  `availability`, `available_at`, `low_stock_threshold`
-- [ ] Variants editor per product (create / patch stock / delete)
-- [ ] Inventory / low-stock screen (`GET /admin/inventory`,
-  `/admin/inventory/low-stock`)
-- [ ] Reviews moderation screen: hide/publish + seller reply (`GET /admin/reviews`,
-  `PATCH /reviews/{id}`)
+### F3.6 Admin — DONE
+
+→ audit: same file as F3.5
+
+- [x] Product editor (`admin.products.tsx`): fields for `tags`, `badge`,
+  `availability`, `available_at`, `low_stock_threshold` (+ list chips for
+  availability/badge/موجودی کم)
+- [x] Variants editor per product (create / patch stock / delete) —
+  `components/admin/VariantEditor.tsx`, opened per row from the products list
+- [x] Inventory / low-stock screen (`GET /admin/inventory`,
+  `/admin/inventory/low-stock`) — new `/admin/inventory` route + tab
+- [x] Reviews moderation screen: hide/publish + seller reply (`GET /admin/reviews`,
+  `PATCH /reviews/{id}`) — new `/admin/reviews` route + tab
 
 ### F3.7 Supersedes open F1/F2 items
 
 - [x] F1.5 search bar → covered by F3.1
   → audit: same file as F3.1
-- [ ] F1.6 live stock in product page & cart → covered by F3.2/F3.5
-- [ ] F2.2 reviews & ratings → schema + API now exist; UI is F3.2
+- [x] F1.6 live stock in product page & cart → covered by F3.2/F3.5
+  → audit: same file as F3.5
+- [x] F2.2 reviews & ratings → storefront UI is F3.2, admin moderation is F3.6
+  → audit: same file as F3.5
+
+## Milestone F4 — Spec-aligned admin UI (from `design/SANDE_FULL_DEV_SPEC.md`)
+
+The spec's Part B3 describes a sidebar-shell back-office with a data grid, detail
+drawer, refunds and coupon screens. §3.3 of `vogue-vintage-vibes/DESIGN_SYSTEM.md`
+maps what exists today; these are the pieces with no task yet. Read the spec first
+(Rule 0) and follow its design rules — but the repo's data layer and routing win on
+conflict (DESIGN_SYSTEM.md §5).
+
+- [ ] **F4.1 Token-driven status badges** — one `StatusBadge` using the status
+  semantics table (DESIGN_SYSTEM.md §2.3 + §7.2) for order/payment/refund state,
+  replacing the uniform terracotta/sand chips; label always names the status, colour
+  is secondary. Spec B0.2/B4.2.
+- [ ] **F4.2 Admin shell** — sidebar layout (`[FE-01]`): right `w-64` sidebar with
+  lucide icons, active terracotta edge, mobile sheet, topbar with breadcrumbs +
+  quick search + role badge, replacing the tab bar in `admin.tsx`. Spec B3/[FE-01].
+- [ ] **F4.3 Reusable admin data grid** (`[FE-02]`) — search, filter chips, sort,
+  pagination, bulk actions, copy-to-clipboard for tracking codes/phones. Needs a
+  **decision to install `@tanstack/react-table`**; overlaps F2.5 (pagination).
+- [ ] **F4.4 Order detail drawer + invoice printing** (`[FE-05]`) — `Sheet` with the
+  fulfilment stepper, customer address box with copy, itemised breakdown, postal
+  tracking input (F2.8) and a `@media print` A4/A5 invoice (no print stylesheet
+  exists yet).
+- [ ] **F4.5 Coupons manager** (`[FE-07]`) — ticket-style cards, usage progress,
+  active toggle, Jalali date pickers on top of the existing `/coupons` CRUD.
+  Customer-side refunds page stays **F2.4**; charts stay **F2.6**; KPI deltas need
+  the backend aggregation endpoint (**B2.8**).
 
 ## Rules reminder
 

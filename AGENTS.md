@@ -4,14 +4,32 @@ Applies to any agent/assistant working in this repository. The detailed rules
 live in [`plan/RULES.md`](./plan/RULES.md); this file is the always-loaded
 summary. **Follow these before considering any task finished.**
 
+## Mandatory: read the dev spec before the task starts
+
+Every task (backend, frontend, docs, infra), with no exceptions, starts by
+reading [`design/SANDE_FULL_DEV_SPEC.md`](./design/SANDE_FULL_DEV_SPEC.md) and
+checking the work against it:
+
+- **Follow it where it applies** — UI/UX rules (Sections B0/B1), directory
+  conventions (B2), module specs (B3) and the Part C backlog are the reference for
+  anything they cover (`[FE-02]` data tables, `[FE-05]` order drawer, …).
+- **The live repo wins on conflict.** The spec's stack header still says Supabase /
+  Lovable Cloud / `createServerFn`; this repo is FastAPI-only with its own JWT and
+  `src/lib/api.ts` as the data layer. Never follow that stale stack, and never
+  change a Rule-4 status string or the cart money rules to match it.
+- **Report it in the audit**: which spec sections were followed, which were
+  deliberately ignored, and why. A conflict is a finding, not a failure.
+- **Don't edit the spec itself** unless the user asks — it is the user's document.
+  If it is merely out of date, say so in the audit and fix the plan docs instead.
+
 ## Mandatory: update the docs when the task ends
 
 An audit file alone is not enough — **after every task, update every affected
 markdown file.** Stale docs are a bug. Walk this checklist:
 
 1. **`plan/audit/YYYY-MM-DD-<task-slug>.md`** — create it (new file every task).
-   It must state: the task, what was done, **files changed**, **how to verify**,
-   and **what is NOT done / open**.
+   It must state: the task, the **spec check** (Rule 0), what was done, **files
+   changed**, **how to verify**, and **what is NOT done / open**.
 2. **`plan/backend-tasks.md` / `plan/frontend-tasks.md`** — tick the task `[x]`
    and add the audit link next to it. Add newly discovered work as a checkbox.
 3. **`plan/session-log.md`** — append a session section: what was done, what was
@@ -29,6 +47,9 @@ If you deliberately leave a doc untouched, say so in the audit under
 
 ## Other standing rules
 
+- **`design/SANDE_FULL_DEV_SPEC.md` is checked at both ends** — read before the
+  task (Rule 0), recorded in the audit after it. The detailed rule lives in
+  [`plan/RULES.md`](./plan/RULES.md) Rule 0 + Rule 4b.
 - **Task lists are the source of truth** — pick work from
   `plan/backend-tasks.md` / `plan/frontend-tasks.md`; add new work as a checkbox
   first. Don't delete tasks — strike them through with a reason.

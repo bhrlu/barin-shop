@@ -648,3 +648,538 @@ with availability/tag/badge/on-sale chips, ratings on cards, and compare.
 - **Reused `ProductRail`** instead of a second carousel so all rails share one
   RTL implementation.
 - **Invalidate after the view POST** rather than relying on mount-refetch timing.
+
+## Session 14 — 2026-09-21
+
+**Scope (user request):** **F3.5** — wire the cart to `POST /stock/check` — and
+**F3.6** — admin product-editor merchandising fields, variant editor, inventory /
+low-stock screen, review moderation screen. Frontend only; all endpoints existed.
+Audit: `plan/audit/2026-09-21-frontend-f35-f36-cart-stock-admin.md`.
+
+### ✅ What was done
+
+1. **Found and fixed a dormant client bug:** `POST /stock/check` takes a bare JSON
+   array, but `api.stockCheck()` posted `{ lines: […] }` → **422**. The method had no
+   callers before this session. Verified live: array → `200`, old shape → `422`.
+2. **Cart re-validates stock on open and after every edit** (query keyed on the
+   full line signature), shows a Persian per-line issue (`not_found` / `inactive` /
+   `insufficient_stock` with the remaining count) and **blocks «تکمیل خرید»** while
+   the API says `ok: false`. A failed request does not block — checkout re-validates
+   server-side. A cart line whose product left the catalog now renders a
+   «محصول حذفشده» row instead of nothing (it used to be unremovable).
+3. **Admin product editor** gained `tags`, `badge`, `availability`, `available_at`
+   (date input, disabled/cleared while `in_stock`) and `low_stock_threshold`;
+   `ProductWrite` was extended to match `ProductIn`. List rows show the new
+   merchandising state.
+4. **New `components/admin/VariantEditor.tsx`** — per-product size × colour stock
+   CRUD (create / edit stock+active / delete), opened per row; datalist-backed
+   size/colour inputs; invalidates the admin list, the storefront variant query,
+   the catalog and the inventory queries.
+5. **New `/admin/inventory`** — `GET /admin/inventory` counters + threshold-aware
+   `GET /admin/inventory/low-stock` report (products and variants).
+6. **New `/admin/reviews`** — status filter, publish↔hide, seller reply, product
+   names from the catalog, with catalog/review invalidation after each mutation.
+7. Both routes added to the admin tab bar; `routeTree.gen.ts` regenerated (the
+   plugin rewrote it when the route files appeared — diff is exactly two routes).
+8. **Verified:** `tsc --noEmit` clean, eslint 0 errors on every touched file, plus
+   live API checks against the Docker stack (stock check, inventory, low-stock,
+   admin reviews, variant CRUD and review moderation/reply — the last two with
+   temporary rows deleted again, `204`, no leftovers).
+
+### ❌ What was NOT done
+
+- **No headless-browser click-through** of the cart/admin screens (layout and the
+  disabled-checkout state were not eyeballed).
+- `vite build` is **not runnable in this environment** (pre-existing: Node 20.9 lacks
+  `node:util.styleText` for rolldown; under Node 22 the installed rolldown is
+  missing its `darwin-arm64` binding). Not caused by this change.
+- Cart stock is not re-checked on window focus (**F3.5b**, added to the task file).
+- No quantity capping from the reported `available`; no admin review delete; seller
+  replies cannot be cleared (`ReviewReplyIn` requires `min_length=1`).
+- `availability` enforcement in the API is still open (**B4.11**); admin lists are
+  still unpaginated (**F2.5**).
+
+### Decisions
+
+- **Blocking is driven by the API's `ok` flag, never by a client re-derivation** —
+  `StockIssue` carries only the product id (no size/colour), so the mapping helper
+  attaches an issue to the single line of a product and only to unsatisfiable lines
+  when a product occupies several; the *decision* to block still comes from the
+  server response.
+- **A failed stock check does not block checkout** — `POST /checkout` re-validates
+  and prices server-side, so a transient fetch error must not trap the customer.
+- **Variant edit is explicit (save button), not on-blur**, so no request fires while
+  the admin is still typing.
+- **Review moderation is hide/publish only** — the delete endpoint stays unused in
+  admin so a hidden review keeps its history/reply.
+- **Kept the legacy cart money rules untouched** (۸۹٬۰۰۰ shipping, free ≥ ۲٬۰۰۰٬۰۰۰)
+  and the storefront totals client-side; `stock/check`'s `subtotal` is not used for
+  display.
+
+## Session 15 — 2026-09-21
+
+**Scope (user request):** **B4.11** (enforce `availability` in the API) and
+**B4.12** (multi-value size/colour filters), plus the shop's multi-select chips
+(**F3.3c**) so the filters are usable end to end. Audit:
+`plan/audit/2026-09-21-backend-b411-b412-availability-multifacet.md`.
+
+**User decisions:** block **both** `coming_soon` and `preorder` (one reason, no
+per-state code); **include** F3.3c in this pass.
+
+### ✅ What was done
+
+1. **`app/services/availability.py`** — `availability_issue()` is the single gate;
+   a missing/null column still counts as orderable so pre-migration rows cannot
+   start failing. Applied in `routers/stock.py` **and** `services/checkout.py`
+   (inside the `FOR UPDATE` lock), before the size/variant/stock checks.
+2. **`preorder` is not orderable** — the order schema has no preorder flag, so
+   allowing it would promise a delivery the model cannot express. Enabling it later
+   is a one-function change plus the flag → **B4.13**.
+3. **`StockIssue.reason` is a documented closed set** (`not_found`, `inactive`,
+   `not_available`, `size_invalid`, `insufficient_stock`). `size_invalid` was
+   already emitted by checkout but was missing from the schema and the frontend
+   type; `/stock/check` now uses it for an unavailable size instead of reporting a
+   stock problem. Same HTTP shapes as before (**409 `stock_conflict`** on checkout,
+   200 with `ok:false` on the pre-check) — no status string changed.
+4. **`app/services/catalog_filters.py`** — `split_multi()` accepts repeated and/or
+   comma-separated facets. `GET /products` takes `list[str]` for `size`/`color`, OR
+   within a facet / AND across, resolved **per combination** so a variant-deactivated
+   pair is not advertised (a missing variant row still falls back to aggregate
+   stock, per the stock model).
+5. **Shop sidebar is multi-select** (F3.3c): `size`/`color` are `string[]` in the
+   route search, chips toggle with `aria-pressed`, headings marked «چند انتخابی»,
+   `clean()` drops empty arrays, and `api.products()` sends **repeated** params.
+6. **`src/lib/stock-issues.ts`** — one copy of the Persian copy per reason, shared
+   by the cart line note and the checkout toast (which is no longer «موجودی کافی
+   نیست» for a non-stock rejection). The cart uses the product's own `availability`
+   to say «پیش‌فروش» vs «هنوز عرضه نشده», since the API reports one reason.
+7. **Verified:** 39 unit tests (14 new) + ruff clean; live Docker stack — repeated
+   == comma facets, OR widens (16→20 for `M,36-38`), AND across facets (11),
+   empty/bogus facet values are safe, `coming_soon`/`preorder` → `not_available` in
+   both endpoints with **no order written**, an inactive variant drops the product
+   from the exact-pair filter while widened facets keep it, and every temporary row
+   was removed afterwards (availability restored, `variants: []`, all products
+   `in_stock`). `tests/api_smoke.py` now asserts the guard and the facet shapes:
+   **76 checks, 0 failed**. Frontend `tsc` clean, eslint clean on the touched files.
+
+### ❌ What was NOT done
+
+- **No browser pass on the shop chips** — `vite` cannot run in this environment
+  (pre-existing: Node 20.9 lacks `node:util.styleText` for rolldown; under nvm
+  Node 22 the installed rolldown has no `darwin-arm64` binding), so the chip
+  toggling is verified by types + the URL contract, not by clicking.
+- `preorder` remains unorderable (deliberate, → B4.13); no facet **counts** on the
+  chips; the filter answers "offered", not "in stock" (an active variant at stock 0
+  still matches); tag chips still come from the cached catalog.
+- `infra/README.md` and `vogue-vintage-vibes/README.md` untouched on purpose — no
+  compose/env/script change (the frontend README carries no component inventory).
+
+### Decisions
+
+- **One reason for both unavailable states** (`not_available`) per the user's
+  choice; the storefront adds the nuance from the product's own `availability`
+  rather than the API duplicating it.
+- **The gate lives in a shared service**, not duplicated in the two endpoints, so
+  the pre-check and the order can never disagree — the same reasoning as
+  `services/variants.py` and `services/catalog_filters.py`.
+- **Per-combination facet semantics** instead of the naive cross-product: a
+  deactivated size×colour pair must not be advertised, while a pair with no variant
+  row keeps the product (it is purchasable through aggregate stock).
+- **Repeated params, not comma-joined** (the client appends one param per value) —
+  both work server-side, but repeated is what `URLSearchParams` gives naturally, so
+  the URL stays readable and canonical.
+
+## Session 16 — 2026-09-21
+
+**Scope (user request):** add a rule that
+`design/SANDE_FULL_DEV_SPEC.md` must be checked **before starting each task**.
+Audit: `plan/audit/2026-09-21-rule-spec-preflight.md`.
+
+**User decisions:** authority is **"read first, current stack wins"** (follow the
+spec where it applies; the live FastAPI architecture beats its Supabase/Lovable
+stack section; report deviations in the audit), and the rule applies to **every
+task, no exceptions**.
+
+### ✅ What was done
+
+1. **`AGENTS.md`** — new always-loaded section *«Mandatory: read the dev spec before
+   the task starts»*, sitting above the existing end-of-task docs checklist so both
+   ends of a task are covered; the audit contents now include a **spec check**, and
+   the standing rules link to the detailed version.
+2. **`plan/RULES.md`** — **new Rule 0** (follow where it applies / live repo wins on
+   conflict / report in the audit / reconcile but don't edit the spec), **new Rule
+   4b** (checked at both ends — no spec line in the audit means the task is not
+   finished), a **Spec check** bullet in Rule 1, and a Rule 4 wording fix: it no
+   longer claims "the Supabase schema" is the protected behaviour (that stopped
+   being true when Supabase was removed; the protected content — status strings and
+   cart money rules — is unchanged).
+3. **`plan/README.md`** — the spec is indexed at the top with its precedence note,
+   and the short rules lead with Rule 0.
+4. **`design/SANDE_FULL_DEV_SPEC.md` was not modified** — it is the user's document
+   (Rule 0.4); the staleness that matters (stack header, Part C statuses, the
+   `formatPrice`/`toPersianDigits` helper names vs this repo's `formatToman`/`toFa`)
+   is recorded as open work in the audit instead.
+
+### ❌ What was NOT done
+
+- **No reconciliation of the spec with the repo** (its Supabase/Lovable stack, its
+  `AdminLayout`/`DataTable`/`OrderDetailSheet`/`admin.refunds`/`admin.coupons`
+  targets, `@tanstack/react-table`, RHF+Zod, helper names, stale Part C statuses).
+  Logged as open in the audit; it is a user-facing document change nobody asked
+  for yet.
+- **No checkbox in the task lists** — a process rule is not backend or frontend
+  work (stated in the audit per Rule 5).
+- **No automated enforcement** — the rule is convention + review, like the audit
+  rule itself.
+- `backend/README.md`, `infra/README.md`, `vogue-vintage-vibes/README.md`,
+  `FEATURES.md`, `feature-roadmap.md`, `DESIGN_SYSTEM.md` untouched — no endpoint,
+  feature, component or setup change.
+
+### Decisions
+
+- **Two-layer rule, like the rest of the working agreement:** the always-loaded
+  one-paragraph version in `AGENTS.md`, the detailed obligations in
+  `plan/RULES.md` Rule 0, so a future agent that only reads one of them still gets
+  the precedence right.
+- **The spec never silently overrides reality.** Explicit "the live repo wins"
+  clause rather than a blanket "follow the spec", because part of the document
+  describes a stack this project deliberately left behind.
+- **The spec is read-only for agents.** Staleness is fixed in the plan docs, not by
+  editing the user's document, so their copy stays authoritative for their intent.
+- **A conflict is a finding, not a failure** — audits must name contradictions, so
+  the rule produces information instead of forcing a wrong implementation.
+
+## Session 17 — 2026-09-21
+
+**Scope (user request):** update `vogue-vintage-vibes/DESIGN_SYSTEM.md` with
+`design/SANDE_FULL_DEV_SPEC.md`. Audit:
+`plan/audit/2026-09-21-design-system-spec-merge.md`. Doc-only change — no code,
+schema, endpoint or test was touched.
+
+### ✅ What was done
+
+1. **`DESIGN_SYSTEM.md` rewritten as one merged guide** with two labelled layers:
+   **Now** (true of the code) and **Target** (from the spec, for new work), preceded
+   by the provenance + precedence note (Rule 0.2).
+2. **Spec content folded in:** the palette's *meaning* as a new **§2.3 status
+   semantics** table (positive/in-progress/waiting/negative/commerce mapped onto the
+   existing tokens, since the spec's own B1.1 forbids the raw `emerald/amber/rose`
+   classes its B0.2/B4.2 prescribe), **§2.5** typography (`font-display`, and the
+   missing `--font-mono` the spec assumes), new **§2.6** spacing/borders/elevation
+   and **§2.7** micro-interactions, a new **§3.3** table mapping [FE-01]–[FE-08] to
+   what exists today, the **B1 invariants** merged into **§4**, the **B4** snippets
+   rewritten against real helpers (`formatToman`/`toFa`), and the **B5** pre-flight
+   list merged into **§9**.
+3. **New §5 precedence table** — 10 conflicts (`Supabase`/`createServerFn`,
+   `order-actions.functions.ts`, helper names, raw status colours, toast position,
+   radii, admin components, `bg-muted`, `font-serif`/`font-mono`, print CSS) each with
+   the binding side, so Rule 0.2 never has to be re-derived for the same question.
+4. **New work logged (Rule 2):** `plan/frontend-tasks.md` **Milestone F4** (F4.1
+   token-driven status badges, F4.2 sidebar admin shell, F4.3 reusable data grid,
+   F4.4 order drawer + invoice print, F4.5 coupons manager) and `plan/backend-tasks.md`
+   **Milestone B5** (B5.1 audit log, B5.2 KPI aggregation range endpoint, B5.3 refund
+   bank-tracking columns + the `requested` vs `pending` vocabulary mismatch, B5.4
+   granular staff roles).
+5. **Claims verified against the code** before writing them: toaster is
+   `top-center`; `@tanstack/react-table` is not installed; `zod` is imported nowhere
+   and RHF only by the unused `ui/form.tsx`; no `--font-mono` and no `@media print`;
+   `rounded-none` is pervasive; both order chips render terracotta/sand; and
+   `refund_requests` has only `status`/`admin_note` with a `requested` default.
+
+### ❌ What was NOT done
+
+- **`design/SANDE_FULL_DEV_SPEC.md` was not edited** (Rule 0.4): its stale stack
+  header, `order-actions.functions.ts`/`formatPrice`/`toPersianDigits` references, raw
+  palette badge classes and Part C statuses stay as they are — §5 of
+  `DESIGN_SYSTEM.md` carries the corrections instead.
+- **Nothing was implemented:** status badges, `--font-mono`, the print stylesheet,
+  the sidebar shell, the data grid, refunds/coupons screens and the audit log are
+  specified but unbuilt (F4.x / B5.x).
+- **No lint/test guardrail** for the new rules (no lint rule blocks `rounded-none` on
+  an admin widget or a raw palette class) — §9's checklist is still the only guardrail.
+- `backend/README.md`, `infra/README.md`, `vogue-vintage-vibes/README.md`,
+  `FEATURES.md`, `plan/feature-roadmap.md` untouched — no capability, endpoint or
+  setup step changed.
+
+### Decisions
+
+- **One document instead of two contradicting ones**, with the spec's rules marked
+  Now/Target rather than silently dropped or silently adopted — the spec stays
+  readable as intent, the code stays the truth.
+- **The spec's own contradiction is resolved in favour of its B1.1 invariant**: state
+  colour is expressed through this project's semantic tokens (§2.3), not the raw
+  `bg-emerald-50 …` classes from its B0.2/B4.2 — with the `--status-*` escape hatch
+  documented if literal green/amber/rose is ever wanted.
+- **`terracotta` is reserved for brand/CTA, `destructive` for negative state** —
+  today's uniform terracotta chip for every order status conflates the brand accent
+  with "danger", which the status table now fixes.
+- **Precedence is written down once (§5), not argued per task** — the spec is read,
+  the repo wins where they conflict, and the audit records which side was taken.
+- **Storefront corners and toast position stay as they are** (grandfathered); the
+  spec's `rounded-xl/2xl` + no-`rounded-none` rule applies to **new admin data
+  widgets** only, so existing screens are not churned for a doc change.
+
+---
+
+## Session 18 — 2026-09-21
+
+**Scope (user request):** continue the remaining **backend + frontend** work,
+**excluding admin tasks**. Audit:
+`plan/audit/2026-09-21-backend-frontend-nonadmin-contacts-addresses-payments.md`.
+
+Chosen slice — the customer-facing items whose dependencies were already in place:
+B3.7 (payment authority), B3.4 (Supabase wording), F2.1 (contact form), F2.7
+(default address in checkout), plus the checkout `province` gap the spec check
+surfaced.
+
+### ✅ What was done
+
+- **B3.7** — `payments.authority` (+ index) created idempotently on startup;
+  `verify_and_finalize` resolves by authority with a `reference = :authority`
+  fallback for pre-column rows and returns `already_paid` for a settled session.
+  A repeat Zarinpal callback is now a 303 redirect to the order page, not a 400.
+- **B3.4** — the last Supabase mentions in `app/db.py`, `models.py`,
+  `routers/auth.py`, `routers/storage.py`, `seed_products.py` now describe the
+  FastAPI + own-JWT + MinIO reality.
+- **B3.9 / F2.1** — `contact_messages` table, public `POST /contact`
+  (guest-friendly, `user_id` NULL), admin `GET /admin/contact-messages?status=` +
+  `DELETE /admin/contact-messages/{id}`; `contact.tsx` is a real form with
+  API-mirrored validation and Persian toasts.
+- **B3.10 / F2.7** — the address book enforces **one** default per customer
+  (first address becomes it, explicit flag moves it, deleting the default promotes
+  the survivor) and gained `PATCH /addresses/{id}`. The account tab shows a
+  «پیشفرض» badge and can move/create defaults; checkout offers saved addresses,
+  pre-selects the default and pre-fills the form.
+- **Checkout `province`** — the spec's [FE-05] shipping box asks for it, saved
+  addresses had it, and the checkout payload silently dropped it. Added as an
+  optional API field (`province: str | None`, so older payloads keep working),
+  stored in `orders.shipping_address`, and added to the form.
+- `src/lib/api.ts` gained `ContactMessage`, `api.contact()`, `api.updateAddress()`
+  and `CheckoutAddress.province`.
+
+### ❌ Explicitly not done
+
+- **No admin screens** (per the instruction): no contact inbox (F2.1b), no refunds
+  page (F2.4), no dashboard charts (F2.6), no pagination (F2.5). `plan/ADMIN-BACKEND_TASKS.md`
+  and `plan/ADMIN-FRONTEND_TASKS.md` were left untouched — only indexed in
+  `plan/README.md` so they stop being invisible.
+- **F2.3 forgot-password** — still needs a reset-token endpoint plus outbound email
+  (B2.1), so it was not started.
+- **F2.8 tracking number** and Milestone **B2** (notifications, exports, invoices,
+  jobs) — untouched, both larger than this slice.
+- **No browser pass** — `vite` still cannot start in this environment (pre-existing
+  Node/rolldown binding issue), so the UI was verified with `tsc` + eslint and by
+  the API shapes it reads, not by clicking.
+- `infra/initdb/02-public-schema.sql` deliberately untouched: `contact_messages`
+  and `payments.authority` are additive DDL applied by `app/db.py`, the existing
+  convention for coupons/variants/reviews/search_history/recently_viewed.
+
+### Decisions
+
+- **Non-admin slice first, admin split left alone.** The user's constraint was
+  explicit, and the admin docs are a separate task file; mixing them would make the
+  audit's scope line meaningless.
+- **`province` made optional rather than required** — the checkout schema is a
+  public contract and the frontend deploys separately from the API, so a required
+  field would break in-flight clients for a cosmetic gain.
+- **Guest-friendly contact endpoint.** Requiring an account to ask about a size or
+  an order would have been the wrong trade; the sender's own `contact` field is the
+  reply channel, and the missing spam guard is logged as B3.11 instead.
+- **`is_default` invariant enforced server-side, not in the UI.** The UI only ever
+  asks for "make this the default"; the "at most one" rule lives in one SQL helper
+  so no future screen can violate it.
+- **Checkout keeps its uncontrolled FormData fields.** Addressing the pre-fill with
+  a remount key avoids converting a working, simple form into controlled state.
+
+---
+
+## Session 19 — 2026-09-21
+
+**Scope (user request):** let customers edit the fields of a saved address in the
+account tab. Audit: `plan/audit/2026-09-21-frontend-f27b-edit-address.md`.
+Frontend-only change — `PATCH /addresses/{id}` already existed (B3.10).
+
+### ✅ What was done
+
+- `account.addresses.tsx`: the seven address inputs moved into a shared
+  **`AddressFields`** component (with a `prefix` so the create form and an open edit
+  form never collide on input ids). Each card gained a **«ویرایش»** action that opens
+  an inline pre-filled form with «ذخیره تغییرات» / «انصراف»; only one card is open at
+  a time and deleting the open card closes it.
+- The edit request sends **fields only** — no `is_default` — so fixing a typo can
+  never move or clear the default that checkout pre-fills. A comment in the mutation
+  says why.
+- `api_smoke.py`: new live assertion **`PATCH fields only edits without touching
+  is_default`** — the exact request shape the UI now sends. Smoke is 99 checks,
+  0 failed.
+
+### ❌ Explicitly not done
+
+- **No backend change** — `AddressUpdateIn` already treats every field as optional,
+  which is what makes a fields-only patch safe. `backend/README.md` and
+  `infra/README.md` untouched (endpoint, setup, scripts unchanged).
+- **No browser pass** — `vite` still cannot start here (pre-existing Node/rolldown
+  binding issue), so focus/scroll behaviour after opening the edit form is unverified.
+- **The edit form does not own `is_default`** — deliberate (see above). If the form
+  should toggle it too, that is a follow-up decision, not an oversight.
+
+### Decisions
+
+- **Fields-only patch instead of sending the whole row.** Sending `is_default` back
+  with every edit would make an innocent title change able to demote the default
+  address (or promote a non-default one) depending on the row's state — the flag
+  stays behind its own explicit action.
+- **One shared field component rather than a copy.** The edit form must stay in sync
+  with the create form (both mirror the backend's `AddressIn`), so the field list
+  exists once; the `prefix` prop is the price of uniqueness.
+- **Inline edit rather than a modal.** The tab is a short list on a storefront page;
+  swapping the card keeps the surrounding addresses visible and needs no new
+  primitive.
+
+---
+
+## Session 20 — 2026-09-21
+
+**Scope (user picked "quick wins batch"):** F2.1b admin contact inbox + F2.4 admin
+refunds page + F2.8 shipment tracking number. Two small backend pieces were needed
+and logged first as new checkboxes (Rule 2): B3.12 (`orders.tracking_code` + PATCH)
+and B3.13 (mark a contact message answered).
+Audit: `plan/audit/2026-09-21-frontend-f21b-f24-f28-admin-inbox-refunds-tracking.md`.
+
+### ✅ What was done
+
+- **Backend:** idempotent `TRACKING_DDL` adds `orders.tracking_code` (NULL until an
+  admin sets it); `PATCH /orders/{id}` accepts it (max 60 chars, empty clears,
+  admin-only); `_ORDER_SELECT` returns it. New `PATCH /admin/contact-messages/{id}`
+  with `Literal["new","answered"]` validation. Smoke gained 8 checks (mark answered,
+  `?status=answered`, 422 on bogus, save/customer-visibility/clear/403 on tracking).
+- **Frontend:** two new admin tabs — `/admin/messages` (F2.1b inbox: filters,
+  copy contact, mark answered/reopen, delete) and `/admin/refunds` (F2.4: three
+  [FE-06] tabs, claim cards, approve/reject/settle dialog). F2.8: tracking input in
+  each admin order row + «کد رهگیری مرسوله» on the customer order page. `api.ts`
+  got the types/methods; `orders.ts` got `REFUND_STATUS`.
+- **Verified:** pytest 39 passed, ruff clean, `tsc --noEmit` clean, live smoke
+  **117 routes/checks, 0 failed** against the running Docker stack (API hot-reloaded).
+- **Docs:** both task lists, this log, `backend/README.md`, `FEATURES.md` (gaps
+  ۶.۳/۶.۱۰/۶.۱۴), `DESIGN_SYSTEM.md` (§3.3 + §8.9), `plan/README.md`, audit file.
+
+### ❌ Explicitly not done
+
+- **Refund bank-tracking input** — needs B5.3 (`bank_tracking_code` column +
+  vocabulary decision); the dialog records the admin note only.
+- **Order drawer / invoice printing** (F4.4) untouched — the tracking input lives
+  in the order row; the drawer remains the spec-aligned follow-up.
+- **`vite build` still fails in this shell** (pre-existing npm-vs-Bun `node_modules`
+  + Node 20.9 vs rolldown requirement). `tsc --noEmit` passes; the container build
+  (Bun) is the reliable path. Not attempted to fix here.
+- **No notification** on tracking/refund events — B2.1, untouched.
+
+### Decisions
+
+- **Settlement records the note only, no fake bank-tracking field.** A required
+  input with nowhere to persist it would drop data silently; B5.3 unblocks it.
+- **`REFUND_STATUS` keeps `requested` as a known label** so pre-existing rows
+  never render raw keys, and unknown future statuses fall back to the raw string.
+- **Empty tracking code = clear** (mirrors `PATCH /addresses` semantics), so a
+  typo can be removed without a dedicated endpoint.
+- **Payment-session `tracking_code` left alone.** Same field name, different
+  meaning (simulated gateway session code); changing it would break Rule 4
+  contracts for nothing.
+
+---
+
+## Session 20b — 2026-09-21 (same day follow-up)
+
+**Scope (user request):** rebuild the frontend `node_modules` with Bun and get
+`vite build` passing locally — the Session 20 open item.
+
+### ✅ What was done
+
+1. **Installed Bun on the host** (1.4.2, matches the container's) via the official
+   installer into `~/.bun` — the host previously had none.
+2. **Removed the npm-installed `node_modules`** (it was built against npm's
+   optional-deps layout, which is why rolldown's `@rolldown/binding-darwin-arm64`
+   native binding was missing).
+3. **Fixed the lockfile registry** — 10 packages (the `@lovable.dev/*` pair, the
+   `@supabase/*` set that supabase-js pulls in, and `iceberg-js`) resolved from
+   `europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/`, a private
+   Lovable registry that 403s outside their infra. All 10 exist on public npm as
+   the **same tarballs at the same versions** (verified: identical paths, same
+   SRI hashes verified by bun on install), so the lockfile's host prefix was
+   repointed to `registry.npmjs.org`. A backup of the old lockfile went to
+   `/tmp/bun.lock.bak`.
+4. **`bun install`** — complete dependency tree restored (333 MB, vite +
+   `@rolldown/binding-darwin-arm64` present).
+5. **`bun run build`** with Node 22 — **passes** (671 ms, full `.output/` SSR
+   bundle). `tsc --noEmit` clean.
+
+### ❌ Explicitly not done
+
+- No code changes; the frontend still pins the same dependency versions.
+- `infra/frontend.Dockerfile`'s `overrides` entry kept (now a harmless safety
+  net) — deleting it belongs to an infra task, and it does no harm.
+
+### Decisions
+
+- **Repoint the lockfile host rather than adding `overrides` to package.json.**
+  The tarballs are byte-identical on the public registry, bun verifies SRI
+  hashes on install, and the lockfile stays the single source of truth for
+  versions. The alternative (a package.json override per private package) would
+  have grown a second place where dependency truth lives.
+- **Documented the Node ≥ 20.12 requirement** in `vogue-vintage-vibes/README.md`
+  (system Node 20.9 fails on rolldown's `styleText` import; Node 22 from nvm
+  works).
+
+### Doc updates in this follow-up
+
+`vogue-vintage-vibes/README.md` (Development note: registry + Node version),
+`infra/README.md` (frontend build note), `infra/frontend.Dockerfile` (header
+comment), `plan/session-log.md` (this section). The Session 20 audit's open item
+"vite build fails in this shell" is now resolved; the audit file itself is not
+retroactively edited — this session entry supersedes it.
+
+---
+
+## Session 20c — 2026-09-21 (same day follow-up)
+
+**Scope (user request):** delete the now-redundant `overrides` entry from
+`infra/frontend.Dockerfile` and verify the image still builds.
+
+### ✅ What was done
+
+- `frontend.Dockerfile`: removed the `bun -e … overrides` JSON-munging RUN; the
+  install step is now a plain `RUN bun install`. Header comment rewritten: the
+  lockfile has been fully public since 2026-09-21, and if it ever regresses to a
+  private tarball URL the build now fails loudly at `bun install` (good) instead
+  of being silently patched around.
+- **Image build verified:** `docker build -f infra/frontend.Dockerfile -t
+  sandeh-frontend:test-override-removal .` from the repo root → success
+  (~6.5 min cold; the COPY layer cache invalidation forced a full re-install).
+- **Image contents verified:** inside the image — `@lovable.dev/cloud-auth-js` +
+  `vite-tanstack-config` present, `vite` present, linux rolldown bindings
+  present, `overrides` count in package.json = 0, zero `pkg.dev` URLs in the
+  copied lockfile.
+- **Runtime verified:** ran the image twice with compose-equivalent mounts
+  (source rw + anonymous `node_modules` volume): first boot showed
+  `Resolving dependencies` — the anonymous volume starts **empty** and bun
+  installs into it on start, so the first `bun install` at build time only
+  primes the image, not the volume (this was true before the change too). With
+  the volume primed, the container served `HTTP 200` with the SÂNDÉ title/brand
+  in the HTML, 0 errors in the vite log.
+- Running `sandeh-*` stack untouched throughout (still Up 47h, backend health
+  200). Test containers/volume/image cleaned up.
+
+### ❌ Explicitly not done
+
+- No `docker compose up -d --build` on the live stack — the running frontend
+  container keeps its 47-hour-old image until the user chooses to rebuild.
+- No commit; all changes remain in the working tree.
+
+### Decisions
+
+- **Loud failure preferred over silent patching.** Keeping the override meant a
+  private-registry regression would go unnoticed (the override would mask it).
+  A plain `bun install` makes the lockfile the single point of truth, verified
+  by SRI hashes at build time.
+- **Kept the same base image and CMD** — the change is the removal of one RUN
+  step, nothing else.

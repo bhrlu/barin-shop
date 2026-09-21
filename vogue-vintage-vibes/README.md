@@ -29,7 +29,14 @@ The API base is read from `VITE_API_URL` (SSR fallback `VITE_BACKEND_URL`,
 default `http://localhost:8000`). See `src/lib/api.ts` — the single data layer
 for every backend endpoint.
 
-> `bun.lock` pins `@lovable.dev/vite-tanstack-config` to a Lovable-sandbox-only
-> tarball; `../infra/frontend.Dockerfile` overrides it for the public registry.
+> `bun.lock` used to pin `@lovable.dev/vite-tanstack-config` to a Lovable-sandbox-only
+> tarball (403 outside their infra). Since 2026-09-21 the lockfile resolves every
+> package — including the `@lovable.dev/*` ones — from the public registry
+> (`registry.npmjs.org`); the same versions and SRI hashes, same tarballs.
+> `../infra/frontend.Dockerfile` therefore runs a plain `bun install` — no
+> override needed any more.
 > `vite.config.ts` is intentionally minimal — the Lovable config injects the
 > plugins, so don't add them manually.
+>
+> **Node version:** the build needs Node ≥ 20.12 (rolldown-vite requirement);
+> Node 22 works. The system Node 20.9 fails with `styleText` import errors.
