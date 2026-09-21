@@ -43,13 +43,14 @@ docker compose -f infra/docker-compose.yml up -d --build
 > `docker compose` automatically loads `infra/.env` when run from inside
 > `infra/`; from the repo root pass `--env-file infra/.env` (or export the vars).
 
-## Frontend build note (lovable tarball)
+## Frontend build note (lovable tarball — resolved)
 
-`bun.lock` pins `@lovable.dev/vite-tanstack-config` to a tarball URL that only
-resolves inside Lovable's sandbox (403 elsewhere). `infra/frontend.Dockerfile`
-injects a temporary `overrides` entry pinning the same version (2.13.1) to the
-public npm registry — it does not modify the repo's `package.json` or lockfile.
-If Lovable ever publishes it publicly, the override can be deleted.
+`bun.lock` used to pin `@lovable.dev/vite-tanstack-config` to a tarball URL that
+only resolved inside Lovable's sandbox (403 elsewhere). Since 2026-09-21 the
+lockfile resolves all 10 formerly-private packages from `registry.npmjs.org`
+(identical tarballs/SRI hashes), so the image just runs plain `bun install` — the
+`overrides` injection was removed from `frontend.Dockerfile`. If the lockfile ever
+regresses to a private tarball URL, the build fails loudly at `bun install`.
 
 ## Notes & gotchas
 
