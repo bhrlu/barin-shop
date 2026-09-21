@@ -164,6 +164,72 @@ TRACKING_DDL = [
 ]
 
 
+# --- Refund settlement fields (idempotent) -----------------------------------
+# Spec [BE-03]: the approval flow records HOW the money was sent and WHO/WHEN it
+# was resolved. `bank_tracking_code` is the Paya/Satna tracking code entered at
+# settlement ([FE-06] requires it when marking a request `refunded`).
+#
+# Vocabulary: the base DDL (infra/initdb) defaults `status` to 'requested' while
+# the API and UI speak pending/approved/rejected/refunded. New rows are inserted
+# with 'pending' explicitly, and the UPDATE below normalizes any legacy
+# 'requested' rows — without touching rows that already hold a settlement state.
+REFUND_DDL = [
+    "ALTER TABLE public.refund_requests ADD COLUMN IF NOT EXISTS bank_tracking_code TEXT",
+    (
+        "ALTER TABLE public.refund_requests ADD COLUMN IF NOT EXISTS resolved_by "
+        "UUID REFERENCES public.users(id) ON DELETE SET NULL"
+    ),
+    "ALTER TABLE public.refund_requests ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ",
+    (
+        "UPDATE public.refund_requests SET status = 'pending' "
+        "WHERE status = 'requested'"
+    ),
+]
+
+
+# --- Granular staff roles (idempotent) ---------------------------------------
+# Spec [BE-04] / B5.4: extends the role enum in place. Roles stay in
+# `user_roles` (never on the user row). `ADD VALUE` cannot run inside a
+# transaction on older Postgres, so these run on an AUTOCOMMIT connection.
+# Legacy 'admin' rows keep working — the API treats 'admin' as a full-equivalent
+# staff role (Rule 4: existing rows never break).
+ROLE_DDL = [
+    "ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'super_admin'",
+    "ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'order_manager'",
+    "ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'support'",
+]
+
+
+# --- Admin audit log (idempotent) --------------------------------------------
+# Spec [BE-04] / B5.1: tamper-resistant trail of privileged mutations. Written by
+# `app/services/audit.py` on the same session as the mutation it describes, so
+# the entry commits atomically with it. `ip_address` stays NULL until request
+# client IPs are plumbed through.
+AUDIT_DDL = [
+    """
+    CREATE TABLE IF NOT EXISTS public.audit_logs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      admin_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+      action TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      old_values JSONB,
+      new_values JSONB,
+      ip_address TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+    """,
+    (
+        "CREATE INDEX IF NOT EXISTS audit_logs_created_idx "
+        "ON public.audit_logs(created_at DESC)"
+    ),
+    (
+        "CREATE INDEX IF NOT EXISTS audit_logs_entity_idx "
+        "ON public.audit_logs(entity_type, entity_id)"
+    ),
+]
+
+
 PAYMENT_DDL = [
     "ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS authority TEXT",
     (
@@ -197,11 +263,23 @@ CONTACT_DDL = [
 
 
 async def startup_ddl() -> None:
+    # enum extension first, on its own autocommit connection (ADD VALUE and
+    # older Postgres transactions do not mix)
+    conn = await engine.connect()
+    try:
+        await conn.execution_options(isolation_level="AUTOCOMMIT")
+        for stmt in ROLE_DDL:
+            await conn.execute(text(stmt))
+    finally:
+        await conn.close()
+
     async with engine.begin() as conn:
         for statements in (
             COUPON_DDL,
             CATALOG_DDL,
             TRACKING_DDL,
+            REFUND_DDL,
+            AUDIT_DDL,
             PAYMENT_DDL,
             CONTACT_DDL,
         ):

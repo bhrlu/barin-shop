@@ -16,7 +16,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import text
 
-from app.auth import AdminUser, DbSession
+from app.auth import DbSession, StaffContactInbox
 from app.schemas import ContactMessageIn, ContactMessageOut, ContactMessageStatusIn
 
 log = logging.getLogger(__name__)
@@ -51,7 +51,7 @@ async def create_message(body: ContactMessageIn, session: DbSession) -> ContactM
 
 @router.get("/admin/contact-messages", response_model=list[ContactMessageOut])
 async def list_messages(
-    user: AdminUser,
+    user: StaffContactInbox,
     session: DbSession,
     status_filter: str | None = Query(default=None, alias="status"),
     limit: int = Query(default=100, ge=1, le=200),
@@ -73,7 +73,7 @@ async def list_messages(
 @router.delete(
     "/admin/contact-messages/{message_id}", status_code=status.HTTP_204_NO_CONTENT
 )
-async def delete_message(message_id: UUID, user: AdminUser, session: DbSession) -> None:
+async def delete_message(message_id: UUID, user: StaffContactInbox, session: DbSession) -> None:
     """Remove a message (spam, or one that has been answered elsewhere)."""
     result = await session.execute(
         text("DELETE FROM public.contact_messages WHERE id = :mid"),
@@ -86,7 +86,7 @@ async def delete_message(message_id: UUID, user: AdminUser, session: DbSession) 
 
 @router.patch("/admin/contact-messages/{message_id}", response_model=ContactMessageOut)
 async def mark_message(
-    message_id: UUID, body: ContactMessageStatusIn, user: AdminUser, session: DbSession
+    message_id: UUID, body: ContactMessageStatusIn, user: StaffContactInbox, session: DbSession
 ) -> ContactMessageOut:
     """Mark a message answered (`status = 'answered'`) or reopen it (`'new'`).
 

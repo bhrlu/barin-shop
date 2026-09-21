@@ -54,6 +54,7 @@ def login(email: str, password: str) -> str:
 def main() -> int:
     customer = login("customer@sande.local", "customer1234")
     admin = login("admin@sande.local", "admin1234")
+    support = login("support@sande.local", "staff1234")
     print("tokens acquired\n")
 
     # --- public / catalog ---
@@ -339,6 +340,7 @@ def main() -> int:
 
     # --- checkout (creates a real order for the customer) ---
     order_id = None
+    refund_id = None
     color = prods[0]["colors"][0]["name"] if prods[0]["colors"] else "x"
     size = prods[0]["sizes"][0] if prods[0]["sizes"] else "M"
     chk = call(
@@ -418,8 +420,162 @@ def main() -> int:
     call("POST", "/payments/verify", customer, params={"authority": "unknown-authority"})
     call("GET", "/payments/mine", customer)
 
+    # --- refund flow (B5.3): cancelled + paid order → request → settle ---
+    if order_id:
+        call("POST", f"/orders/{order_id}/cancel", customer)
+        refund = call(
+            "POST", f"/orders/{order_id}/refunds", customer, json={"reason": "smoke refund"}
+        )
+        if refund is not None and refund.status_code == 201:
+            refund_id = refund.json()["id"]
+            check(
+                "refund request starts as pending",
+                refund.json().get("status") == "pending",
+                str(refund.json()),
+            )
+            listed = call("GET", "/admin/refunds", admin)
+            entries = (
+                listed.json() if listed is not None and listed.status_code == 200 else []
+            ) or []
+            mine = next((r for r in entries if r["id"] == refund_id), None)
+            check(
+                "admin refund list carries claimant contact",
+                mine is not None and bool(mine.get("user_email")),
+                f"user_email={mine.get('user_email') if mine else None}",
+            )
+            nobank = call(
+                "PATCH",
+                f"/refunds/{refund_id}",
+                admin,
+                json={"status": "refunded", "admin_note": "smoke"},
+            )
+            check(
+                "settlement without bank tracking code is rejected",
+                nobank is not None and nobank.status_code == 422,
+                f"{nobank.status_code if nobank else 0}",
+            )
+            settled = call(
+                "PATCH",
+                f"/refunds/{refund_id}",
+                admin,
+                json={
+                    "status": "refunded",
+                    "admin_note": "smoke",
+                    "bank_tracking_code": "SATNA123456",
+                },
+            )
+            check(
+                "settlement with bank code succeeds",
+                settled is not None and settled.status_code == 200,
+                f"{settled.status_code if settled else 0} {settled.text[:80] if settled else ''}",
+            )
+            listed2 = call("GET", "/admin/refunds", admin)
+            entries2 = (
+                listed2.json() if listed2 is not None and listed2.status_code == 200 else []
+            ) or []
+            mine2 = next((r for r in entries2 if r["id"] == refund_id), None)
+            check(
+                "settled refund records bank code + resolver",
+                mine2 is not None
+                and mine2.get("bank_tracking_code") == "SATNA123456"
+                and bool(mine2.get("resolved_by"))
+                and bool(mine2.get("resolved_at")),
+                str(
+                    {
+                        k: mine2.get(k) if mine2 else None
+                        for k in ("bank_tracking_code", "resolved_by", "resolved_at")
+                    }
+                ),
+            )
+            order_after = call("GET", f"/orders/{order_id}", customer)
+            check(
+                "settled refund flips order payment_status to refunded",
+                order_after is not None
+                and order_after.status_code == 200
+                and order_after.json().get("payment_status") == "refunded",
+                "",
+            )
+
     # --- admin ---
     call("GET", "/admin/stats", admin)
+
+    # --- KPI aggregation (B5.2 / spec BE-09) ---
+    kpi = call("GET", "/admin/kpis?range=7d", admin)
+    kpi_keys = (
+        "grossRevenue",
+        "netRevenue",
+        "paidOrders",
+        "aov",
+        "pendingRefunds",
+        "lowStock",
+        "series",
+        "statusBreakdown",
+    )
+    check(
+        "KPI endpoint returns the aggregated block",
+        kpi is not None
+        and kpi.status_code == 200
+        and all(key in (kpi.json() or {}) for key in kpi_keys),
+        f"{kpi.status_code if kpi else 0}",
+    )
+    kpi_points = (
+        len((kpi.json() or {}).get("series", []))
+        if kpi is not None and kpi.status_code == 200
+        else "?"
+    )
+    check(
+        "KPI series carries one point per day",
+        kpi is not None and kpi.status_code == 200 and kpi_points == 8,
+        f"{kpi_points} points",
+    )
+    for r in ("today", "30d", "all"):
+        call("GET", f"/admin/kpis?range={r}", admin)
+    call("GET", "/admin/kpis?range=bogus", admin)  # expected 422
+    call("GET", "/admin/kpis")  # unauthenticated → 401/403
+
+    # --- audit log (B5.1 / spec BE-04) ---
+    logs = call(
+        "GET", "/admin/audit-logs?entity_type=order&limit=50", admin
+    )
+    log_entries = (
+        logs.json() if logs is not None and logs.status_code == 200 else []
+    ) or []
+    order_audit_actions = (
+        "update_order_status",
+        "update_order_payment_status",
+        "update_order_tracking_code",
+    )
+    check(
+        "audit log records the admin order mutation",
+        bool(log_entries)
+        and any(e["action"] in order_audit_actions for e in log_entries),
+        f"entries={len(log_entries)}",
+    )
+    check(
+        "audit entries carry admin identity + timestamps",
+        bool(log_entries)
+        and all(e.get("admin_id") and e.get("created_at") for e in log_entries),
+        f"first={log_entries[0].get('admin_email') if log_entries else None}",
+    )
+    if order_id and refund_id:
+        by_entity = call(
+            "GET", f"/admin/audit-logs?entity_type=order&entity_id={order_id}", admin
+        )
+        entity_entries = (
+            by_entity.json() if by_entity is not None and by_entity.status_code == 200 else []
+        ) or []
+        check(
+            "audit log filters by entity_id (refund resolution visible)",
+            any(e["action"] == "resolve_refund" for e in entity_entries),
+            f"actions={[e['action'] for e in entity_entries]}",
+        )
+    forbidden_logs = call("GET", "/admin/audit-logs", customer)
+    check(
+        "audit log is admin-only",
+        forbidden_logs is not None and forbidden_logs.status_code == 403,
+        f"{forbidden_logs.status_code if forbidden_logs else 0}",
+    )
+
     call("GET", "/admin/users", admin)
     call("GET", "/admin/refunds", admin)
     call("GET", "/admin/orders", admin)
@@ -464,6 +620,99 @@ def main() -> int:
             f"{forbidden.status_code if forbidden else 0}",
         )
     call("GET", "/admin/payments", admin)
+
+    # --- granular staff roles (B5.4 / spec BE-04) ---
+    # create a throwaway user, grant order_manager, exercise the capability
+    # matrix, then demote — leaves the DB as it started.
+    staff_mail = f"staff_{uuid4().hex[:8]}@example.com"
+    su = call(
+        "POST", "/auth/signup",
+        json={"email": staff_mail, "password": "secret123", "full_name": "کارمند آزمون"},
+    )
+    staff_uid = (
+        su.json().get("id") if su is not None and su.status_code in (200, 201) else None
+    )
+    if staff_uid is None:
+        # signup returns a token, not an id — find the user via the admin list
+        ulist = call("GET", "/admin/users", admin)
+        for u in (ulist.json() if ulist is not None and ulist.status_code == 200 else []):
+            if u.get("email") == staff_mail:
+                staff_uid = u["id"]
+                break
+    staff_tok = login(staff_mail, "secret123")
+
+    if staff_uid:
+        check("customer cannot self-grant staff roles", call(
+            "PUT", f"/admin/users/{staff_uid}/roles",
+            json={"roles": ["super_admin"]}, token=staff_tok,
+        ).status_code == 403, "")
+
+        granted = call(
+            "PUT", f"/admin/users/{staff_uid}/roles", admin,
+            json={"roles": ["order_manager"]},
+        )
+        check(
+            "PUT /admin/users/{id}/roles grants order_manager",
+            granted is not None and granted.status_code == 200
+            and granted.json().get("roles") == ["order_manager"],
+            f"{granted.status_code if granted else 0} {granted.text[:80] if granted else ''}",
+        )
+        staff_tok = login(staff_mail, "secret123")  # role set is DB-backed, re-login anyway
+
+        check("order_manager reads orders (orders cap)", call(
+            "GET", "/admin/orders", staff_tok).status_code == 200, "")
+        check("order_manager reads KPIs (stats cap)", call(
+            "GET", "/admin/kpis?range=7d", staff_tok).status_code == 200, "")
+        check("order_manager blocked from audit log (audit cap)", call(
+            "GET", "/admin/audit-logs", staff_tok).status_code == 403, "")
+        check("order_manager blocked from users list (users cap)", call(
+            "GET", "/admin/users", staff_tok).status_code == 403, "")
+        check("order_manager blocked from review moderation", call(
+            "PATCH", "/reviews/nonexistent", staff_tok, json={"status": "approved"},
+        ).status_code == 403, "")
+
+        # order_manager exercises a fulfillment mutation, then support can't
+        if order_id:
+            om_code = "249028345699999999999999"
+            om_patch = call(
+                "PATCH", f"/orders/{order_id}", staff_tok, json={"tracking_code": om_code}
+            )
+            check(
+                "order_manager saves tracking_code",
+                om_patch is not None and om_patch.status_code == 200,
+                f"{om_patch.status_code if om_patch else 0}",
+            )
+        check("support blocked from fulfillment (orders cap)", call(
+            "GET", "/admin/orders", support,
+        ).status_code == 403, "")
+        check("support reaches the contact inbox (contact_inbox cap)", call(
+            "GET", "/admin/contact-messages", support,
+        ).status_code == 200, "")
+
+        roles_audit = call(
+            "GET", f"/admin/audit-logs?entity_type=user&entity_id={staff_uid}", admin
+        )
+        role_entries = (
+            roles_audit.json() if roles_audit is not None and roles_audit.status_code == 200 else []
+        ) or []
+        check(
+            "role change is audited with old/new values",
+            any(e["action"] == "update_user_roles" for e in role_entries)
+            and any(e.get("old_values") is not None and e.get("new_values") for e in role_entries),
+            f"entries={len(role_entries)}",
+        )
+
+        demoted = call("PUT", f"/admin/users/{staff_uid}/roles", admin, json={"roles": []})
+        check(
+            "demote back to plain customer",
+            demoted is not None and demoted.status_code == 200
+            and demoted.json().get("roles") == [],
+            f"{demoted.status_code if demoted else 0}",
+        )
+        check("demoted user loses staff access", call(
+            "GET", "/admin/orders", staff_tok).status_code == 403, "")
+    else:
+        check("B5.4 role flow (user created)", False, "could not resolve new user id")
 
     # --- storage ---
     call("POST", "/storage/sign", customer, json={"paths": ["uploads/x.jpg", "cat-tshirt"]})

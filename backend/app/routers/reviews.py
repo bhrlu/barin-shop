@@ -17,7 +17,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import text
 
-from app.auth import AdminUser, CurrentUser, DbSession
+from app.auth import CurrentUser, DbSession, StaffReviews
 from app.schemas import (
     ReviewIn,
     ReviewListOut,
@@ -25,6 +25,7 @@ from app.schemas import (
     ReviewOut,
     ReviewReplyIn,
 )
+from app.services.audit import record_audit
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["reviews"])
@@ -161,13 +162,21 @@ async def delete_review(
         text("DELETE FROM public.product_reviews WHERE id = :rid"),
         {"rid": str(review_id)},
     )
+    if user.is_admin:
+        await record_audit(
+            session,
+            admin_id=user.id,
+            action="delete_review",
+            entity_type="review",
+            entity_id=str(review_id),
+        )
     await session.commit()
 
 
 @router.get("/admin/reviews", response_model=list[ReviewOut])
 async def admin_list_reviews(
     session: DbSession,
-    user: AdminUser,
+    user: StaffReviews,
     status_filter: str | None = Query(default=None, alias="status"),
     limit: int = Query(default=100, ge=1, le=200),
 ) -> list[ReviewOut]:
@@ -185,7 +194,7 @@ async def admin_list_reviews(
 async def moderate_or_reply(
     review_id: UUID,
     body: ReviewModerateIn | ReviewReplyIn,
-    user: AdminUser,
+    user: StaffReviews,
     session: DbSession,
 ) -> ReviewOut:
     """Admin: hide/publish a review and/or post the seller's reply."""
@@ -209,6 +218,17 @@ async def moderate_or_reply(
     if row is None:
         await session.rollback()
         raise HTTPException(status.HTTP_404_NOT_FOUND, "نظر پیدا نشد")
+
+    if isinstance(body, ReviewModerateIn):
+        await record_audit(
+            session,
+            admin_id=user.id,
+            action="moderate_review",
+            entity_type="review",
+            entity_id=str(review_id),
+            new_values={"status": body.status},
+        )
+
     await session.commit()
 
     full = (

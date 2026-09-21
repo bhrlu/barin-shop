@@ -55,6 +55,9 @@ async def main() -> None:
         settings.admin_email, settings.admin_password, settings.admin_full_name, "admin"
     )
     await seed_user("customer@sande.local", "customer1234", "مشتری نمونه", "customer")
+    # granular staff roles (B5.4) — demo accounts for the capability matrix
+    await seed_user("ordermgr@sande.local", "staff1234", "مدیر سفارش‌ها", "order_manager")
+    await seed_user("support@sande.local", "staff1234", "پشتیبانی", "support")
     print("done.")
 
 

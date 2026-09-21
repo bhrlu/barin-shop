@@ -32,7 +32,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 from sqlalchemy import text
 
-from app.auth import AdminUser, AuthUser, CurrentUser, DbSession
+from app.auth import AuthUser, CurrentUser, DbSession, StaffCatalog
 from app.schemas import (
     ProductIn,
     ProductOut,
@@ -42,6 +42,7 @@ from app.schemas import (
     ProductVariantUpdateIn,
 )
 from app.security import decode_access_token
+from app.services.audit import record_audit
 from app.services.catalog_filters import split_multi
 from app.services.roles import resolve_role
 
@@ -339,7 +340,7 @@ async def list_variants(product_id: str, session: DbSession) -> list[ProductVari
     status_code=status.HTTP_201_CREATED,
 )
 async def create_variant(
-    product_id: str, body: ProductVariantIn, session: DbSession, user: AdminUser
+    product_id: str, body: ProductVariantIn, session: DbSession, user: StaffCatalog
 ) -> ProductVariantOut:
     if await _fetch_product(session, product_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "محصول پیدا نشد")
@@ -362,6 +363,19 @@ async def create_variant(
                 },
             )
         ).mappings().first()
+        await record_audit(
+            session,
+            admin_id=user.id,
+            action="create_variant",
+            entity_type="variant",
+            entity_id=str(row["id"]),
+            new_values={
+                "product_id": product_id,
+                "size": body.size,
+                "color": body.color,
+                "stock": body.stock,
+            },
+        )
         await session.commit()
     except Exception as exc:
         await session.rollback()
@@ -374,7 +388,7 @@ async def create_variant(
 
 @router.patch("/variants/{variant_id}", response_model=ProductVariantOut)
 async def update_variant(
-    variant_id: UUID, body: ProductVariantUpdateIn, session: DbSession, user: AdminUser
+    variant_id: UUID, body: ProductVariantUpdateIn, session: DbSession, user: StaffCatalog
 ) -> ProductVariantOut:
     sets: list[str] = []
     params: dict[str, Any] = {"vid": str(variant_id)}
@@ -386,6 +400,12 @@ async def update_variant(
     if not sets:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "چیزی برای به‌روزرسانی نیست")
 
+    before = (
+        await session.execute(
+            text(f"SELECT {_VARIANT_COLS} FROM public.product_variants WHERE id = :vid"),
+            {"vid": str(variant_id)},
+        )
+    ).mappings().first()
     try:
         row = (
             await session.execute(
@@ -396,6 +416,16 @@ async def update_variant(
                 params,
             )
         ).mappings().first()
+        if before is not None and row is not None:
+            await record_audit(
+                session,
+                admin_id=user.id,
+                action="update_variant",
+                entity_type="variant",
+                entity_id=str(variant_id),
+                old_values={k: before[k] for k in params if k != "vid"},
+                new_values={k: row[k] for k in params if k != "vid"},
+            )
         await session.commit()
     except Exception as exc:
         await session.rollback()
@@ -409,11 +439,19 @@ async def update_variant(
 
 
 @router.delete("/variants/{variant_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_variant(variant_id: UUID, session: DbSession, user: AdminUser) -> None:
+async def delete_variant(variant_id: UUID, session: DbSession, user: StaffCatalog) -> None:
     result = await session.execute(
         text("DELETE FROM public.product_variants WHERE id = :vid"),
         {"vid": str(variant_id)},
     )
+    if result.rowcount:
+        await record_audit(
+            session,
+            admin_id=user.id,
+            action="delete_variant",
+            entity_type="variant",
+            entity_id=str(variant_id),
+        )
     await session.commit()
     if result.rowcount == 0:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "تنوع پیدا نشد")
@@ -423,7 +461,7 @@ async def delete_variant(variant_id: UUID, session: DbSession, user: AdminUser) 
 
 
 @router.post("/products", response_model=ProductOut, status_code=status.HTTP_201_CREATED)
-async def create_product(body: ProductIn, session: DbSession, user: AdminUser) -> ProductOut:
+async def create_product(body: ProductIn, session: DbSession, user: StaffCatalog) -> ProductOut:
     pid = str(uuid.uuid4())
     try:
         await session.execute(
@@ -440,6 +478,14 @@ async def create_product(body: ProductIn, session: DbSession, user: AdminUser) -
             ),
             {"id": pid, **_payload(body)},
         )
+        await record_audit(
+            session,
+            admin_id=user.id,
+            action="create_product",
+            entity_type="product",
+            entity_id=pid,
+            new_values={"name": body.name, "price": body.price, "stock": body.stock},
+        )
         await session.commit()
     except Exception as exc:
         await session.rollback()
@@ -452,13 +498,19 @@ async def create_product(body: ProductIn, session: DbSession, user: AdminUser) -
 
 @router.patch("/products/{product_id}", response_model=ProductOut)
 async def update_product(
-    product_id: str, body: ProductUpdateIn, session: DbSession, user: AdminUser
+    product_id: str, body: ProductUpdateIn, session: DbSession, user: StaffCatalog
 ) -> ProductOut:
     sets, params = _update_sets(body)
     if not sets:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "چیزی برای به‌روزرسانی نیست")
 
     params["pid"] = product_id
+    before = (
+        await session.execute(
+            text("SELECT name, price, stock, active FROM public.products WHERE id = :pid"),
+            {"pid": product_id},
+        )
+    ).mappings().first()
     try:
         await session.execute(
             text(
@@ -467,6 +519,19 @@ async def update_product(
             ),
             params,
         )
+        if before is not None:
+            tracked = ("name", "price", "stock", "active")
+            await record_audit(
+                session,
+                admin_id=user.id,
+                action="update_product",
+                entity_type="product",
+                entity_id=product_id,
+                old_values={k: before[k] for k in tracked if k in params},
+                new_values={
+                    k: params[k] for k in tracked if k in params
+                },
+            )
         await session.commit()
     except Exception as exc:
         await session.rollback()
@@ -479,7 +544,7 @@ async def update_product(
 
 
 @router.delete("/products/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_product(product_id: str, session: DbSession, user: AdminUser) -> None:
+async def delete_product(product_id: str, session: DbSession, user: StaffCatalog) -> None:
     ordered = (
         await session.execute(
             text("SELECT 1 FROM public.order_items WHERE product_id = :pid LIMIT 1"),
@@ -491,6 +556,15 @@ async def delete_product(product_id: str, session: DbSession, user: AdminUser) -
         await session.execute(
             text("UPDATE public.products SET active = false, updated_at = now() WHERE id = :pid"),
             {"pid": product_id},
+        )
+        await record_audit(
+            session,
+            admin_id=user.id,
+            action="delete_product",
+            entity_type="product",
+            entity_id=product_id,
+            old_values={"active": True},
+            new_values={"active": False},
         )
     else:
         await session.execute(

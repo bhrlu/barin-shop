@@ -201,3 +201,28 @@ class CouponRedemption(Base):
     user_id: Mapped[UUID] = mapped_column(Uuid)
     amount: Mapped[Decimal] = mapped_column(Numeric)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# --- refunds (columns added by REFUND_DDL; table itself from infra/initdb) ------
+class RefundRequest(Base):
+    """Mirrors `public.refund_requests` for reference; the routers speak raw SQL
+    for this table. `status`: pending / approved / rejected / refunded (the
+    startup DDL normalizes legacy 'requested' rows to 'pending')."""
+
+    __tablename__ = "refund_requests"
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid, primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    order_id: Mapped[UUID] = mapped_column(Uuid)
+    user_id: Mapped[UUID] = mapped_column(Uuid)
+    amount: Mapped[int] = mapped_column(Integer)
+    reason: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(Text, default="pending")
+    admin_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    bank_tracking_code: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolved_by: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

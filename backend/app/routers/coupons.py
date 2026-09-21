@@ -11,9 +11,10 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import text
 
-from app.auth import AdminUser, CurrentUser, DbSession
+from app.auth import CurrentUser, DbSession, StaffCoupons
 from app.models import Coupon
 from app.schemas import CouponCreate, CouponOut, CouponUpdate, CouponValidateRequest
+from app.services.audit import record_audit
 from app.services.coupons import (
     CouponError,
     compute_discount,
@@ -63,7 +64,7 @@ async def validate(
 
 
 @router.post("", response_model=CouponOut, status_code=status.HTTP_201_CREATED)
-async def create_coupon(body: CouponCreate, admin: AdminUser, session: DbSession) -> CouponOut:
+async def create_coupon(body: CouponCreate, admin: StaffCoupons, session: DbSession) -> CouponOut:
     code = body.code.strip().upper()
     exists = (
         await session.execute(
@@ -103,6 +104,21 @@ async def create_coupon(body: CouponCreate, admin: AdminUser, session: DbSession
         )
     ).mappings().first()
 
+    await record_audit(
+        session,
+        admin_id=admin.id,
+        action="create_coupon",
+        entity_type="coupon",
+        entity_id=str(row["id"]),
+        new_values={
+            "code": row["code"],
+            "percent_off": row["percent_off"],
+            "amount_off": row["amount_off"],
+            "max_uses": row["max_uses"],
+        },
+    )
+    await session.commit()
+
     return CouponOut(
         code=row["code"],
         discount=0,
@@ -114,7 +130,7 @@ async def create_coupon(body: CouponCreate, admin: AdminUser, session: DbSession
 
 
 @router.get("")
-async def list_coupons(admin: AdminUser, session: DbSession) -> dict:
+async def list_coupons(admin: StaffCoupons, session: DbSession) -> dict:
     rows = (
         await session.execute(text("SELECT * FROM public.coupons ORDER BY created_at DESC"))
     ).mappings().all()
@@ -139,7 +155,7 @@ async def list_coupons(admin: AdminUser, session: DbSession) -> dict:
 
 @router.patch("/{coupon_id}")
 async def update_coupon(
-    coupon_id: UUID, body: CouponUpdate, admin: AdminUser, session: DbSession
+    coupon_id: UUID, body: CouponUpdate, admin: StaffCoupons, session: DbSession
 ) -> dict:
     row = (
         await session.execute(
@@ -182,12 +198,22 @@ async def update_coupon(
         await session.execute(
             text(f"UPDATE public.coupons SET {sets} WHERE id = :cid"), fields
         )
+        await record_audit(
+            session,
+            admin_id=admin.id,
+            action="update_coupon",
+            entity_type="coupon",
+            entity_id=str(coupon_id),
+            old_values={k: row[k] for k in fields if k != "cid"},
+            new_values={k: v for k, v in fields.items() if k != "cid"},
+        )
 
+    await session.commit()
     return {"ok": True}
 
 
 @router.post("/generate", status_code=status.HTTP_201_CREATED)
-async def generate(admin: AdminUser, session: DbSession, prefix: str = "SANDE") -> dict:
+async def generate(admin: StaffCoupons, session: DbSession, prefix: str = "SANDE") -> dict:
     """Convenience: mint a fresh unused code (admin picks its rules separately)."""
     code = generate_code(prefix.upper())
     return {"code": code}

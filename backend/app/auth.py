@@ -1,20 +1,24 @@
 """Role-based FastAPI dependencies backed by the backend's own JWTs.
 
 Tokens are issued by /auth/login (HS256, aud=authenticated). The caller's
-role comes from the token claim and is cross-checked against public.user_roles.
+roles come from the token claim and are cross-checked against public.user_roles
+(DB is the source of truth). Staff authorization is capability-based (B5.4):
+routes declare what they need via `require_staff(capability)`, and
+`app/services/roles.py::ROLE_CAPABILITIES` maps capabilities to staff roles.
 """
 
+from collections.abc import Callable
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.security import decode_access_token
+from app.services.roles import has_capability, resolve_roles
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -22,14 +26,22 @@ bearer_scheme = HTTPBearer(auto_error=False)
 class AuthUser:
     """Authenticated caller extracted from the backend's own JWT."""
 
-    def __init__(self, user_id: UUID, email: str | None, role: str):
+    def __init__(self, user_id: UUID, email: str | None, roles: set[str]):
         self.id = user_id
         self.email = email
-        self.role = role  # "admin" | "customer"
+        self.roles = roles  # {"customer"} or a mix of staff roles
+
+    @property
+    def role(self) -> str:
+        """Highest-privilege role (display/compat; authorization uses roles)."""
+        for role in ("super_admin", "admin", "order_manager", "support", "customer"):
+            if role in self.roles:
+                return role
+        return "customer"
 
     @property
     def is_admin(self) -> bool:
-        return self.role == "admin"
+        return bool(self.roles & {"admin", "super_admin"})
 
 
 async def get_current_user(
@@ -49,30 +61,43 @@ async def get_current_user(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token has no subject")
 
     user_id = UUID(sub)
-    role = await _resolve_role(session, user_id, payload.get("role"))
-    return AuthUser(user_id=user_id, email=payload.get("email"), role=role)
+    roles = await _resolve_roles(session, user_id, payload.get("role"))
+    return AuthUser(user_id=user_id, email=payload.get("email"), roles=roles)
 
 
-async def _resolve_role(session: AsyncSession, user_id: UUID, token_role: str | None) -> str:
+async def _resolve_roles(session: AsyncSession, user_id: UUID, token_role: str | None) -> set[str]:
     """DB is the source of truth; fall back to the token claim, then customer."""
-    row = await session.execute(
-        text("SELECT role FROM public.user_roles WHERE user_id = :uid"),
-        {"uid": str(user_id)},
-    )
-    roles = {r[0] for r in row.all()}
-    if "admin" in roles:
-        return "admin"
-    if "customer" in roles:
-        return "customer"
-    return token_role if token_role in ("admin", "customer") else "customer"
+    roles = await resolve_roles(session, user_id)
+    if roles == {"customer"} and token_role in ("admin", "customer"):
+        # rows seeded before the role table existed (or missing rows)
+        return {token_role}
+    return roles
 
 
 async def require_admin(
     user: Annotated[AuthUser, Depends(get_current_user)],
 ) -> AuthUser:
+    """Any staff role passes; bare customers are rejected (legacy convenience)."""
     if not user.is_admin:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin role required")
     return user
+
+
+def require_staff(capability: str) -> Callable[[AuthUser], AuthUser]:
+    """Dependency factory: any staff role granted this capability passes.
+
+    Per spec [BE-04] the role check happens here, per route, from the DB-backed
+    role set — never from a column on the user row.
+    """
+
+    async def _guard(user: Annotated[AuthUser, Depends(get_current_user)]) -> AuthUser:
+        if not has_capability(user.roles, capability):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN, "دسترسی لازم برای این بخش را ندارید"
+            )
+        return user
+
+    return _guard
 
 
 async def get_optional_user(
@@ -92,13 +117,24 @@ async def get_optional_user(
         if not sub:
             return None
         user_id = UUID(sub)
-        role = await _resolve_role(session, user_id, payload.get("role"))
+        roles = await _resolve_roles(session, user_id, payload.get("role"))
     except (JWTError, ValueError):
         return None
-    return AuthUser(user_id=user_id, email=payload.get("email"), role=role)
+    return AuthUser(user_id=user_id, email=payload.get("email"), roles=roles)
 
 
 CurrentUser = Annotated[AuthUser, Depends(get_current_user)]
 AdminUser = Annotated[AuthUser, Depends(require_admin)]
 OptionalUser = Annotated[AuthUser | None, Depends(get_optional_user)]
+
+# per-capability staff guards (B5.4) — import and annotate routes with these
+StaffOrders = Annotated[AuthUser, Depends(require_staff("orders"))]
+StaffRefunds = Annotated[AuthUser, Depends(require_staff("refunds"))]
+StaffCatalog = Annotated[AuthUser, Depends(require_staff("catalog"))]
+StaffCoupons = Annotated[AuthUser, Depends(require_staff("coupons"))]
+StaffReviews = Annotated[AuthUser, Depends(require_staff("reviews"))]
+StaffContactInbox = Annotated[AuthUser, Depends(require_staff("contact_inbox"))]
+StaffUsers = Annotated[AuthUser, Depends(require_staff("users"))]
+StaffStats = Annotated[AuthUser, Depends(require_staff("stats"))]
+StaffAudit = Annotated[AuthUser, Depends(require_staff("audit"))]
 DbSession = Annotated[AsyncSession, Depends(get_session)]

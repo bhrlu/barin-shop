@@ -1,18 +1,28 @@
-"""Admin endpoints: dashboard stats, users, refunds, inventory."""
+"""Admin endpoints: dashboard stats, users, refunds, inventory, KPIs, audit log."""
 
 import logging
+from typing import Literal
+from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy import text
 
-from app.auth import AdminUser, DbSession
+from app.auth import DbSession, StaffAudit, StaffOrders, StaffRefunds, StaffStats, StaffUsers
+from app.services.audit import record_audit
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
 
+_KPI_RANGES = {"today": "1 day", "7d": "7 days", "30d": "30 days", "all": None}
+
+
+def _iso(value):
+    return value.isoformat() if value is not None else None
+
 
 @router.get("/stats")
-async def stats(user: AdminUser, session: DbSession) -> dict:
+async def stats(user: StaffStats, session: DbSession) -> dict:
     revenue, pending, order_count = (
         await session.execute(
             text(
@@ -53,7 +63,7 @@ async def stats(user: AdminUser, session: DbSession) -> dict:
 
 
 @router.get("/users")
-async def users(user: AdminUser, session: DbSession) -> list[dict]:
+async def users(user: StaffUsers, session: DbSession) -> list[dict]:
     rows = (
         await session.execute(
             text(
@@ -84,12 +94,18 @@ async def users(user: AdminUser, session: DbSession) -> list[dict]:
 
 
 @router.get("/refunds")
-async def refunds(user: AdminUser, session: DbSession) -> list[dict]:
+async def refunds(user: StaffRefunds, session: DbSession) -> list[dict]:
+    """All refund requests with the claimant's contact details and, for settled
+    ones, who resolved them ([BE-03] resolved_by → profiles/users)."""
     rows = (
         await session.execute(
             text(
-                "SELECT rr.*, o.order_number FROM public.refund_requests rr "
+                "SELECT rr.*, o.order_number, u.email AS user_email, "
+                "COALESCE(p.full_name, u.email) AS user_name "
+                "FROM public.refund_requests rr "
                 "JOIN public.orders o ON o.id = rr.order_id "
+                "JOIN public.users u ON u.id = rr.user_id "
+                "LEFT JOIN public.profiles p ON p.id = rr.user_id "
                 "ORDER BY rr.created_at DESC"
             )
         )
@@ -97,8 +113,208 @@ async def refunds(user: AdminUser, session: DbSession) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+@router.get("/kpis")
+async def kpis(
+    user: StaffStats,
+    session: DbSession,
+    range: str = Query(default="30d"),
+) -> dict:
+    """Dashboard KPI aggregation (spec [BE-09], B5.2).
+
+    Replaces the client-side aggregation the dashboard used to do. `range`
+    windows the *revenue/orders* metrics; refunds and low-stock counts are
+    store-wide. Deltas compare the window against the preceding window of the
+    same length ('all' has no delta).
+    """
+    if range not in _KPI_RANGES:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "بازه نامعتبر است")
+    window = _KPI_RANGES[range]
+
+    if window is None:
+        where = "WHERE o.status <> 'cancelled'"
+        prev_where = "WHERE FALSE"
+    else:
+        where = (
+            f"WHERE o.status <> 'cancelled' "
+            f"AND o.created_at >= now() - INTERVAL '{window}'"
+        )
+        prev_where = (
+            f"WHERE o.status <> 'cancelled' "
+            f"AND o.created_at >= now() - INTERVAL '{window}' * 2 "
+            f"AND o.created_at < now() - INTERVAL '{window}'"
+        )
+
+    async def _period(conditions: str) -> dict:
+        row = (
+            await session.execute(
+                text(
+                    "SELECT COALESCE(SUM(o.total), 0) AS gross, "
+                    "  COALESCE(SUM(o.total) FILTER (WHERE o.payment_status = 'paid'), 0) "
+                    "    AS net, "
+                    "  COALESCE(COUNT(*) FILTER (WHERE o.payment_status = 'paid'), 0) "
+                    "    AS paid_orders "
+                    "FROM public.orders o "
+                    + conditions
+                )
+            )
+        ).mappings().first()
+        gross, net, paid = int(row["gross"]), int(row["net"]), int(row["paid_orders"])
+        return {
+            "gross": gross,
+            "net": net,
+            "paidOrders": paid,
+            "aov": round(net / paid) if paid else 0,
+        }
+
+    current = await _period(where)
+    previous = await _period(prev_where)
+
+    def _delta(cur: int, prev: int) -> int | None:
+        if window is None or prev == 0:
+            return None
+        return round((cur - prev) / prev * 100)
+
+    pending_refunds = (
+        await session.execute(
+            text(
+                "SELECT COUNT(*) FROM public.refund_requests "
+                "WHERE status IN ('pending', 'approved')"
+            )
+        )
+    ).scalar_one()
+    low_stock = (
+        await session.execute(
+            text(
+                "SELECT COALESCE(COUNT(*) FILTER "
+                "(WHERE active AND stock <= low_stock_threshold), 0) "
+                "FROM public.products"
+            )
+        )
+    ).scalar_one()
+
+    # daily revenue series for the area chart (paid, cancelled excluded)
+    if window is None:
+        series_sql = (
+            "SELECT to_char(d.day, 'YYYY-MM-DD') AS date, "
+            "COALESCE(SUM(o.total) FILTER (WHERE o.payment_status = 'paid'), 0) AS revenue "
+            "FROM generate_series(date_trunc('day', now() - INTERVAL '29 days'), "
+            "date_trunc('day', now()), INTERVAL '1 day') AS d(day) "
+            "LEFT JOIN public.orders o ON date_trunc('day', o.created_at) = d.day "
+            "AND o.status <> 'cancelled' "
+            "GROUP BY d.day ORDER BY d.day"
+        )
+        params: dict = {}
+    else:
+        # `window` comes from the _KPI_RANGES whitelist (never raw user input);
+        # asyncpg refuses to CAST a text *parameter* to interval, so the whitelisted
+        # literal is inlined instead
+        series_sql = (
+            "SELECT to_char(d.day, 'YYYY-MM-DD') AS date, "
+            "COALESCE(SUM(o.total) FILTER (WHERE o.payment_status = 'paid'), 0) AS revenue "
+            "FROM generate_series(date_trunc('day', now() - INTERVAL '"
+            f"{window}'), "
+            "date_trunc('day', now()), INTERVAL '1 day') AS d(day) "
+            "LEFT JOIN public.orders o ON date_trunc('day', o.created_at) = d.day "
+            "AND o.status <> 'cancelled' "
+            "GROUP BY d.day ORDER BY d.day"
+        )
+        params: dict = {}
+
+    series_rows = (await session.execute(text(series_sql), params)).mappings().all()
+
+    status_rows = (
+        await session.execute(
+            text(
+                "SELECT o.status, COUNT(*) AS count FROM public.orders o "
+                + where
+                + " GROUP BY o.status"
+            )
+        )
+    ).mappings().all()
+
+    return {
+        "range": range,
+        "grossRevenue": current["gross"],
+        "netRevenue": current["net"],
+        "paidOrders": current["paidOrders"],
+        "aov": current["aov"],
+        "pendingRefunds": int(pending_refunds),
+        "lowStock": int(low_stock),
+        "deltas": {
+            "grossRevenue": _delta(current["gross"], previous["gross"]),
+            "netRevenue": _delta(current["net"], previous["net"]),
+            "paidOrders": _delta(current["paidOrders"], previous["paidOrders"]),
+            "aov": _delta(current["aov"], previous["aov"]),
+        },
+        "series": [
+            {"date": r["date"], "revenue": int(r["revenue"])} for r in series_rows
+        ],
+        "statusBreakdown": [
+            {"status": r["status"], "count": int(r["count"])} for r in status_rows
+        ],
+    }
+
+
+@router.get("/audit-logs")
+async def audit_logs(
+    user: StaffAudit,
+    session: DbSession,
+    action: str | None = Query(default=None),
+    entity_type: str | None = Query(default=None),
+    entity_id: str | None = Query(default=None),
+    admin_id: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> list[dict]:
+    """Audit trail, newest first (B5.1). Filters: action, entity_type,
+    entity_id, admin_id."""
+    sql = (
+        "SELECT a.id, a.admin_id, u.email AS admin_email, "
+        "COALESCE(p.full_name, u.email) AS admin_name, "
+        "a.action, a.entity_type, a.entity_id, a.old_values, a.new_values, "
+        "a.ip_address, a.created_at "
+        "FROM public.audit_logs a "
+        "LEFT JOIN public.users u ON u.id = a.admin_id "
+        "LEFT JOIN public.profiles p ON p.id = a.admin_id"
+    )
+    conditions: list[str] = []
+    params: dict = {"limit": limit}
+    if action:
+        conditions.append("a.action = :action")
+        params["action"] = action
+    if entity_type:
+        conditions.append("a.entity_type = :entity_type")
+        params["entity_type"] = entity_type
+    if entity_id:
+        conditions.append("a.entity_id = :entity_id")
+        params["entity_id"] = entity_id
+    if admin_id:
+        conditions.append("a.admin_id = CAST(:admin_id AS uuid)")
+        params["admin_id"] = admin_id
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
+    sql += " ORDER BY a.created_at DESC LIMIT :limit"
+
+    rows = (await session.execute(text(sql), params)).mappings().all()
+    return [
+        {
+            "id": str(r["id"]),
+            "admin_id": str(r["admin_id"]) if r["admin_id"] else None,
+            "admin_email": r["admin_email"],
+            "admin_name": r["admin_name"],
+            "action": r["action"],
+            "entity_type": r["entity_type"],
+            "entity_id": r["entity_id"],
+            "old_values": r["old_values"],
+            "new_values": r["new_values"],
+            "ip_address": r["ip_address"],
+            "created_at": _iso(r["created_at"]),
+        }
+        for r in rows
+    ]
+
+
 @router.get("/orders")
-async def all_orders(user: AdminUser, session: DbSession) -> list[dict]:
+async def all_orders(user: StaffOrders, session: DbSession) -> list[dict]:
     """All orders with items — same shape as GET /orders but unscoped."""
     from app.routers.orders import _ORDER_SELECT, _order_row
 
@@ -111,7 +327,7 @@ async def all_orders(user: AdminUser, session: DbSession) -> list[dict]:
 
 
 @router.get("/inventory")
-async def inventory_summary(user: AdminUser, session: DbSession) -> dict:
+async def inventory_summary(user: StaffStats, session: DbSession) -> dict:
     """Stock health across the catalog: counts, units and inventory value."""
     row = (
         await session.execute(
@@ -148,7 +364,7 @@ async def inventory_summary(user: AdminUser, session: DbSession) -> dict:
 
 @router.get("/inventory/low-stock")
 async def low_stock(
-    user: AdminUser,
+    user: StaffStats,
     session: DbSession,
     threshold: int | None = Query(default=None, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
@@ -205,7 +421,7 @@ async def low_stock(
 
 
 @router.get("/payments")
-async def all_payments(user: AdminUser, session: DbSession) -> list[dict]:
+async def all_payments(user: StaffOrders, session: DbSession) -> list[dict]:
     rows = (
         await session.execute(
             text(
@@ -217,3 +433,72 @@ async def all_payments(user: AdminUser, session: DbSession) -> list[dict]:
         )
     ).mappings().all()
     return [dict(r) for r in rows]
+
+
+_ALLOWED_ROLES = ("super_admin", "order_manager", "support")
+
+
+class RolesIn(BaseModel):
+    """Full replacement set of staff roles for a user (PUT semantics)."""
+
+    roles: list[Literal["super_admin", "order_manager", "support"]]
+
+
+@router.put("/users/{user_id}/roles")
+async def set_user_roles(
+    user_id: UUID,
+    body: RolesIn,
+    user: StaffUsers,
+    session: DbSession,
+) -> dict:
+    """Replace a user's staff roles (B5.4). Admin/super_admin only — granted by
+    the `users` capability. Audited with the old and new role sets."""
+    target = (
+        await session.execute(
+            text("SELECT id FROM public.users WHERE id = cast(:uid as uuid)"),
+            {"uid": str(user_id)},
+        )
+    ).first()
+    if target is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "کاربر پیدا نشد")
+
+    old_rows = (
+        await session.execute(
+            text(
+                "SELECT role::text FROM public.user_roles "
+                "WHERE user_id = cast(:uid as uuid) AND role::text = ANY(:roles)"
+            ),
+            {"uid": str(user_id), "roles": list(_ALLOWED_ROLES)},
+        )
+    ).all()
+    old_roles = sorted(r[0] for r in old_rows)
+    new_roles = sorted(set(body.roles))
+
+    await session.execute(
+        text(
+            "DELETE FROM public.user_roles "
+            "WHERE user_id = cast(:uid as uuid) AND role::text = ANY(:roles)"
+        ),
+        {"uid": str(user_id), "roles": list(_ALLOWED_ROLES)},
+    )
+    for role in new_roles:
+        await session.execute(
+            text(
+                "INSERT INTO public.user_roles (user_id, role) "
+                "VALUES (cast(:uid as uuid), :role) "
+                "ON CONFLICT (user_id, role) DO NOTHING"
+            ),
+            {"uid": str(user_id), "role": role},
+        )
+
+    await record_audit(
+        session,
+        admin_id=user.id,
+        action="update_user_roles",
+        entity_type="user",
+        entity_id=str(user_id),
+        old_values={"roles": old_roles},
+        new_values={"roles": new_roles},
+    )
+    await session.commit()
+    return {"userId": str(user_id), "roles": new_roles}

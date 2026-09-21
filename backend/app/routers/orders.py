@@ -18,7 +18,8 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from app.auth import AdminUser, CurrentUser, DbSession
+from app.auth import CurrentUser, DbSession, StaffOrders, StaffRefunds
+from app.services.audit import record_audit
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["orders"])
@@ -43,6 +44,9 @@ class RefundRequestIn(BaseModel):
 class RefundResolveIn(BaseModel):
     status: str  # approved | rejected | refunded
     admin_note: str | None = Field(default=None, max_length=500)
+    # spec [BE-03]/[FE-06]: the Paya/Satna code is required by the UI when
+    # settling; the API accepts it for any resolution and stores what it gets
+    bank_tracking_code: str | None = Field(default=None, max_length=60)
 
 
 class RefundRequestOut(BaseModel):
@@ -127,7 +131,7 @@ async def get_order(order_id: UUID, user: CurrentUser, session: DbSession) -> di
 
 @router.patch("/orders/{order_id}")
 async def patch_order(
-    order_id: UUID, body: OrderPatch, session: DbSession, user: AdminUser
+    order_id: UUID, body: OrderPatch, session: DbSession, user: StaffOrders
 ) -> dict:
     if body.status and body.status not in _ALLOWED_STATUS:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "وضعیت نامعتبر است")
@@ -149,6 +153,9 @@ async def patch_order(
     if not sets:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "چیزی برای به‌روزرسانی نیست")
 
+    # capture the previous values so the audit entry shows old → new
+    before = await _fetch_order(session, str(order_id), admin=True)
+
     # perform the update first, then re-select
     await session.execute(
         text(f"UPDATE public.orders SET {', '.join(sets)} WHERE id = CAST(:oid AS uuid)"),
@@ -158,6 +165,45 @@ async def patch_order(
     if order is None:
         await session.rollback()
         raise HTTPException(status.HTTP_404_NOT_FOUND, "سفارش پیدا نشد")
+
+    # audit: one entry per changed facet (B5.1)
+    if before is not None:
+        changed = {
+            k: (before.get(k), order.get(k))
+            for k in ("status", "payment_status", "tracking_code")
+            if before.get(k) != order.get(k)
+        }
+        if "status" in changed:
+            await record_audit(
+                session,
+                admin_id=user.id,
+                action="update_order_status",
+                entity_type="order",
+                entity_id=str(order_id),
+                old_values={"status": changed["status"][0]},
+                new_values={"status": changed["status"][1]},
+            )
+        if "payment_status" in changed:
+            await record_audit(
+                session,
+                admin_id=user.id,
+                action="update_order_payment_status",
+                entity_type="order",
+                entity_id=str(order_id),
+                old_values={"payment_status": changed["payment_status"][0]},
+                new_values={"payment_status": changed["payment_status"][1]},
+            )
+        if "tracking_code" in changed:
+            await record_audit(
+                session,
+                admin_id=user.id,
+                action="update_order_tracking_code",
+                entity_type="order",
+                entity_id=str(order_id),
+                old_values={"tracking_code": changed["tracking_code"][0]},
+                new_values={"tracking_code": changed["tracking_code"][1]},
+            )
+
     await session.commit()
     return order
 
@@ -175,6 +221,15 @@ async def cancel_order(order_id: UUID, user: CurrentUser, session: DbSession) ->
     await session.execute(
         text("UPDATE public.orders SET status = 'cancelled' WHERE id = CAST(:oid AS uuid)"),
         {"oid": str(order_id)},
+    )
+    await record_audit(
+        session,
+        admin_id=user.id,
+        action="cancel_order",
+        entity_type="order",
+        entity_id=str(order_id),
+        old_values={"status": order["status"]},
+        new_values={"status": "cancelled"},
     )
     await session.commit()
     return CancelOut(
@@ -201,8 +256,9 @@ async def request_refund(
         row = (
             await session.execute(
                 text(
-                    "INSERT INTO public.refund_requests (order_id, user_id, amount, reason) "
-                    "VALUES (CAST(:oid AS uuid), CAST(:uid AS uuid), :amount, :reason) "
+                    "INSERT INTO public.refund_requests "
+                    "(order_id, user_id, amount, reason, status) "
+                    "VALUES (CAST(:oid AS uuid), CAST(:uid AS uuid), :amount, :reason, 'pending') "
                     "RETURNING id, order_id, amount, status"
                 ),
                 {
@@ -224,19 +280,35 @@ async def request_refund(
 
 @router.patch("/refunds/{request_id}")
 async def resolve_refund(
-    request_id: UUID, body: RefundResolveIn, user: AdminUser, session: DbSession
+    request_id: UUID, body: RefundResolveIn, user: StaffRefunds, session: DbSession
 ) -> dict:
     if body.status not in ("approved", "rejected", "refunded"):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "وضعیت نامعتبر است")
 
+    # [FE-06]: settling without the Paya/Satna code leaves the refund
+    # untraceable at the bank; the UI enforces this too
+    if body.status == "refunded" and not (body.bank_tracking_code or "").strip():
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "برای ثبت بازگشت وجه، کد رهگیری بانکی الزامی است",
+        )
+
     row = (
         await session.execute(
             text(
-                "UPDATE public.refund_requests SET status = :status, admin_note = :note "
+                "UPDATE public.refund_requests SET status = :status, admin_note = :note, "
+                "bank_tracking_code = COALESCE(:bank, bank_tracking_code), "
+                "resolved_by = CAST(:admin AS uuid), resolved_at = now() "
                 "WHERE id = CAST(:rid AS uuid) "
                 "RETURNING id, order_id, user_id, amount"
             ),
-            {"rid": str(request_id), "status": body.status, "note": body.admin_note},
+            {
+                "rid": str(request_id),
+                "status": body.status,
+                "note": body.admin_note,
+                "bank": (body.bank_tracking_code or "").strip() or None,
+                "admin": str(user.id),
+            },
         )
     ).mappings().first()
     if row is None:
@@ -262,6 +334,20 @@ async def resolve_refund(
                 "ref": f"RFD-{str(row['id'])[:8].upper()}",
             },
         )
+
+    await record_audit(
+        session,
+        admin_id=user.id,
+        action="resolve_refund",
+        entity_type="order",
+        entity_id=str(row["order_id"]),
+        old_values={"refund_status": "pending"},
+        new_values={
+            "refund_status": body.status,
+            "bank_tracking_code": (body.bank_tracking_code or "").strip() or None,
+            "admin_note": body.admin_note,
+        },
+    )
     await session.commit()
     return {"ok": True}
 
