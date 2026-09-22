@@ -128,6 +128,12 @@ canonical rate-limit primitive exists.
 
 **Unblocks:** `B3.11`.
 
+**Implemented** (2026-09-22) in B3.11 exactly as above
+([audit](audit/2026-09-22-b311-contact-spam-guard.md)): table
+`contact_attempts`, per-IP advisory lock, generic Persian 429/400. The "per-IP"
+key uses the shared client-IP resolver, which believes `X-Forwarded-For` only
+from `TRUSTED_PROXIES`.
+
 ---
 
 ## D2 — Notification provider and scope
@@ -477,7 +483,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "B3.11",
+    "agent_start_task": "B2.1",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -593,13 +599,16 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "B3.11",
       "title": "Contact-form spam guard",
       "priority": "P1",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "backend",
       "depends_on": [],
       "blocks": [],
       "batch": "F",
       "source": "backend-tasks.md",
-      "scope": "Implement PostgreSQL-backed per-IP throttling at 5 requests per 10 minutes plus honeypot; no Redis or CAPTCHA."
+      "scope": "Implement PostgreSQL-backed per-IP throttling at 5 requests per 10 minutes plus honeypot; no Redis or CAPTCHA.",
+      "audit": "plan/audit/2026-09-22-b311-contact-spam-guard.md",
+      "verification_level": "fully verified",
+      "completed": "2026-09-22"
     },
     {
       "id": "B2.1",
@@ -985,10 +994,10 @@ changes to the file shipped in sequence; the collision is closed.
   ],
   "counts": {
     "total_executable": 37,
-    "done": 7,
-    "open": 30,
+    "done": 8,
+    "open": 29,
     "P0": 0,
-    "P1": 3,
+    "P1": 2,
     "P2": 16,
     "P3": 11,
     "blocked": 0,
@@ -1353,9 +1362,30 @@ Network inspection + frontend checks.
 
 ## B3.11 — Contact-form spam guard
 
-* **Layer:** Backend
-* **Status:** TODO
+* **Layer:** Backend (+ DB, config, honeypot field in the contact form)
+* **Status:** DONE (2026-09-22)
 * **Dependencies:** resolved D1
+* **Audit:** [`plan/audit/2026-09-22-b311-contact-spam-guard.md`](audit/2026-09-22-b311-contact-spam-guard.md)
+* **Verification level:** fully verified.
+  * 20 new tests; mutation checks show each mechanism (lock, commit-before-raise,
+    trusted-proxy check, honeypot) turns its tests red.
+  * pytest 92 passed, ruff clean, `api_smoke.py` 199/0.
+  * Live curl: rotating spoofed XFF → `201×5, 429×2`, and the audit IP can no
+    longer be spoofed.
+  * Browser `/contact` 10/10 ×6.
+  * Clean environment: `down -v` → `db-init` exit 0 through all four stages,
+    `/health` OK, table and indexes on the fresh DB.
+* **Delivered:**
+  * `contact_attempts` + `services/contact_guard.py` (5 per 10 min per IP; all
+    outcomes count; per-IP advisory lock);
+  * honeypot `website` → 400; throttle → 429 (both generic Persian);
+  * the form's hidden honeypot and a Persian 429 toast;
+  * **the shared client-IP resolver was fixed in place**
+    (`services/client_ip.py`): it previously trusted any caller's
+    `X-Forwarded-For`, which would have made the limit and the audit IPs
+    spoofable;
+  * `TRUSTED_PROXIES` / `CONTACT_RATE_LIMIT` / `CONTACT_RATE_WINDOW_SECONDS`
+    config.
 
 ### Required implementation
 
@@ -2370,7 +2400,7 @@ Start after `AB-BE-02`.
 These are no longer blocked, but some have task dependencies:
 
 ```text
-B3.11
+B3.11  (DONE 2026-09-22)
 B2.1
 F2.3
 B2.5
@@ -2409,13 +2439,13 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**30** (7 completed: B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02, AB-FE-05;
+**29** (8 completed: B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02, AB-FE-05, B3.11;
 10 added by discovery: NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10, B2.2b,
 B5.4b, F5.11, F5.12)
 
 ### Ready for execution
 
-**30**
+**29**
 
 ### Blocked
 
@@ -2451,12 +2481,12 @@ D1–D9 are resolved.
 | Priority  | Remaining |
 | --------- | --------: |
 | P0        |         0 |
-| P1        |         3 |
+| P1        |         2 |
 | P2        |        16 |
 | P3        |        11 |
-| **Total** |    **30** |
+| **Total** |    **29** |
 
-Recomputed from the JSON index on 2026-09-22 (AB-FE-05 session).
+Recomputed from the JSON index on 2026-09-22 (B3.11 session).
 
 Priority is execution guidance, not permission to rewrite requirements.
 
@@ -2570,7 +2600,7 @@ were freshly executed.
 ## START HERE
 
 ```text
-B3.11
+B2.1
 ```
 
 Batch A (`B6.8`, `B6.9`, `AB-BE-03`) is complete — audits
@@ -2583,12 +2613,18 @@ Batch A (`B6.8`, `B6.9`, `AB-BE-03`) is complete — audits
 ([audit](audit/2026-09-22-abfe05-admin-products-pagination.md)). Batch B keeps
 only `F5.9` (P2).
 
-`B3.11` (contact-form spam guard) is the highest-priority open task: the first of
-the three remaining P1s in index order, Batch F, no task dependencies. Its product
-decision is D1 (resolved). It is backend + DB work: Rules 11–14 apply, including a
-clean-environment run if it touches DDL.
+`B3.11` is DONE too ([audit](audit/2026-09-22-b311-contact-spam-guard.md)).
 
-After `B3.11` is completed:
+`B2.1` (SMS/email notifications) is the highest-priority open task: the first of
+the two remaining P1s (then `F2.3`, which depends on it), Batch F, no task
+dependencies, product decision D2 resolved.
+
+**Check the stop conditions (§18) first.** Real Kavenegar / SMTP credentials are
+almost certainly not configured in this repo. Building the provider abstraction
+with a dev/log transport is possible, but real delivery cannot be verified without
+the secrets. Report that instead of faking it.
+
+After `B2.1` is completed:
 
 1. update this pointer;
 2. update the task status;
@@ -2692,16 +2728,16 @@ Reconciliation date:
 Current state:
 
 ```text
-30 remaining implementation units
-  (20 of the original 27, plus NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10,
+29 remaining implementation units
+  (19 of the original 27, plus NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10,
    B2.2b, B5.4b, F5.11 and F5.12 — the last eight discovered as NEW-ABBE03-1,
    NEW-F55-1, NEW-F56-1, NEW-F56-2, NEW-ABFE02-1 and NEW-ABFE05-1/2/3 — found
    during them)
-7 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02,
-  AB-FE-05)
+8 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02,
+  AB-FE-05, B3.11)
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = B3.11
+NEXT = B2.1
 ```

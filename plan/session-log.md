@@ -1980,3 +1980,73 @@ through (`?page=abc` reached the API). Rejected keys are now returned as explici
 
 **Next backlog pointer** — `B3.11` (contact-form spam guard, P1, Batch F; backend +
 DB). Batch B is complete apart from F5.9 (P2).
+
+## 2026-09-22 — B3.11 contact-form spam guard
+
+**B3.11 — done (decision D1).** `POST /contact` now goes through
+`services/contact_guard.py`:
+- Every attempt is written to the new `contact_attempts` table. An IP gets 5
+  attempts per sliding 10 minutes; accepted, honeypot and throttled attempts all
+  count. A per-IP `pg_advisory_xact_lock` serialises the count-and-insert.
+- A filled honeypot field `website` → generic Persian 400, nothing stored.
+  Throttled → generic Persian 429 (no `Retry-After`, no counts).
+- Rejected attempts are committed before raising, because `get_session` rolls back
+  on errors.
+- Frontend: the form carries an off-screen, `aria-hidden`, untabbable `website`
+  input (present in the SSR HTML), and a 429 shows the server's text.
+
+**Found and fixed in place (R7/R9)** — the shared client-IP resolver (B5.1a audit
+middleware) took the first `X-Forwarded-For` entry from any caller. No proxy
+exists in this repo (compose publishes :8000 directly), so the throttle and the
+audit IPs would both have been spoofable. The new `services/client_ip.py` believes
+XFF only when the socket peer is in `TRUSTED_PROXIES` (empty by default) and walks
+the chain right to left. `TRUSTED_PROXIES`, `CONTACT_RATE_LIMIT` and
+`CONTACT_RATE_WINDOW_SECONDS` are in config, compose and `.env.example`.
+
+**Verification**
+- 20 new tests; full pytest 92 passed; ruff clean.
+- Mutation checks: lock / commit-before-raise / trusted-proxy check / honeypot
+  each turn their tests red (the lock-free burst failed 3 out of 3 runs).
+- Clean environment `down -v && up -d --build`: `db-init` exit 0 through all four
+  stages, services healthy, `/health` OK, table and indexes on the fresh DB.
+- `api_smoke.py` 199/0.
+- Live curl: rotating spoofed XFF → `201×5, 429×2`; audit IP not spoofable.
+- Browser `/contact` 10/10, 6 consecutive runs.
+- F5.6 / AB-FE-02 / AB-FE-05 browser suites green on the rebuilt stack.
+- Level: *fully verified*.
+
+**Mistakes in my own tests, found and fixed**
+- An IPv6-canonicalisation cleanup leak in one test.
+- Shell quoting in the browser helper.
+- A digit-script mismatch in one assertion.
+- My endpoint docstring advertised the honeypot in the public OpenAPI. It was
+  moved to a code comment, and `/openapi.json` was checked to be clean of every
+  mechanism keyword.
+- A pre-hydration click race in the browser harness. It is now waited on
+  deterministically. It is the likely cause of 1 intermittent failure in 8 early
+  runs, which could not be reproduced afterwards.
+
+**What was explicitly NOT done**
+- No throttle on other public endpoints (D1 covers `/contact` only).
+- No cleanup job beyond the per-attempt 1-day pruning.
+- The local non-docker uvicorn `--proxy-headers` default (trusts 127.0.0.1) is
+  documented, not changed.
+- The F5.5 browser suite was not re-run: the wiped DB lacks the ≥26 audit rows it
+  needs.
+- Docs left untouched: `vogue-vintage-vibes/README.md`, `DESIGN_SYSTEM.md` and the
+  spec.
+
+**Decisions taken**
+1. A 400 for the honeypot rather than a fake 201, so a person whose browser
+   autofills the hidden field sees an error instead of false success.
+2. 422 schema errors are not counted: FastAPI rejects them before the handler, and
+   they store nothing.
+3. Canonical homes were added to RULES.md Rule 7 (client IP, contact guard).
+4. Dev note in `infra/README.md`: the host shares one bucket (docker gateway IP),
+   with a one-line reset.
+
+→ audit: [2026-09-22-b311-contact-spam-guard.md](audit/2026-09-22-b311-contact-spam-guard.md)
+
+**Next backlog pointer** — `B2.1` (SMS/email notifications, P1). Check the
+stop conditions first: real Kavenegar/SMTP credentials are probably not
+available.

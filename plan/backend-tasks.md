@@ -134,9 +134,19 @@ Legend: `[ ]` todo · `[x]` done (audit file required) · audit links in `plan/a
   `Literal` schema) so the F2.1b inbox can work through its backlog; unknown
   statuses 422. Smoke asserts mark + `?status=answered` filter + 422.
   → audit: same as B3.12
-- [ ] **B3.11 Spam guard for the public contact endpoint** — `POST /contact` is an
-  unauthenticated write with no rate limit, honeypot or captcha. Decide the
-  approach (per-IP throttle vs honeypot field) before opening a public deploy.
+- [x] **B3.11 Spam guard for the public contact endpoint** — `POST /contact` was an
+  unauthenticated write with no rate limit, honeypot or captcha. Done per decision
+  D1:
+  - PostgreSQL per-IP throttle of 5 attempts per 10 minutes (`contact_attempts`,
+    serialised by a per-IP advisory lock). Accepted, honeypot and throttled
+    attempts all count, and guests and signed-in users share the limit.
+  - Honeypot field `website`: 400, not stored. A throttled attempt gets a generic
+    Persian 429.
+  - The shared client-IP resolver now believes `X-Forwarded-For` only from
+    `TRUSTED_PROXIES` (none by default), so the limit and the audit IP can't be
+    spoofed.
+  - Fully verified, including a clean-environment run.
+  → audit: [2026-09-22-b311-contact-spam-guard.md](audit/2026-09-22-b311-contact-spam-guard.md)
 
 ## Milestone B4 — Catalog & Products backend (complete)
 
@@ -207,7 +217,8 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   Spec BE-04. IP capture and DB-level tamper-resistance split off (below).
   → audit: [2026-09-21-backend-b51-audit-log.md](audit/2026-09-21-backend-b51-audit-log.md)
 - [x] **B5.1a Audit IP capture** — `client_ip_ctx` contextvar set by the
-  `capture_client_ip` middleware (XFF-aware, socket fallback); `record_audit`
+  `capture_client_ip` middleware (socket peer; `X-Forwarded-For` only from a
+  configured trusted proxy since B3.11 — it used to trust any caller's XFF); `record_audit`
   falls back to it, so all audit sites record the caller IP with no signature
   churn. Verified live + smoke assertion.
   → audit: [2026-09-21-b51a-audit-ip-f41-status-badges.md](audit/2026-09-21-b51a-audit-ip-f41-status-badges.md)

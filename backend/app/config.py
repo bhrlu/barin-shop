@@ -45,6 +45,15 @@ class Settings(BaseSettings):
     shipping_flat_fee: int = 89_000
     free_shipping_threshold: int = 2_000_000
 
+    # Client IP (B5.1a audit + B3.11 throttle): comma-separated IPs/CIDRs of reverse
+    # proxies whose X-Forwarded-For is believed. Empty = trust no proxy, use the
+    # socket peer (compose publishes the backend directly, so XFF is client-set).
+    trusted_proxies: str = ""
+
+    # Contact-form abuse guard (B3.11, decision D1): attempts per IP per window
+    contact_rate_limit: int = 5
+    contact_rate_window_seconds: int = 600
+
     # Bootstrap admin (used by `python -m app.seed_auth`)
     admin_email: str = "admin@sande.local"
     admin_password: str = "admin1234"

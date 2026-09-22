@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Clock, Mail, MapPin, Phone } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,16 +28,24 @@ const empty = { name: "", contact: "", message: "" };
 
 function ContactPage() {
   const [form, setForm] = useState(empty);
+  // B3.11 honeypot: hidden from people, so only a form-filling bot sets it
+  const [website, setWebsite] = useState("");
   const [sent, setSent] = useState(false);
 
   const submit = useMutation({
-    mutationFn: () => api.contact(form),
+    mutationFn: () => api.contact({ ...form, website }),
     onSuccess: () => {
       setForm(empty);
       setSent(true);
       toast.success("پیام شما ثبت شد");
     },
-    onError: () => toast.error("ارسال پیام ناموفق بود؛ لطفاً دوباره تلاش کنید."),
+    // 429 = too many attempts from this connection: show the server's wording
+    onError: (error) =>
+      toast.error(
+        error instanceof ApiError && error.status === 429
+          ? error.message
+          : "ارسال پیام ناموفق بود؛ لطفاً دوباره تلاش کنید.",
+      ),
   });
 
   const field = (key: keyof typeof empty, label: string, minLength: number) => (
@@ -74,6 +82,18 @@ function ContactPage() {
           }}
         >
           {field("name", "نام", 2)}
+          <div aria-hidden="true" className="sr-only">
+            <label htmlFor="website">وب‌سایت</label>
+            <input
+              id="website"
+              name="website"
+              type="text"
+              tabIndex={-1}
+              autoComplete="off"
+              value={website}
+              onChange={(event) => setWebsite(event.target.value)}
+            />
+          </div>
           <div>
             <Label htmlFor="contact">ایمیل یا شماره تماس</Label>
             <Input

@@ -280,6 +280,24 @@ CONTACT_DDL = [
         "CREATE INDEX IF NOT EXISTS contact_messages_created_idx "
         "ON public.contact_messages(created_at DESC)"
     ),
+    # B3.11: one row per POST /contact attempt (accepted or rejected) — the
+    # per-IP sliding window of decision D1; pruned after a day by the guard
+    """
+    CREATE TABLE IF NOT EXISTS public.contact_attempts (
+      id BIGSERIAL PRIMARY KEY,
+      ip TEXT NOT NULL,
+      outcome TEXT NOT NULL CHECK (outcome IN ('accepted', 'honeypot', 'throttled')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+    """,
+    (
+        "CREATE INDEX IF NOT EXISTS contact_attempts_ip_created_idx "
+        "ON public.contact_attempts(ip, created_at DESC)"
+    ),
+    (
+        "CREATE INDEX IF NOT EXISTS contact_attempts_created_idx "
+        "ON public.contact_attempts(created_at)"
+    ),
 ]
 
 

@@ -398,6 +398,9 @@ class ContactMessageIn(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     contact: str = Field(min_length=5, max_length=120)
     message: str = Field(min_length=5, max_length=2000)
+    # B3.11 honeypot: the form renders this off-screen, so only bots fill it.
+    # Kept free of any description — the OpenAPI schema is public.
+    website: str | None = Field(default=None, max_length=200)
 
 
 class ContactMessageStatusIn(BaseModel):

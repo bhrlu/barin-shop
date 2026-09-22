@@ -7,7 +7,8 @@ is the inbox the admin panel reads (F2.1b) and `PATCH
 
 `POST /contact` is public: a guest must be able to ask about a size or an order
 without an account. `user_id` is therefore left NULL and the sender's own
-`contact` field carries the way to reply.
+`contact` field carries the way to reply. Because it is public it is guarded
+(B3.11): a per-IP throttle and a honeypot field, see `services.contact_guard`.
 """
 
 import logging
@@ -18,6 +19,8 @@ from sqlalchemy import text
 
 from app.auth import DbSession, StaffContactInbox
 from app.schemas import ContactMessageIn, ContactMessageOut, ContactMessageStatusIn
+from app.services import contact_guard
+from app.services.audit import client_ip_ctx
 from app.services.pagination import clamp_page_size, count_rows, envelope
 
 log = logging.getLogger(__name__)
@@ -35,6 +38,26 @@ def _row_to_out(row) -> ContactMessageOut:
 )
 async def create_message(body: ContactMessageIn, session: DbSession) -> ContactMessageOut:
     """Store a contact-form message (public — no account required)."""
+    # B3.11 guard: 429 once the caller's IP has used its attempts for the window,
+    # 400 when the honeypot field is filled. Both answers are deliberately
+    # generic, and this is a comment, not the docstring, because FastAPI
+    # publishes endpoint docstrings in the public OpenAPI schema.
+    outcome = await contact_guard.record_attempt(
+        session, ip=client_ip_ctx.get(), honeypot=bool((body.website or "").strip())
+    )
+    if outcome != contact_guard.ACCEPTED:
+        # rejected attempts count toward the window (D1) — keep the row even
+        # though the request fails
+        await session.commit()
+        log.info("contact attempt rejected (%s)", outcome)
+        if outcome == contact_guard.THROTTLED:
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                "تعداد پیام‌های ارسالی زیاد است؛ لطفاً کمی بعد دوباره تلاش کنید.",
+            )
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "ارسال پیام ممکن نشد؛ لطفاً دوباره تلاش کنید."
+        )
     row = (
         await session.execute(
             text(

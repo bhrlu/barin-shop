@@ -7,10 +7,9 @@ audit trail, or vice versa, must not happen.
 
 The client IP (B5.1a) is captured per request by the middleware in
 `app.main`, which sets `client_ip_ctx` on every inbound call; `record_audit`
-reads it when the caller does not pass an explicit `ip_address`. Proxies in
-front of the app are trusted for `X-Forwarded-For` — the stack is not exposed
-to untrusted networks directly (compose binds the backend behind a reverse
-proxy or loopback).
+reads it when the caller does not pass an explicit `ip_address`. The address
+comes from `app.services.client_ip.resolve_client_ip`: `X-Forwarded-For` is
+believed only from a configured trusted proxy, so a caller cannot forge it.
 """
 
 import json

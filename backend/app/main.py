@@ -33,6 +33,7 @@ from app.routers import (
     storage,
 )
 from app.services import audit
+from app.services.client_ip import resolve_client_ip
 
 logging.basicConfig(level=logging.INFO)
 
@@ -86,15 +87,17 @@ app.include_router(exports.router)
 
 @app.middleware("http")
 async def capture_client_ip(request: Request, call_next):
-    """Record the caller's IP for the audit trail (B5.1a).
+    """Record the caller's IP for the audit trail (B5.1a) and the contact throttle (B3.11).
 
-    Runs first (registered last): trusts X-Forwarded-For when present — the
-    backend always sits behind the compose proxy / loopback — and falls back to
-    the socket peer. The value lands in audit_logs.ip_address via
-    `audit.client_ip_ctx` whenever a privileged mutation writes an entry.
+    Runs first (registered last). `resolve_client_ip` believes X-Forwarded-For
+    only from a configured trusted proxy (`TRUSTED_PROXIES`, none by default —
+    compose publishes the backend directly), else it uses the socket peer. The
+    value lands in `audit.client_ip_ctx`.
     """
-    xff = request.headers.get("x-forwarded-for")
-    ip = xff.split(",")[0].strip() if xff else (request.client.host if request.client else None)
+    ip = resolve_client_ip(
+        request.client.host if request.client else None,
+        request.headers.get("x-forwarded-for"),
+    )
     audit.client_ip_ctx.set(ip)
     return await call_next(request)
 

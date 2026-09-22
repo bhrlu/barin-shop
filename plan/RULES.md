@@ -188,6 +188,8 @@ Canonical implementations in this repo — use these, do not re-derive them:
 | Payments / refunds / simulation mode | `backend/app/services/payments.py` |
 | Pagination envelope | `backend/app/services/pagination.py` (frontend side: `toPage()` in `src/lib/api.ts`) |
 | Audit logging | `backend/app/services/audit.py` |
+| Client IP (audit trail, throttles) | `backend/app/services/client_ip.py` (`resolve_client_ip`; XFF only from `TRUSTED_PROXIES`), stored per request in `audit.client_ip_ctx` |
+| Contact-form abuse guard | `backend/app/services/contact_guard.py` (`record_attempt`) |
 | Startup DDL | `startup_ddl()` in `backend/app/db.py` |
 | All frontend HTTP | `vogue-vintage-vibes/src/lib/api.ts` (the `api` object + `request()`) |
 | Frontend auth/session | `src/lib/auth.tsx` |

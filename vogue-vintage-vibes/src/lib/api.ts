@@ -671,7 +671,8 @@ export const api = {
 
   // --- contact ---
   // public: a guest can ask about a size or an order without an account
-  contact: (body: { name: string; contact: string; message: string }) =>
+  // `website` is the B3.11 honeypot — always empty when a person submits the form
+  contact: (body: { name: string; contact: string; message: string; website?: string }) =>
     request<ContactMessage>("/contact", { method: "POST", json: body }),
   // admin inbox (F2.1b) — F2.5: optional page/page_size envelope
   adminContactMessages: (status?: ContactMessageStatus, page?: number, pageSize?: number) => {

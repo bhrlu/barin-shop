@@ -150,6 +150,24 @@ def main() -> int:
         f"{bad_contact.status_code if bad_contact else 0}",
     )
 
+    # --- contact abuse guard (B3.11): a filled honeypot is rejected and never
+    # stored. 429 is also a rejection — earlier runs from this host may have used
+    # the IP's attempts for the window.
+    bait = f"honeypot-{uuid4().hex[:8]}@example.com"
+    trap = call("POST", "/contact", json={
+        "name": "ربات آزمون", "contact": bait, "message": "پیام هرزنامه آزمون",
+        "website": "http://spam.example",
+    })
+    inbox = call("GET", "/admin/contact-messages?limit=200", admin)
+    inbox_rows = inbox.json() if inbox is not None and inbox.status_code == 200 else []
+    check(
+        "POST /contact honeypot rejected and not stored (B3.11)",
+        trap is not None
+        and trap.status_code in (400, 429)
+        and not any(m.get("contact") == bait for m in inbox_rows),
+        f"{trap.status_code if trap else 0}",
+    )
+
     # --- contact inbox mark-answered (F2.1b) ---
     listed = call("GET", "/admin/contact-messages?status=new", admin)
     msgs = listed.json() if listed is not None and listed.status_code == 200 else []

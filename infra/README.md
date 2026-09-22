@@ -77,4 +77,12 @@ regresses to a private tarball URL, the build fails loudly at `bun install`.
 - **Payments:** with the default `ZARINPAL_MERCHANT_ID` (zero UUID) the backend
   stays in simulation mode — no real gateway calls. The payment page also uses the
   backend's simulated `payment-session` / `payment-complete` endpoints.
+- **Client IP / reverse proxies (B3.11).** The backend port is published directly,
+  so `X-Forwarded-For` is ignored unless the socket peer is listed in
+  `TRUSTED_PROXIES` (empty by default). In docker every host request arrives from
+  the bridge gateway (e.g. `172.23.0.1`), so the local browser and `api_smoke.py`
+  share one contact-form bucket (5 attempts / 10 min); to reset it during
+  development: `docker exec sandeh-postgres-1 psql -U sande -d postgres -c
+  "DELETE FROM contact_attempts"`. Behind a real reverse proxy, set
+  `TRUSTED_PROXIES` to the proxy's address.
 - The stack is for **development**; no TLS, default passwords, published ports.

@@ -101,7 +101,7 @@ Public / customer:
 | POST | `/payments/start` · `/payments/verify` | user | real Zarinpal session / verify |
 | GET | `/payments/zarinpal/callback` | – | gateway return (redirects to the frontend; idempotent) |
 | GET/POST/PATCH/DELETE | `/addresses` | user | address book (at most one `is_default`; `PATCH` edits and/or moves the default) |
-| POST | `/contact` | – | store a contact-form message (guest-friendly) |
+| POST | `/contact` | – | store a contact-form message (guest-friendly). **Guarded (B3.11):** 5 attempts per IP per 10 min (accepted and rejected both count) → generic 429; a filled honeypot field `website` → generic 400, not stored |
 | GET/POST | `/favorites` · `/favorites/{id}` | user | wishlist |
 | POST | `/storage/upload-url` · `/storage/sign` | admin / user | MinIO presign |
 
@@ -224,7 +224,15 @@ base schema comes from `infra/initdb/`; this service owns only the additive
 columns (including `payments.authority` and `order_items.variant_id`) and the
 `coupons` (incl. `coupons.max_discount_cap`), `product_variants`,
 `product_reviews`, `search_history`,
-`recently_viewed`, `contact_messages` tables.
+`recently_viewed`, `contact_messages`, `contact_attempts` tables.
+
+**Client IP (B5.1a audit + B3.11 throttle).** `app/services/client_ip.py` is the
+single resolver: the socket peer, or the `X-Forwarded-For` chain walked right to
+left **only when the peer is listed in `TRUSTED_PROXIES`** (empty by default —
+compose publishes the backend directly, so the header is client-controlled).
+Put the backend behind a reverse proxy? Set `TRUSTED_PROXIES` to its address, or
+every visitor shares one throttle bucket. Throttle knobs: `CONTACT_RATE_LIMIT`
+(5), `CONTACT_RATE_WINDOW_SECONDS` (600).
 
 ## Tests
 

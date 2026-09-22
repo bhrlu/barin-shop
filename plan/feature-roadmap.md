@@ -124,7 +124,7 @@ Endpoints noted in `code` already exist and are verified working.
 - [x] **Enforce availability in the API** → `coming_soon`/`preorder` are rejected by `stock/check` and checkout with reason `not_available` (B4.11); preorder needs an order flag to become orderable (B4.13)
 - [ ] **Admin payments list** → `GET /admin/payments`
 - [x] **Single-product fetch** → product page uses `GET /products/{id}` (F3.2)
-- [x] **Contact form persistence** → `POST /contact` stores the message and `GET/DELETE /admin/contact-messages` reads it (B3.9 + F2.1); the admin inbox screen is F2.1b
+- [x] **Contact form persistence** → `POST /contact` stores the message and `GET/DELETE /admin/contact-messages` reads it (B3.9 + F2.1); the admin inbox screen is F2.1b; **spam guard (B3.11): 5 attempts / 10 min per IP + honeypot, PostgreSQL only**
 - [x] **Default address in checkout** → saved addresses pre-fill the shipping box, `PATCH /addresses/{id}` moves the single default (F2.7 + B3.10)
 - [x] **Idempotent payment callback** → `payments.authority` + `already_paid` on a repeat callback/verify (B3.7)
 
