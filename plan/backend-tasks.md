@@ -205,6 +205,11 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   → audit: [2026-09-21-b51a-audit-ip-f41-status-badges.md](audit/2026-09-21-b51a-audit-ip-f41-status-badges.md)
 - [ ] **B5.1b Audit tamper-resistance at the DB level** — REVOKE UPDATE/DELETE on
   `audit_logs` for the app role (append-only) in `infra/initdb` or startup DDL.
+- [ ] **B5.1c `GET /admin/audit-logs` 500s on a malformed `admin_id`**
+  (`NEW-F55-1`, discovered during F5.5) — `?admin_id=foo` reaches
+  `CAST(:admin_id AS uuid)` and Postgres raises, so the admin caller gets a 500
+  instead of a 422. Type the query parameter as `UUID` in `routers/admin.py`.
+  Admin-only; the F5.5 viewer only sends real UUIDs.
 - [x] **B5.2 KPI aggregation endpoint** — `GET /admin/kpis?range=today|7d|30d|all`
   returning gross/net revenue, paid order count, AOV, pending refunds and low-stock
   count, plus daily revenue series + status breakdown and deltas vs the preceding

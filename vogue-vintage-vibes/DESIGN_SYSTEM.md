@@ -188,7 +188,7 @@ Per the comment at the top of `styles.css`:
 | `product/RecentlyViewedRail.tsx` | `ProductRail` fed by `recentlyViewedQuery`; hidden for guests and while the list is empty (home + shop). |
 
 Supporting `src/lib` modules that carry UI rules: `format.ts` (`toFa`,
-`formatToman`, `formatFaDate`), `variants.ts` (the backend's combo rule), `compare.tsx`
+`formatToman`, `formatFaDate`, `formatFaDateTime`), `variants.ts` (the backend's combo rule), `compare.tsx`
 (localStorage basket), `cart.tsx` (localStorage cart), **`stock-issues.ts`** (the one
 copy of the Persian copy per rejected-line reason — cart line note vs checkout toast).
 
@@ -260,7 +260,8 @@ Merged from the repo and spec B1 (global invariants); both are binding.
 - **Never create `src/pages/` or `App.tsx`** (spec B1.3): routes live in
   `src/routes/` (see `src/routes/README.md`).
 - **Numbers, currency, dates:** `toFa()`, `formatToman()`, `formatFaDate()` from
-  `@/lib/format` (Persian digits, Jalali dates). Never render raw Latin digits in
+  `@/lib/format` (Persian digits, Jalali dates); `formatFaDateTime()` adds the
+  24-hour time where the moment matters (audit log, F5.5). Never render raw Latin digits in
   UI. The spec names these `toPersianDigits` / `formatPrice` / `formatDate` — **the
   repo names win** (§5); the behaviour is identical.
 - **RTL discipline** (spec B1.5): logical spacing (`ms-*`/`me-*`) and borders
@@ -472,7 +473,10 @@ if (!data?.length) {
    /admin/contact-messages/{id}` to mark answered) and the refunds centre is
    `/admin/refunds` (F2.4 + B5.3, with the required bank-tracking code on
    settlement). Both are plain card lists in the tab shell; the spec's drawer
-   chrome stays open for F4.x.
+   chrome stays open for F4.x. The audit-log viewer `/admin/audit` (F5.5,
+   admin/super_admin only) follows the same card-list pattern, with a
+   `<details>` old→new value table per entry and «جدیدتر/قدیمی‌تر» offset paging
+   (the endpoint returns no total).
 10. **Province is free text everywhere** — both the address book and the checkout
    shipping box take a plain string; the spec implies a province list (and real
    carrier rates need one). No task logged yet — it belongs with shipping rates.
@@ -489,7 +493,7 @@ Repo checklist, then the spec's pre-flight list (B5) — both must pass.
 - [ ] `cn()` for className, CVA for variants, `@/` imports.
 - [ ] Colors via tokens (`text-terracotta`, `bg-sand`, §2.3 for state), never raw
       palette classes or hex.
-- [ ] Numbers via `toFa` / `formatToman` / `formatFaDate`.
+- [ ] Numbers via `toFa` / `formatToman` / `formatFaDate` / `formatFaDateTime`.
 - [ ] Data via TanStack Query; images via `@/lib/catalog` helpers.
 - [ ] Loading/empty/error states (`bg-clay animate-pulse` skeletons, §7.3).
 - [ ] Toasts via `sonner` for mutations.

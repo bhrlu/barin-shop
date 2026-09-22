@@ -450,6 +450,32 @@ export type AdminUser = {
   spent: number;
 };
 
+/** One `audit_logs` row as `GET /admin/audit-logs` returns it (B5.1, spec [BE-04]). */
+export type AuditLogEntry = {
+  id: string;
+  admin_id: string | null;
+  admin_email: string | null;
+  admin_name: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  old_values: Record<string, unknown> | null;
+  new_values: Record<string, unknown> | null;
+  ip_address: string | null;
+  created_at: string | null;
+};
+
+/** Filters for `GET /admin/audit-logs`; the endpoint pages by limit/offset and
+ * returns a bare array (no `Page<T>` envelope, no total). */
+export type AuditLogQuery = {
+  action?: string;
+  entity_type?: string;
+  entity_id?: string;
+  admin_id?: string;
+  limit?: number;
+  offset?: number;
+};
+
 export type RefundRequest = {
   id: string;
   order_id: string;
@@ -657,6 +683,18 @@ export const api = {
     return request<PaymentRecord[] | Page<PaymentRecord>>(`/admin/payments${suffix}`);
   },
   adminRefunds: () => request<RefundRequest[]>("/admin/refunds"),
+  // audit trail (F5.5) — newest first, audit capability (admin/super_admin)
+  adminAuditLogs: (query: AuditLogQuery = {}) => {
+    const qs = new URLSearchParams();
+    if (query.action) qs.set("action", query.action);
+    if (query.entity_type) qs.set("entity_type", query.entity_type);
+    if (query.entity_id) qs.set("entity_id", query.entity_id);
+    if (query.admin_id) qs.set("admin_id", query.admin_id);
+    if (query.limit) qs.set("limit", String(query.limit));
+    if (query.offset) qs.set("offset", String(query.offset));
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return request<AuditLogEntry[]>(`/admin/audit-logs${suffix}`);
+  },
 
   // --- admin coupon CRUD (F4.5 / spec FE-07) ---
   adminCoupons: () => request<{ coupons: AdminCoupon[] }>("/coupons"),

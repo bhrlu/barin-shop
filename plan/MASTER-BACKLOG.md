@@ -474,7 +474,7 @@ Execute them sequentially unless file ownership is explicitly separated.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "F5.5",
+    "agent_start_task": "F5.6",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -530,13 +530,16 @@ Execute them sequentially unless file ownership is explicitly separated.
       "id": "F5.5",
       "title": "Audit-log viewer",
       "priority": "P1",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "frontend",
       "depends_on": [],
       "blocks": [],
       "batch": "B",
       "source": "frontend-tasks.md",
-      "scope": "Add typed API access and an authorized admin audit-log viewer with filters, pagination, old/new values, IP, loading, empty, and error states."
+      "scope": "Add typed API access and an authorized admin audit-log viewer with filters, pagination, old/new values, IP, loading, empty, and error states.",
+      "audit": "plan/audit/2026-09-22-f55-audit-log-viewer.md",
+      "verification_level": "browser tested",
+      "completed": "2026-09-22"
     },
     {
       "id": "F5.6",
@@ -839,7 +842,7 @@ Execute them sequentially unless file ownership is explicitly separated.
       "scope": "routers/products.py turns any failure in four CRUD handlers into a 409 duplicate message, and routers/storage.py has two broad handlers to review; apply the B6.9 shape (IntegrityError + SQLSTATE 23505 only, re-raise the rest)."
     },
     {
-      "id": "NEW-ABBE03-1",
+      "id": "F5.9",
       "title": "Coupon discount-cap field in the admin dialog",
       "priority": "P2",
       "status": "TODO",
@@ -847,8 +850,24 @@ Execute them sequentially unless file ownership is explicitly separated.
       "depends_on": ["AB-BE-03"],
       "blocks": [],
       "batch": "B",
-      "source": "discovered-during-AB-BE-03",
-      "scope": "Expose coupons.max_discount_cap in the F4.5 admin coupon dialog (admin.coupons.tsx) and in the AdminCoupon / adminCreateCoupon / adminUpdateCoupon types in src/lib/api.ts, including the 0-clears-the-ceiling semantics. Tracked as F5.9 in frontend-tasks.md."
+      "source": "frontend-tasks.md",
+      "discovered_as": "NEW-ABBE03-1",
+      "discovered_during": "AB-BE-03",
+      "scope": "Expose coupons.max_discount_cap in the F4.5 admin coupon dialog (admin.coupons.tsx) and in the AdminCoupon / adminCreateCoupon / adminUpdateCoupon types in src/lib/api.ts, including the 0-clears-the-ceiling semantics on PATCH."
+    },
+    {
+      "id": "B5.1c",
+      "title": "Reject a malformed admin_id on GET /admin/audit-logs with 422, not 500",
+      "priority": "P3",
+      "status": "TODO",
+      "layer": "backend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "C",
+      "source": "backend-tasks.md",
+      "discovered_as": "NEW-F55-1",
+      "discovered_during": "F5.5",
+      "scope": "Type the admin_id query parameter of routers/admin.py::audit_logs as UUID so ?admin_id=<not-a-uuid> returns 422 instead of reaching CAST(:admin_id AS uuid) and failing with 500; add an api_smoke/pytest error-path check."
     }
   ],
   "excluded": [
@@ -869,13 +888,13 @@ Execute them sequentially unless file ownership is explicitly separated.
     }
   ],
   "counts": {
-    "total_executable": 30,
-    "done": 3,
+    "total_executable": 31,
+    "done": 4,
     "open": 27,
     "P0": 0,
-    "P1": 7,
+    "P1": 6,
     "P2": 13,
-    "P3": 7,
+    "P3": 8,
     "blocked": 0,
     "dropped": 2,
     "obsolete": 1,
@@ -1019,7 +1038,7 @@ Focused pytest + API error-path smoke test.
   2026-09-22 full-backlog audit proposed — `quote()` takes an already computed
   discount, so clamping there would have needed a second copy for the validate
   endpoint (Rule 7).
-* **Not delivered:** no admin UI field yet (`NEW-ABBE03-1` / `F5.9`); fixed
+* **Not delivered:** no admin UI field yet (`F5.9`, discovered as `NEW-ABBE03-1`); fixed
   `amount_off` coupons stay deliberately uncapped.
 
 ### Required implementation
@@ -1048,9 +1067,21 @@ Pytest + checkout API smoke.
 ## F5.5 — Audit-log viewer
 
 * **Layer:** Frontend
-* **Status:** TODO
+* **Status:** DONE (2026-09-22)
 * **Dependencies:** none
 * **Backend:** `GET /admin/audit-logs`
+* **Audit:** [`plan/audit/2026-09-22-f55-audit-log-viewer.md`](audit/2026-09-22-f55-audit-log-viewer.md)
+* **Verification level:** browser tested (tsc clean, lint 0 errors, build OK,
+  35/35 headless-Chromium checks across anonymous / customer / support /
+  order_manager / admin incl. direct URL + refresh, mocked 500/403 error states,
+  375 px layout; backend regression pytest 70 passed, `api_smoke.py` 196/0)
+* **Delivered:** `/admin/audit` (admin/super_admin tab, role notice for other
+  staff on direct entry), `api.adminAuditLogs()` + `AuditLogEntry` type,
+  action / entity / staff / entity-id filters, 25-row offset paging (limit 26
+  probes for a next page — the endpoint has no total), Jalali timestamp with time
+  (`formatFaDateTime`), IP, old→new value table, loading / empty / error states.
+  Backend contract unchanged.
+* **Discovered:** `B5.1c` (was `NEW-F55-1`) — malformed `admin_id` → 500.
 
 ### Required implementation
 
@@ -1592,6 +1623,38 @@ Worker execution + restart/retry test + duplicate-event test.
 
 ---
 
+## F5.9 — Coupon discount-cap field in the admin dialog
+
+* **Layer:** Frontend
+* **Status:** TODO
+* **Priority:** P2
+* **Batch:** B
+* **Dependencies:** `AB-BE-03` (DONE)
+* **Discovered as:** `NEW-ABBE03-1` during `AB-BE-03` — legacy discovery ID
+  only; `F5.9` is the executable ID.
+* **Source:** `frontend-tasks.md` F5.9
+
+### Problem
+
+The backend stores and enforces `coupons.max_discount_cap`, but
+`admin.coupons.tsx` and the `AdminCoupon` / `adminCreateCoupon` /
+`adminUpdateCoupon` types in `src/lib/api.ts` do not mention it, so a ceiling
+can only be set through the API.
+
+### Required implementation
+
+* add `max_discount_cap` to the coupon types in `src/lib/api.ts`;
+* add the field to the F4.5 coupon dialog (create + edit) and show it in the list;
+* on edit, sending `0` clears the ceiling (backend `PATCH` semantics);
+* the field is meaningful for percent-off coupons only; the backend stays the
+  authority for the discount value.
+
+### Verification
+
+Typecheck + lint + build + create/edit/clear flow against a running stack.
+
+---
+
 # P3 — Future
 
 ## B2.3 — PDF invoices
@@ -1767,6 +1830,35 @@ Also test cancellation/refund behavior.
 
 ---
 
+## B5.1c — Malformed `admin_id` on the audit-log endpoint
+
+* **Layer:** Backend
+* **Status:** TODO
+* **Priority:** P3
+* **Batch:** C
+* **Dependencies:** none
+* **Discovered as:** `NEW-F55-1` during `F5.5` — legacy discovery ID only;
+  `B5.1c` is the executable ID.
+* **Source:** `backend-tasks.md` B5.1c
+
+### Problem
+
+`GET /admin/audit-logs?admin_id=foo` returns 500: the string reaches
+`CAST(:admin_id AS uuid)` and Postgres raises. Admin-only caller; the F5.5 viewer
+only sends real UUIDs.
+
+### Required implementation
+
+Type `admin_id` as `UUID | None` in `routers/admin.py::audit_logs` so FastAPI
+answers 422; keep every other filter and the response shape unchanged.
+
+### Verification
+
+Error-path check (malformed → 422, valid UUID → 200) in `api_smoke.py` or pytest;
+full pytest + ruff.
+
+---
+
 # 8. Explicitly not executable
 
 ## B4.8 — Product model dimension
@@ -1828,6 +1920,9 @@ Do not create another task because of these historical identifier collisions.
 B6.8
 └──→ AB-BE-01
 
+AB-BE-03 (DONE)
+└──→ F5.9
+
 AB-BE-02
 └──→ AB-FE-03
 
@@ -1876,11 +1971,16 @@ However, `AB-FE-02` and `AB-FE-05` should not modify
 `admin.products.tsx` concurrently.
 
 ```text
-F5.5
+F5.5   (DONE 2026-09-22)
 F5.6
 AB-FE-02
 AB-FE-05
+F5.9
 ```
+
+`F5.9` depends on `AB-BE-03` (DONE) and edits `admin.coupons.tsx` plus the
+coupon types in `src/lib/api.ts`; it does not collide with the other Batch B
+files.
 
 ---
 
@@ -1890,6 +1990,7 @@ AB-FE-05
 B5.1b
 AB-BE-01
 AB-BE-02
+B5.1c
 ```
 
 `AB-BE-01` begins after `B6.8`.
@@ -1964,7 +2065,8 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**27**
+**27** (4 completed: B6.8, B6.9, AB-BE-03, F5.5; 4 added by discovery: NEW-B68-1,
+NEW-B69-1, F5.9, B5.1c)
 
 ### Ready for execution
 
@@ -2003,11 +2105,14 @@ D1–D9 are resolved.
 
 | Priority  | Remaining |
 | --------- | --------: |
-| P0        |         1 |
-| P1        |         9 |
-| P2        |        11 |
-| P3        |         6 |
+| P0        |         0 |
+| P1        |         6 |
+| P2        |        13 |
+| P3        |         8 |
 | **Total** |    **27** |
+
+Recomputed from the JSON index on 2026-09-22 (F5.5 session); the earlier table
+still counted the completed P0/P1 tasks.
 
 Priority is execution guidance, not permission to rewrite requirements.
 
@@ -2121,16 +2226,18 @@ were freshly executed.
 ## START HERE
 
 ```text
-F5.5
+F5.6
 ```
 
 Batch A (`B6.8`, `B6.9`, `AB-BE-03`) is complete — audits
 [B6.8](audit/2026-09-22-b68-variant-stock-restore.md),
 [B6.9](audit/2026-09-22-b69-refund-exception-handling.md),
-[AB-BE-03](audit/2026-09-22-abbe03-coupon-max-discount-cap.md). `F5.5` is the
-highest-priority open task (P1, Batch B, no dependencies).
+[AB-BE-03](audit/2026-09-22-abbe03-coupon-max-discount-cap.md) — and so is
+`F5.5` ([audit](audit/2026-09-22-f55-audit-log-viewer.md)). `F5.6` (role
+management UI) is the highest-priority open task: P1, Batch B, no dependencies,
+next in the index after F5.5.
 
-After `F5.5` is completed:
+After `F5.6` is completed:
 
 1. update this pointer;
 2. update the task status;
@@ -2235,12 +2342,12 @@ Current state:
 
 ```text
 27 remaining implementation units
-  (24 of the original 27, plus NEW-B68-1, NEW-B69-1 and NEW-ABBE03-1
-   discovered during them)
-3 completed implementation units (B6.8, B6.9, AB-BE-03)
+  (23 of the original 27, plus NEW-B68-1, NEW-B69-1, F5.9 and B5.1c —
+   the last two discovered as NEW-ABBE03-1 and NEW-F55-1 — found during them)
+4 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5)
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = F5.5
+NEXT = F5.6
 ```

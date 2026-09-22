@@ -21,3 +21,21 @@ export function formatFaDate(iso: string | null | undefined): string {
     }).format(date),
   );
 }
+
+/** Persian (Jalali) date + time such as «۱۲ مهر ۱۴۰۵، ۱۴:۳۰:۰۵»; empty string for missing/invalid input. */
+export function formatFaDateTime(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return toFa(
+    new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).format(date),
+  );
+}

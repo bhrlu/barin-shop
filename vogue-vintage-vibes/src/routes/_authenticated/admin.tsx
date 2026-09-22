@@ -8,6 +8,7 @@ import {
   MessageSquare,
   Package,
   RotateCcw,
+  ScrollText,
   ShoppingBag,
   SlidersHorizontal,
   Star,
@@ -43,7 +44,8 @@ type TabKey =
   | "coupons"
   | "messages"
   | "reviews"
-  | "users";
+  | "users"
+  | "audit";
 
 type AdminTab = {
   key: TabKey;
@@ -85,6 +87,7 @@ const ALL_TABS: AdminTab[] = [
   { key: "messages", to: "/admin/messages", label: "پیام‌ها", exact: false, icon: MessageSquare },
   { key: "reviews", to: "/admin/reviews", label: "نظرات", exact: false, icon: Star },
   { key: "users", to: "/admin/users", label: "کاربران", exact: false, icon: Users },
+  { key: "audit", to: "/admin/audit", label: "گزارش فعالیت‌ها", exact: false, icon: ScrollText },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
@@ -108,6 +111,7 @@ const ROLE_TAB_KEYS: Record<string, TabKey[]> = {
     "messages",
     "reviews",
     "users",
+    "audit",
   ],
   admin: [
     "dashboard",
@@ -119,6 +123,7 @@ const ROLE_TAB_KEYS: Record<string, TabKey[]> = {
     "messages",
     "reviews",
     "users",
+    "audit",
   ],
   order_manager: ["dashboard", "products", "inventory", "orders", "refunds", "coupons", "messages"],
   support: ["dashboard", "messages", "reviews"],

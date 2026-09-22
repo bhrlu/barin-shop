@@ -57,7 +57,12 @@ plan/
     ├── 2026-09-22-f25-pagination-everywhere.md
     ├── 2026-09-22-full-stack-audit-and-fixes.md
     ├── 2026-09-22-mock-dataset-seed.md
-    └── 2026-09-22-agent-guardrail-rules.md
+    ├── 2026-09-22-agent-guardrail-rules.md
+    ├── 2026-09-22-full-backlog-audit.md
+    ├── 2026-09-22-b68-variant-stock-restore.md
+    ├── 2026-09-22-b69-refund-exception-handling.md
+    ├── 2026-09-22-abbe03-coupon-max-discount-cap.md
+    └── 2026-09-22-f55-audit-log-viewer.md
 ```
 
 The two `ADMIN-*.md` files hold the back-office task split (epics [BE-01]… and

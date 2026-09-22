@@ -353,8 +353,12 @@ conflict (DESIGN_SYSTEM.md §5).
 - [x] **F5.4 `bun run lint` green** — 45 prettier errors fixed with
   `bun run format` (source files only).
   → audit for F5.1–F5.4: [2026-09-22-full-stack-audit-and-fixes.md](audit/2026-09-22-full-stack-audit-and-fixes.md)
-- [ ] **F5.5 Audit-log viewer** — `GET /admin/audit-logs` shipped with B5.1 but
-  has no UI and no `api.ts` client method.
+- [x] **F5.5 Audit-log viewer** — `GET /admin/audit-logs` shipped with B5.1 but
+  had no UI and no `api.ts` client method. Now `/admin/audit` (admin /
+  super_admin only): action / entity / staff / entity-id filters, 25-row offset
+  paging, Jalali timestamp, IP, old→new value table, loading / empty / error
+  states; `api.adminAuditLogs()` + `formatFaDateTime()`. Browser tested.
+  → audit: [2026-09-22-f55-audit-log-viewer.md](audit/2026-09-22-f55-audit-log-viewer.md)
 - [ ] **F5.6 Role management UI** (`[FE-08]`) — `PUT /admin/users/{id}/roles`
   exists and is audited; the users page is still read-only.
 - [ ] **F5.7 Split the admin chart bundle** — recharts (~553 kB raw) and lodash

@@ -1748,3 +1748,59 @@ than adding a separate `clear_max_discount_cap` flag.
 → audit: [2026-09-22-abbe03-coupon-max-discount-cap.md](audit/2026-09-22-abbe03-coupon-max-discount-cap.md)
 
 **Next backlog pointer** — `F5.5` (audit-log viewer) — batch A is complete.
+
+## 2026-09-22 — Backlog ID normalization (F5.9) + F5.5 audit-log viewer
+
+**Backlog normalization (markdown only)** — the task discovered during AB-BE-03
+is now executed under its official ID: the Master Backlog JSON entry
+`NEW-ABBE03-1` became `F5.9` (`discovered_as: "NEW-ABBE03-1"`,
+`discovered_during: "AB-BE-03"`; P2 / TODO / depends on AB-BE-03 / batch B
+unchanged), a matching `## F5.9` prose section was added under P2 in line with
+`frontend-tasks.md` F5.9, and the Batch B list, dependency graph, AB-BE-03
+"not delivered" line and reconciliation record now say `F5.9`. JSON parsed
+cleanly; no executable `NEW-ABBE03-1` remains; no duplicate task; the pointer
+stayed on F5.5.
+
+**F5.5 — done.** New `/admin/audit` route (`admin.audit.tsx`) over the existing
+`GET /admin/audit-logs` contract (bare array, `limit`/`offset`, no total):
+action / entity / staff / entity-id filters, 25-row paging that asks for 26
+rows to learn whether a next page exists, Jalali timestamp with time
+(`formatFaDateTime`, new in `src/lib/format.ts`), IP, a per-entry old→new value
+table, and loading / empty / error states. `api.adminAuditLogs()` +
+`AuditLogEntry` / `AuditLogQuery` in `src/lib/api.ts`. The admin shell got an
+`audit` tab («گزارش فعالیت‌ها») for `admin` / `super_admin` only, so the existing
+`tabAllowed` guard shows the Persian role notice to `order_manager` / `support`
+on direct entry. Backend untouched.
+
+**Verification** — `tsc` clean; `bun run lint` 0 errors (15 pre-existing
+warnings, none in touched files); `bun run build` OK; backend `pytest -q` 70
+passed against the live DB, ruff clean, `api_smoke.py` 196/0; headless-Chromium
+script 35/35: anonymous redirect, customer / support / order_manager blocked on
+direct URL and refresh with zero audit requests, admin list + filters + paging
++ value table + empty states, mocked 500/403 error states with retry, 375 px
+without horizontal scroll. Verification level: *browser tested*. To have two
+pages of real data, a throwaway coupon `F55AUDIT` was created, patched 30 times
+and deleted through the admin API, which left real audit rows in the dev DB.
+
+**What was explicitly NOT done** — F5.6, F5.9, AB-FE-02, AB-FE-05 and F4.3 were
+not touched. The backend defect found during F5.5 (malformed `admin_id` → 500)
+was recorded as `B5.1c` (discovered as `NEW-F55-1`, P3, batch C) and not fixed.
+No total/page count (the contract has none), filters are not in the URL, and the
+Playwright script is not committed. `backend/README.md`, `infra/README.md`,
+`vogue-vintage-vibes/README.md` and the spec were left untouched. The Master
+Backlog still uses `NEW-B68-1` / `NEW-B69-1` as executable IDs with no prose
+sections, although `backend-tasks.md` names them B6.8a / B6.9a. That is the same
+normalization gap as F5.9, but outside this session's scope, so it is noted and
+not changed.
+
+**Decisions taken** — (1) offset paging with a `limit + 1` probe instead of
+changing the endpoint to the `Page<T>` envelope (the user said not to invent a
+new audit API). (2) The staff filter is populated from `api.adminUsers()` (same
+admin/super_admin capability as the audit log), so only real UUIDs are ever sent
+as `admin_id`. (3) The §12 priority table was stale compared with the JSON index,
+so it was recomputed (P0 0 / P1 6 / P2 13 / P3 8 = 27), and the JSON `counts`
+block was updated to 31 executable / 4 done.
+
+→ audit: [2026-09-22-f55-audit-log-viewer.md](audit/2026-09-22-f55-audit-log-viewer.md)
+
+**Next backlog pointer** — `F5.6` (role management UI).
