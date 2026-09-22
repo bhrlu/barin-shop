@@ -474,7 +474,7 @@ Execute them sequentially unless file ownership is explicitly separated.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "AB-BE-03",
+    "agent_start_task": "F5.5",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -515,13 +515,16 @@ Execute them sequentially unless file ownership is explicitly separated.
       "id": "AB-BE-03",
       "title": "Coupon max discount cap",
       "priority": "P1",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "backend_db_pricing",
       "depends_on": [],
       "blocks": [],
       "batch": "A",
       "source": "ADMIN-BACKEND_TASKS.md:BE-02",
-      "scope": "Add max_discount_cap and apply it consistently in validation, pricing, checkout, and coupon admin CRUD."
+      "scope": "Add max_discount_cap and apply it consistently in validation, pricing, checkout, and coupon admin CRUD.",
+      "audit": "plan/audit/2026-09-22-abbe03-coupon-max-discount-cap.md",
+      "verification_level": "fully verified",
+      "completed": "2026-09-22"
     },
     {
       "id": "F5.5",
@@ -834,6 +837,18 @@ Execute them sequentially unless file ownership is explicitly separated.
       "batch": "E",
       "source": "discovered-during-B6.9",
       "scope": "routers/products.py turns any failure in four CRUD handlers into a 409 duplicate message, and routers/storage.py has two broad handlers to review; apply the B6.9 shape (IntegrityError + SQLSTATE 23505 only, re-raise the rest)."
+    },
+    {
+      "id": "NEW-ABBE03-1",
+      "title": "Coupon discount-cap field in the admin dialog",
+      "priority": "P2",
+      "status": "TODO",
+      "layer": "frontend",
+      "depends_on": ["AB-BE-03"],
+      "blocks": [],
+      "batch": "B",
+      "source": "discovered-during-AB-BE-03",
+      "scope": "Expose coupons.max_discount_cap in the F4.5 admin coupon dialog (admin.coupons.tsx) and in the AdminCoupon / adminCreateCoupon / adminUpdateCoupon types in src/lib/api.ts, including the 0-clears-the-ceiling semantics. Tracked as F5.9 in frontend-tasks.md."
     }
   ],
   "excluded": [
@@ -854,12 +869,12 @@ Execute them sequentially unless file ownership is explicitly separated.
     }
   ],
   "counts": {
-    "total_executable": 29,
-    "done": 2,
+    "total_executable": 30,
+    "done": 3,
     "open": 27,
     "P0": 0,
-    "P1": 8,
-    "P2": 12,
+    "P1": 7,
+    "P2": 13,
     "P3": 7,
     "blocked": 0,
     "dropped": 2,
@@ -986,9 +1001,26 @@ Focused pytest + API error-path smoke test.
 ## AB-BE-03 — Coupon max discount cap
 
 * **Layer:** Backend + DB + pricing
-* **Status:** TODO
+* **Status:** DONE (2026-09-22)
 * **Dependencies:** none
 * **Source:** ADMIN-BACKEND `[BE-02]`
+* **Audit:** [`plan/audit/2026-09-22-abbe03-coupon-max-discount-cap.md`](audit/2026-09-22-abbe03-coupon-max-discount-cap.md)
+* **Verification level:** fully verified (16 new/updated tests, full pytest 70
+  passed, ruff clean, `api_smoke.py` 196/0, live admin+customer HTTP flow, and a
+  `docker compose down -v` clean-environment proof of the DDL and seeds)
+* **Delivered:** nullable `coupons.max_discount_cap INTEGER` (CHECK > 0) via
+  `COUPON_DDL`; the clamp lives in `services/coupons.py::compute_discount`, the
+  one function both `POST /coupons/validate` and checkout reach, so the quote and
+  the order always agree. Percent-off only — a fixed `amount_off` is already its
+  own ceiling — and NULL keeps today's behaviour for every seeded coupon.
+  Exposed in `CouponOut`/`CouponCreate`/`CouponUpdate`, the admin list and the
+  create-audit entry; `PATCH` with `0` clears the ceiling.
+* **Deviation:** the clamp is in `compute_discount`, not `pricing.py` as the
+  2026-09-22 full-backlog audit proposed — `quote()` takes an already computed
+  discount, so clamping there would have needed a second copy for the validate
+  endpoint (Rule 7).
+* **Not delivered:** no admin UI field yet (`NEW-ABBE03-1` / `F5.9`); fixed
+  `amount_off` coupons stay deliberately uncapped.
 
 ### Required implementation
 
@@ -1829,11 +1861,10 @@ B4.9
 Run first:
 
 ```text
-AB-BE-03
+(empty — B6.8, B6.9 and AB-BE-03 are all DONE)
 ```
 
-`B6.8` and `B6.9` are DONE; `AB-BE-01` is unblocked and `AB-BE-03` is the last
-open item in this batch.
+Batch A is complete. `AB-BE-01` is unblocked; execution moves to Batch B.
 
 ---
 
@@ -2090,14 +2121,16 @@ were freshly executed.
 ## START HERE
 
 ```text
-AB-BE-03
+F5.5
 ```
 
-Previously completed: `B6.8` (2026-09-22,
-[audit](audit/2026-09-22-b68-variant-stock-restore.md)) and `B6.9` (2026-09-22,
-[audit](audit/2026-09-22-b69-refund-exception-handling.md)).
+Batch A (`B6.8`, `B6.9`, `AB-BE-03`) is complete — audits
+[B6.8](audit/2026-09-22-b68-variant-stock-restore.md),
+[B6.9](audit/2026-09-22-b69-refund-exception-handling.md),
+[AB-BE-03](audit/2026-09-22-abbe03-coupon-max-discount-cap.md). `F5.5` is the
+highest-priority open task (P1, Batch B, no dependencies).
 
-After `AB-BE-03` is completed:
+After `F5.5` is completed:
 
 1. update this pointer;
 2. update the task status;
@@ -2202,11 +2235,12 @@ Current state:
 
 ```text
 27 remaining implementation units
-  (25 of the original 27, plus NEW-B68-1 and NEW-B69-1 discovered during them)
-2 completed implementation units (B6.8, B6.9)
+  (24 of the original 27, plus NEW-B68-1, NEW-B69-1 and NEW-ABBE03-1
+   discovered during them)
+3 completed implementation units (B6.8, B6.9, AB-BE-03)
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = AB-BE-03
+NEXT = F5.5
 ```

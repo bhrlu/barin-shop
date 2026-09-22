@@ -361,6 +361,12 @@ conflict (DESIGN_SYSTEM.md §5).
   (~164 kB) are pulled into the shared bundle for the dashboard alone.
 - [ ] **F5.8 `/shop` fetches the catalog twice** — `catalogQuery`
   (`?include_inactive=true`) and the filtered list query both run on every visit.
+- [ ] **F5.9 Coupon discount-cap field in the admin dialog** (`NEW-ABBE03-1`,
+  discovered during AB-BE-03) — the backend now stores and enforces
+  `coupons.max_discount_cap`, but `admin.coupons.tsx` and the `AdminCoupon` /
+  `adminCreateCoupon` / `adminUpdateCoupon` types in `src/lib/api.ts` do not
+  mention it, so a ceiling can only be set through the API. Sending `0` on the
+  PATCH clears it.
 
 ## Rules reminder
 

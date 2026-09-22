@@ -66,6 +66,13 @@ COUPON_DDL = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS coupon_redemptions_user_idx ON public.coupon_redemptions(user_id)",
+    # ceiling (in tomans) for a percent-off coupon on a large cart (AB-BE-03 /
+    # spec [BE-02]). NULL = uncapped, which is what every existing coupon keeps.
+    # Fixed `amount_off` coupons ignore it — their discount is already a ceiling.
+    (
+        "ALTER TABLE public.coupons ADD COLUMN IF NOT EXISTS max_discount_cap INTEGER "
+        "CHECK (max_discount_cap IS NULL OR max_discount_cap > 0)"
+    ),
 ]
 
 

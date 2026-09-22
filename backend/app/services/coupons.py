@@ -32,8 +32,22 @@ class CouponError(Exception):
 
 
 def compute_discount(coupon: Coupon, subtotal: int) -> int:
+    """Authoritative discount for a coupon on a subtotal (AB-BE-03).
+
+    This is the ONE place the amount is computed: `POST /coupons/validate` and
+    checkout both reach it through `validate_coupon`, so the quote the cart shows
+    and the discount the order records can never disagree.
+
+    `max_discount_cap` is a ceiling on **percent-off** coupons only — a fixed
+    `amount_off` is its own ceiling, so capping it again would silently shrink a
+    discount an admin stated in tomans. NULL means uncapped, which is how every
+    coupon created before this column behaves.
+    """
     if coupon.percent_off is not None:
         d = subtotal * coupon.percent_off // 100
+        cap = getattr(coupon, "max_discount_cap", None)
+        if cap is not None:
+            d = min(d, int(cap))
     elif coupon.amount_off is not None:
         d = coupon.amount_off
     else:  # defensive: malformed row

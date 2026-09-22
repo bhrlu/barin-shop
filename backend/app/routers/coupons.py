@@ -60,6 +60,7 @@ async def validate(
         amount_off=coupon.amount_off,
         min_subtotal=coupon.min_subtotal,
         expires_at=_iso(coupon.expires_at),
+        max_discount_cap=coupon.max_discount_cap,
     )
 
 
@@ -87,9 +88,10 @@ async def create_coupon(body: CouponCreate, admin: StaffCoupons, session: DbSess
         await session.execute(
             text(
                 "INSERT INTO public.coupons "
-                "(code, percent_off, amount_off, min_subtotal, max_uses, "
+                "(code, percent_off, amount_off, min_subtotal, max_discount_cap, max_uses, "
                 " max_uses_per_user, expires_at) "
-                "VALUES (:code, :percent, :amount, :min_sub, :max_uses, :max_user, :expires) "
+                "VALUES (:code, :percent, :amount, :min_sub, :cap, :max_uses, :max_user, "
+                "        :expires) "
                 "RETURNING *"
             ),
             {
@@ -97,6 +99,7 @@ async def create_coupon(body: CouponCreate, admin: StaffCoupons, session: DbSess
                 "percent": body.percent_off,
                 "amount": body.amount_off,
                 "min_sub": body.min_subtotal,
+                "cap": body.max_discount_cap,
                 "max_uses": body.max_uses,
                 "max_user": body.max_uses_per_user,
                 "expires": expires,
@@ -114,6 +117,7 @@ async def create_coupon(body: CouponCreate, admin: StaffCoupons, session: DbSess
             "code": row["code"],
             "percent_off": row["percent_off"],
             "amount_off": row["amount_off"],
+            "max_discount_cap": row["max_discount_cap"],
             "max_uses": row["max_uses"],
         },
     )
@@ -126,6 +130,7 @@ async def create_coupon(body: CouponCreate, admin: StaffCoupons, session: DbSess
         amount_off=row["amount_off"],
         min_subtotal=int(row["min_subtotal"]),
         expires_at=_iso(row["expires_at"]),
+        max_discount_cap=row["max_discount_cap"],
     )
 
 
@@ -142,6 +147,7 @@ async def list_coupons(admin: StaffCoupons, session: DbSession) -> dict:
                 "percent_off": r["percent_off"],
                 "amount_off": r["amount_off"],
                 "min_subtotal": int(r["min_subtotal"]),
+                "max_discount_cap": r["max_discount_cap"],
                 "max_uses": r["max_uses"],
                 "max_uses_per_user": int(r["max_uses_per_user"]),
                 "used_count": int(r["used_count"]),
@@ -175,6 +181,10 @@ async def update_coupon(
         fields["amount_off"] = body.amount_off
     if body.min_subtotal is not None:
         fields["min_subtotal"] = body.min_subtotal
+    if body.max_discount_cap is not None:
+        # 0 means "remove the ceiling" — the column is NULL-for-uncapped, and the
+        # CHECK constraint refuses a stored 0 (AB-BE-03)
+        fields["max_discount_cap"] = body.max_discount_cap or None
     if body.max_uses is not None:
         fields["max_uses"] = body.max_uses
     if body.max_uses_per_user is not None:

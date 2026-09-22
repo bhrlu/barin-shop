@@ -133,7 +133,7 @@ returning bare arrays.** `/admin/audit-logs` uses `?limit=&offset=` instead
 | PATCH | `/refunds/{id}` | resolve a refund request — settling (`refunded`) **requires** `bank_tracking_code` (Paya/Satna); every resolution records `resolved_by` + `resolved_at` |
 | GET/DELETE | `/admin/contact-messages` | contact inbox (`?status=new`), delete a message |
 | PATCH | `/admin/contact-messages/{id}` | mark a message `answered` (or reopen it as `new`) |
-| POST/GET/PATCH | `/coupons` · `/coupons/{id}` · `/coupons/generate` | coupon CRUD |
+| POST/GET/PATCH | `/coupons` · `/coupons/{id}` · `/coupons/generate` | coupon CRUD — incl. `max_discount_cap`, the ceiling (in tomans) on a **percent-off** discount; `null` = uncapped, and `PATCH` with `0` clears it |
 | DELETE | `/coupons/{id}` | remove a coupon (audited; past order discounts unaffected) |
 | GET | `/admin/export/orders.{csv\|xlsx}?from=&to=&status=` | order ledger export (B2.2/BE-08): customer, address, item breakdown, subtotal/discount/shipping/total; `from` defaults 30 days back, invalid range → 422 |
 | GET | `/admin/export/products.{csv\|xlsx}` | full catalog with stock/thresholds |
@@ -216,7 +216,8 @@ The coupon **and** catalog tables/columns are created idempotently on startup
 (`app/db.py`), so a fresh database and an already-seeded one both converge. The
 base schema comes from `infra/initdb/`; this service owns only the additive
 columns (including `payments.authority` and `order_items.variant_id`) and the
-`coupons`, `product_variants`, `product_reviews`, `search_history`,
+`coupons` (incl. `coupons.max_discount_cap`), `product_variants`,
+`product_reviews`, `search_history`,
 `recently_viewed`, `contact_messages` tables.
 
 ## Tests
@@ -241,4 +242,8 @@ const order = await api.checkout({ lines, address, coupon_code });
 
 The browser talks to this service directly at `VITE_API_URL`. Checkout is
 server-priced; the cart only sends the applied coupon **code**, never an amount.
+`app/services/coupons.py::compute_discount` is the single place a discount is
+computed, so `POST /coupons/validate` and checkout always agree — including the
+`max_discount_cap` ceiling, which applies to percent-off coupons only (a fixed
+`amount_off` is already its own ceiling).
 See `plan/frontend-tasks.md` Milestone F3 for the catalog UI still to be wired.

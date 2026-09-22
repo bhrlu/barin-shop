@@ -86,6 +86,8 @@ class CouponOut(BaseModel):
     amount_off: int | None
     min_subtotal: int
     expires_at: str | None
+    # ceiling applied to a percent-off discount; None = uncapped (AB-BE-03)
+    max_discount_cap: int | None = None
 
 
 class CouponCreate(BaseModel):
@@ -93,6 +95,7 @@ class CouponCreate(BaseModel):
     percent_off: int | None = Field(default=None, ge=1, le=100)
     amount_off: int | None = Field(default=None, gt=0)
     min_subtotal: int = Field(default=0, ge=0)
+    max_discount_cap: int | None = Field(default=None, gt=0)
     max_uses: int | None = Field(default=None, gt=0)
     max_uses_per_user: int = Field(default=1, ge=1)
     expires_at: str | None = None
@@ -113,6 +116,9 @@ class CouponUpdate(BaseModel):
     percent_off: int | None = Field(default=None, ge=1, le=100)
     amount_off: int | None = Field(default=None, gt=0)
     min_subtotal: int | None = Field(default=None, ge=0)
+    # 0 clears the cap (back to uncapped); omitted leaves it unchanged, the same
+    # convention `expires_at: ""` already uses on this schema (AB-BE-03)
+    max_discount_cap: int | None = Field(default=None, ge=0)
     max_uses: int | None = Field(default=None, gt=0)
     max_uses_per_user: int | None = Field(default=None, ge=1)
     expires_at: str | None = None

@@ -60,6 +60,7 @@ def make_coupon(**overrides) -> Coupon:
         percent_off=10,
         amount_off=None,
         min_subtotal=0,
+        max_discount_cap=None,
         max_uses=None,
         max_uses_per_user=1,
         used_count=0,
@@ -82,6 +83,52 @@ class TestComputeDiscount:
     def test_discount_capped_at_subtotal(self):
         coupon = make_coupon(percent_off=None, amount_off=999_999)
         assert compute_discount(coupon, 100_000) == 100_000
+
+
+class TestMaxDiscountCap:
+    """AB-BE-03: `max_discount_cap` is a ceiling on percent-off coupons only."""
+
+    def test_percent_under_the_cap_is_untouched(self):
+        coupon = make_coupon(percent_off=20, max_discount_cap=300_000)
+        assert compute_discount(coupon, 1_000_000) == 200_000
+
+    def test_percent_over_the_cap_is_clamped(self):
+        coupon = make_coupon(percent_off=20, max_discount_cap=300_000)
+        assert compute_discount(coupon, 5_000_000) == 300_000
+
+    def test_percent_exactly_at_the_cap(self):
+        coupon = make_coupon(percent_off=20, max_discount_cap=300_000)
+        assert compute_discount(coupon, 1_500_000) == 300_000
+
+    def test_percent_without_a_cap_is_uncapped(self):
+        """NULL preserves today's behaviour for every coupon seeded so far."""
+        coupon = make_coupon(percent_off=20, max_discount_cap=None)
+        assert compute_discount(coupon, 5_000_000) == 1_000_000
+
+    def test_fixed_amount_ignores_the_cap(self):
+        coupon = make_coupon(percent_off=None, amount_off=500_000, max_discount_cap=100_000)
+        assert compute_discount(coupon, 5_000_000) == 500_000
+
+    def test_cap_never_exceeds_the_subtotal(self):
+        coupon = make_coupon(percent_off=100, max_discount_cap=999_999_999)
+        assert compute_discount(coupon, 80_000) == 80_000
+
+    def test_validate_applies_the_same_cap(self):
+        """`validate_coupon` is the only door to `compute_discount`."""
+        coupon = make_coupon(percent_off=50, max_discount_cap=120_000)
+        assert validate_coupon(coupon, 4_000_000, uuid4(), prior_uses=0) == 120_000
+
+    def test_cap_does_not_bypass_the_min_subtotal_rule(self):
+        coupon = make_coupon(percent_off=50, max_discount_cap=120_000, min_subtotal=1_000_000)
+        with pytest.raises(CouponError) as exc:
+            validate_coupon(coupon, 500_000, uuid4(), 0)
+        assert exc.value.code == "min_subtotal"
+
+    def test_cap_does_not_bypass_the_usage_limit(self):
+        coupon = make_coupon(percent_off=50, max_discount_cap=120_000, max_uses=1, used_count=1)
+        with pytest.raises(CouponError) as exc:
+            validate_coupon(coupon, 4_000_000, uuid4(), 0)
+        assert exc.value.code == "exhausted"
 
 
 class TestValidateCoupon:

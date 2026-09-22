@@ -288,6 +288,14 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   است»; `routers/storage.py` has two to review. Same fix shape as B6.9.
 - [ ] **B6.10 Pagination for `GET /products` and `GET /admin/orders`** — both
   return the entire table; the spec's `[FE-02]` grid assumes server-side paging.
+- [x] **AB-BE-03 Coupon max discount cap** (`[BE-02]`) — additive nullable
+  `coupons.max_discount_cap INTEGER` (CHECK > 0) clamps a **percent-off**
+  discount in `services/coupons.py::compute_discount`, the single point both
+  `POST /coupons/validate` and checkout pass through, so the quote and the order
+  can never disagree. Fixed `amount_off` coupons and NULL caps are unchanged, so
+  every seeded coupon keeps its behaviour. Exposed in the coupon schemas and the
+  admin CRUD (`PATCH` with `0` clears the ceiling); no admin UI field yet.
+  → audit: [2026-09-22-abbe03-coupon-max-discount-cap.md](audit/2026-09-22-abbe03-coupon-max-discount-cap.md)
 
 ## Ideas (not scheduled)
 

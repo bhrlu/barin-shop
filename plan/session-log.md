@@ -1684,3 +1684,67 @@ runs.
 → audit: [2026-09-22-b69-refund-exception-handling.md](audit/2026-09-22-b69-refund-exception-handling.md)
 
 **Next backlog pointer** — `AB-BE-03` (coupon max discount cap).
+
+---
+
+## 2026-09-22 — AB-BE-03 coupon max discount cap
+
+**Task** — `AB-BE-03` (P1, Master Backlog batch A, source ADMIN-BACKEND
+`[BE-02]`), executed alone after B6.9. It completes batch A.
+
+**What was done** — a percent-off coupon had no ceiling, so a large cart
+discounted without limit. `coupons` gains a nullable
+`max_discount_cap INTEGER CHECK (… > 0)` through `COUPON_DDL`, and the clamp
+lives in `app/services/coupons.py::compute_discount` — the single function both
+`POST /coupons/validate` and checkout reach via `validate_coupon`, so the quote
+the cart shows and the discount the order stores can never disagree. The cap
+applies to **percent-off coupons only**: a fixed `amount_off` is already a stated
+ceiling in tomans. NULL means uncapped, so `SANDE10`, `WELCOME500` and every
+other existing coupon behave exactly as before. The field is exposed in
+`CouponOut` / `CouponCreate` / `CouponUpdate`, in the admin list, in the
+create-audit entry, and can be cleared by PATCHing `0` (the same sentinel
+convention `expires_at: ""` already uses). `models.py` gained the column and
+`backend/README.md` documents it.
+
+**Tests run** — `TestMaxDiscountCap` in `tests/test_pricing_and_coupons.py`
+(9 cases: under/over/at the cap, no cap, fixed amount ignoring it, cap larger
+than the subtotal, `validate_coupon` agreeing, and the cap not bypassing the
+`min_subtotal` or `max_uses` rules) and a new DB-backed
+`tests/test_coupon_cap_integration.py` (7 cases: validate returns the capped
+amount and the cap; checkout stores the identical amount in the quote,
+`orders.discount`, `orders.total` and `coupon_redemptions.amount`; NULL cap keeps
+the full percentage; a small cart is not clamped; admin create→list→patch→clear
+round-trip; negative cap 422; customer 403). Full `pytest -q` 70 passed; ruff
+clean; `api_smoke.py` 196/0; clean-environment `docker compose down -v &&
+up -d --build` with `db-init` exit 0, the column and its CHECK present on a
+fresh database and the seeded coupons NULL-capped; plus a live HTTP flow where a
+50% coupon capped at 300,000 discounted a 5,670,000 cart by exactly 300,000 at
+both validate (lowercase code) and checkout, while `SANDE10` and `WELCOME500`
+were unaffected. Mutation check: deleting the three clamp lines reddens exactly
+four tests.
+
+**Verification level** — *fully verified*.
+
+**What was explicitly NOT done** — no admin UI field: `admin.coupons.tsx` and the
+`AdminCoupon` / `adminCreateCoupon` / `adminUpdateCoupon` types in
+`src/lib/api.ts` are untouched, so the ceiling is API-only for now. AB-BE-03's
+layer is `backend_db_pricing` and the full-backlog audit listed the dialog field
+as a frontend dependency, so it was recorded as `NEW-ABBE03-1` / `F5.9` instead.
+Fixed `amount_off` coupons stay uncapped by design. `CouponUpdate` still cannot
+clear `max_uses` or `min_subtotal` (pre-existing convention, left alone).
+`feature-roadmap.md`, `FEATURES.md`, `DESIGN_SYSTEM.md`, `infra/README.md`,
+`vogue-vintage-vibes/README.md` and `plan/README.md` were left untouched — the
+capability is not user-visible until the dialog field ships.
+
+**Decisions taken** — (1) the clamp went into `compute_discount`, **not** into
+`app/services/pricing.py` as the 2026-09-22 full-backlog audit proposed:
+`quote()` receives an already computed integer discount and knows nothing about
+coupons, so clamping there would have required a second copy for the validate
+endpoint — the two-sources-of-truth Rule 7 forbids. The deviation is recorded in
+the audit. (2) `INTEGER` tomans, not the spec's `NUMERIC`, because every money
+column in this repo is an integer. (3) `0` on PATCH clears the ceiling rather
+than adding a separate `clear_max_discount_cap` flag.
+
+→ audit: [2026-09-22-abbe03-coupon-max-discount-cap.md](audit/2026-09-22-abbe03-coupon-max-discount-cap.md)
+
+**Next backlog pointer** — `F5.5` (audit-log viewer) — batch A is complete.

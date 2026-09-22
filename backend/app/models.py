@@ -181,6 +181,8 @@ class Coupon(Base):
     percent_off: Mapped[int | None] = mapped_column(Integer, nullable=True)
     amount_off: Mapped[int | None] = mapped_column(Integer, nullable=True)
     min_subtotal: Mapped[int] = mapped_column(Integer, default=0)
+    # ceiling for a percent-off discount; NULL = uncapped (AB-BE-03)
+    max_discount_cap: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_uses: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_uses_per_user: Mapped[int] = mapped_column(Integer, default=1)
     used_count: Mapped[int] = mapped_column(Integer, default=0)
