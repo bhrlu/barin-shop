@@ -7,9 +7,11 @@
 > `plan/ADMIN-FRONTEND_TASKS.md`, and the full audit
 > `plan/audit/2026-09-22-full-backlog-audit.md`.
 >
-> **Rule:** Agents execute from this file for remaining work. The older task/spec
-> documents remain historical/source documents and must not be treated as a second
-> independent queue.
+> **Rule:** Agents execute remaining work from this file. The older task/spec
+> documents remain historical/source documents and must not be treated as a
+> second independent execution queue.
+
+---
 
 ## 1. Scope and source of truth
 
@@ -24,18 +26,23 @@ The live repository architecture is authoritative:
 * No Supabase, Postgres RPC, RLS, or `createServerFn` implementation exists.
 
 The dev spec contains stale Supabase/RLS/RPC wording in several places. Do not
-reintroduce those mechanisms. Follow the live repository and Rules 0–15.
+reintroduce those mechanisms.
+
+Follow the live repository and Rules 0–15.
+
+---
 
 ## 2. Master status model
 
 Use these statuses in this file:
 
 * `TODO` — ready for an agent to execute.
-* `BLOCKED` — cannot be implemented correctly until the listed decision is made.
 * `IN_PROGRESS` — an agent currently owns the task.
 * `DONE` — implementation + required verification completed and audit written.
 * `DROPPED` — explicitly removed by product decision.
 * `OBSOLETE` — retained only for traceability; never execute.
+
+There are currently **no execution tasks in `BLOCKED` state**.
 
 Priority:
 
@@ -43,6 +50,8 @@ Priority:
 * **P1** — core product functionality.
 * **P2** — quality / scalability / operability.
 * **P3** — future / nice-to-have.
+
+---
 
 ## 3. Agent execution contract
 
@@ -52,7 +61,7 @@ Before starting a task:
 2. Read `AGENTS.md` and `plan/RULES.md`.
 3. Read this file and the source task/spec entry for the selected task.
 4. Inspect the live implementation and trace the full contract before modifying it.
-5. Confirm the task is still `TODO` and that all dependencies are satisfied.
+5. Confirm the task is still `TODO` and that all prerequisites are satisfied.
 6. Do not silently absorb another backlog item into the current task.
 
 While implementing:
@@ -63,8 +72,8 @@ While implementing:
 * Treat money and inventory changes as transactional invariants.
 * Prefer the smallest diff that completely fixes the selected task.
 * Preserve backward compatibility unless the task explicitly changes the contract.
-* If a newly discovered requirement is outside the task, stop and create/update a
-  backlog entry rather than expanding scope silently.
+* If a newly discovered requirement is outside the selected task, record it as a
+  separate backlog item instead of expanding scope silently.
 
 Before marking `DONE`:
 
@@ -79,516 +88,1687 @@ Before marking `DONE`:
 
    * `TODO → DONE`
    * add the audit link
-   * record verification level
-   * update dependency availability if another task is unblocked.
+   * record the actual verification level
+   * update any newly unblocked dependency information.
 9. Commit and push the complete task.
 
 **Do not mark DONE merely because code exists.**
 
-## 4. Critical ordering
+---
 
-### First task
+# 4. Resolved product / architecture decisions
+
+All previous decisions D1–D9 are now resolved.
+
+Agents must implement these decisions as written and must **not reopen them** unless
+a new explicit product decision is added.
+
+## D1 — Contact-form abuse control
+
+**Decision:**
+
+`POST /contact` uses:
+
+* PostgreSQL-backed per-IP throttling.
+* Honeypot field.
+* No Redis.
+* No CAPTCHA.
+
+### Canonical rule
+
+Default throttle:
+
+* maximum **5 contact submissions per IP per 10 minutes**;
+* successful/accepted and rejected attempts both count toward the abuse window;
+* response must not expose internal rate-limit implementation details;
+* authenticated and guest submissions use the same abuse boundary.
+
+The implementation may use a dedicated lightweight PostgreSQL table if no existing
+canonical rate-limit primitive exists.
+
+**Unblocks:** `B3.11`.
+
+---
+
+## D2 — Notification provider and scope
+
+**Decision:**
+
+* **SMS:** Kavenegar.
+* **Email:** SMTP.
+* Use a small provider abstraction so the transport can be replaced later without
+  changing business logic.
+
+### Transactional notification scope
+
+Implement only transactional notifications:
+
+* order created;
+* payment confirmed;
+* order shipped;
+* order cancelled;
+* refund approved/settled;
+* password-reset email;
+* preorder-related notification required by the final preorder workflow.
+
+No marketing/newsletter/campaign notification system is part of this backlog.
+
+### Requirements
+
+* provider failures must not corrupt order/payment/refund state;
+* repeated lifecycle operations must not send duplicate notifications;
+* secrets belong in environment/configuration;
+* business logic must call a canonical notification service rather than Kavenegar
+  or SMTP directly from multiple routers.
+
+**Unblocks:** `B2.1`, `F2.3`, `B2.5`, `B4.13`.
+
+---
+
+## D3 — CSV product import semantics
+
+**Decision:**
+
+CSV import is an **idempotent upsert**.
+
+### Matching order
+
+1. If a valid `product_id` exists in the CSV, use it as the canonical key.
+2. Otherwise use normalized `name + category` as the match key.
+
+Normalization must be deterministic:
+
+* trim whitespace;
+* normalize case;
+* normalize repeated internal whitespace;
+* use the existing project/category representation where available.
+
+### Update behavior
+
+Only fields actually supplied in the CSV are updated.
+
+An omitted field must **not** erase an existing value.
+
+### Duplicate behavior
+
+Duplicate canonical keys inside the same CSV are rejected as an import validation
+error instead of being processed unpredictably.
+
+### Import transaction
+
+The import must provide deterministic results and be safe to retry.
+
+**Unblocks:** `B2.2a`.
+
+---
+
+## D4 — Preorder policy
+
+**Decision:**
+
+Preorders are supported and purchasable.
+
+### Rules
+
+* `availability=preorder` is orderable.
+* A preorder does **not** decrement physical stock.
+* The order item stores an explicit preorder marker.
+* The existing frozen order statuses remain unchanged.
+* Payment follows the current checkout/payment flow.
+* Once the product reaches its `available_at`/fulfillment point, the order becomes
+  operationally fulfillable.
+* No speculative automatic fulfillment worker is required for the first implementation.
+* Admin workflows must clearly identify preorder items.
+
+Cancellation/refund behavior must follow the same existing order lifecycle and
+financial invariants.
+
+Notifications use the D2 notification path where applicable.
+
+**Unblocks:** `B4.13`.
+
+---
+
+## D5 — Stock reservation with TTL
+
+**Decision:**
+
+Do **not** implement stock reservation with TTL in the current roadmap.
+
+The canonical model remains:
+
+```text
+checkout
+  ↓
+create order
+  ↓
+decrement stock transactionally
+```
+
+The system will not introduce:
+
+```text
+reserve
+  ↓
+TTL
+  ↓
+commit/release
+```
+
+until the real asynchronous payment/redirect architecture creates a concrete
+business requirement for reservation.
+
+**Result:** `B4.9` is **DROPPED**.
+
+---
+
+## D6 — Refund banking information
+
+**Decision:**
+
+Do **not** store:
+
+* IBAN;
+* Sheba;
+* card number;
+* other customer payout banking details.
+
+Refund settlement remains operational/out-of-band.
+
+The system stores only:
+
+* refund status;
+* resolver;
+* resolution timestamp;
+* bank/payment tracking code.
+
+**Result:** no IBAN/Sheba implementation task is created.
+
+---
+
+## D7(a) — Product variant dimensions
+
+**Decision:**
+
+Variants remain:
+
+```text
+Size × Color
+```
+
+No third product variant axis is introduced.
+
+Do not invent:
+
+* model;
+* material;
+* style;
+* length;
+* fit;
+* or any other third dimension.
+
+**Result:** `B4.8` is **DROPPED**.
+
+---
+
+## D7(b) — Customer tiers
+
+Customer tiers are:
+
+### New
+
+Fewer than **3 delivered orders**.
+
+### VIP
+
+**3 or more delivered orders**.
+
+### Wholesale
+
+Explicitly assigned by staff.
+
+Wholesale takes precedence over automatic New/VIP calculation.
+
+The tier is a customer classification, not a backend authorization role.
+
+Therefore:
+
+```text
+role != tier
+```
+
+A Wholesale customer is not automatically an admin/staff user.
+
+`AB-FE-06` must use these semantics.
+
+If the current schema has no canonical field for the explicit Wholesale flag,
+the task may add the smallest appropriate customer-tier representation as part
+of `AB-FE-06`, without introducing a second role system.
+
+---
+
+## D7(c) — Guest recently viewed
+
+Guest recently-viewed is stored in `localStorage`.
+
+Rules:
+
+* maximum **8 products**;
+* store product IDs and most recent view timestamps;
+* deduplicate by product ID;
+* newest view wins;
+* when the user signs in, guest history merges with account history;
+* server/account history remains authoritative after merge;
+* no new backend DELETE endpoint is required for this task.
+
+**Unblocks:** `F3.4b`.
+
+---
+
+## D8 — Admin data grid
+
+**Decision:**
+
+Use:
+
+```text
+@tanstack/react-table
+```
+
+as the canonical implementation for `AdminDataTable`.
+
+### Rules
+
+* table state is controlled;
+* search/filter/sort state is explicit;
+* pagination is server-side where the backend supports it;
+* bulk actions operate through existing/canonical API mutations;
+* no second table abstraction should be created.
+
+**Unblocks:** `F4.3`.
+
+---
+
+## D9 — Low-stock policy
+
+**Decision:**
+
+The canonical low-stock rule is:
+
+```text
+product.low_stock_threshold
+```
+
+per product.
+
+Do **not** implement the stale fixed rule:
+
+```text
+stock < 5
+```
+
+The product-configurable threshold remains authoritative.
+
+No new implementation task is needed.
+
+---
+
+# 5. Critical ordering
+
+## First task
 
 `B6.8` must be completed before:
 
 * `AB-BE-01`
-* `B4.9`
 
-### Variant-editor dependency
+`B4.9` is no longer part of execution because it is DROPPED.
+
+## Variant editor dependency
 
 `AB-BE-02` must be completed before:
 
 * `AB-FE-03`
 
-### Notification chain
+## Notification chain
 
-After decision `D2`:
+The notification tasks are now unblocked:
 
-`B2.1 → F2.3 → B2.5 → B4.13`
+```text
+B2.1
+├──→ F2.3
+├──→ B2.5
+└──→ B4.13
+```
 
-### Admin products file collision
+## Admin products file collision
 
-`AB-FE-02` and `AB-FE-05` both modify `admin.products.tsx`.
-Execute them sequentially unless the agents have explicitly separated file ownership.
+`AB-FE-02` and `AB-FE-05` both modify
+`admin.products.tsx`.
 
-## 5. Product / architecture decisions
+Execute them sequentially unless file ownership is explicitly separated.
 
-These are decisions, not implementation tasks.
+---
 
-| ID | Decision                                                          | Blocks                           | Status |
-| -- | ----------------------------------------------------------------- | -------------------------------- | ------ |
-| D1 | Contact-form abuse control: per-IP throttle, honeypot, or CAPTCHA | B3.11                            | OPEN   |
-| D2 | Notification provider and transactional email scope               | B2.1, F2.3, B2.5, B4.13          | OPEN   |
-| D3 | CSV import overwrite/skip/upsert semantics + idempotency key      | B2.2a                            | OPEN   |
-| D4 | Whether preorder is actually purchasable + fulfilment rules       | B4.13                            | OPEN   |
-| D5 | Whether to replace order-time decrement with reserve→commit + TTL | B4.9                             | OPEN   |
-| D6 | Whether IBAN/Sheba must be stored as PII                          | future refund UI/storage task    | OPEN   |
-| D7 | Product third dimension + customer tier definitions               | B4.8, F3.4b, AB-FE-06 tier badge | OPEN   |
-| D8 | Admin data-grid implementation/library                            | F4.3                             | OPEN   |
-| D9 | Low-stock rule: configurable per-product threshold vs fixed rule  | documentation only               | OPEN   |
+# 6. Machine-readable task index
 
-D6 must not generate an implementation task until the PII decision is made.
-D9 is documentation/product policy only and does not block current engineering work.
+> This JSON block is the canonical machine-readable representation of the
+> executable backlog. Agents may parse this block instead of extracting task
+> metadata from the prose sections below.
+>
+> Rules:
+>
+> * Every executable task appears exactly once.
+> * `status` must match the prose section.
+> * `depends_on` contains only task IDs, not product decisions.
+> * Resolved decisions are represented in task descriptions, not as blockers.
+> * `blocks` contains downstream task IDs.
+> * `batch` identifies the recommended execution batch.
+> * `priority` is one of `P0`, `P1`, `P2`, `P3`.
 
-## 6. Master backlog
+```json
+{
+  "schema_version": "1.0",
+  "backlog_version": "2026-09-22",
+  "repository": "bhrlu/barin-shop",
+  "branch": "main",
+  "source_of_truth": "plan/MASTER-BACKLOG.md",
+  "execution_policy": {
+    "blocked_tasks": 0,
+    "agent_start_task": "B6.8",
+    "one_task_at_a_time": true,
+    "verify_before_done": true,
+    "audit_required": true,
+    "session_log_required": true
+  },
+  "tasks": [
+    {
+      "id": "B6.8",
+      "title": "Per-variant stock restoration on cancellation",
+      "priority": "P0",
+      "status": "TODO",
+      "layer": "backend_db_tests",
+      "depends_on": [],
+      "blocks": ["AB-BE-01"],
+      "batch": "A",
+      "source": "backend-tasks.md",
+      "scope": "Add order_items.variant_id, persist it during checkout, restore variant and aggregate stock atomically, preserve legacy NULL behavior, and prove cancellation is idempotent."
+    },
+    {
+      "id": "B6.9",
+      "title": "Narrow refund exception handling",
+      "priority": "P1",
+      "status": "TODO",
+      "layer": "backend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "A",
+      "source": "backend-tasks.md",
+      "scope": "Replace broad refund exception swallowing with explicit duplicate/idempotency handling and preserve unexpected failures."
+    },
+    {
+      "id": "AB-BE-03",
+      "title": "Coupon max discount cap",
+      "priority": "P1",
+      "status": "TODO",
+      "layer": "backend_db_pricing",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "A",
+      "source": "ADMIN-BACKEND_TASKS.md:BE-02",
+      "scope": "Add max_discount_cap and apply it consistently in validation, pricing, checkout, and coupon admin CRUD."
+    },
+    {
+      "id": "F5.5",
+      "title": "Audit-log viewer",
+      "priority": "P1",
+      "status": "TODO",
+      "layer": "frontend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "B",
+      "source": "frontend-tasks.md",
+      "scope": "Add typed API access and an authorized admin audit-log viewer with filters, pagination, old/new values, IP, loading, empty, and error states."
+    },
+    {
+      "id": "F5.6",
+      "title": "Role management UI",
+      "priority": "P1",
+      "status": "TODO",
+      "layer": "frontend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "B",
+      "source": "frontend-tasks.md",
+      "scope": "Manage staff role sets from the users page using the canonical backend capability model."
+    },
+    {
+      "id": "AB-FE-02",
+      "title": "Admin export controls",
+      "priority": "P1",
+      "status": "TODO",
+      "layer": "frontend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "B",
+      "source": "ADMIN-FRONTEND_TASKS.md plus audit-derived task",
+      "scope": "Expose existing order/product CSV/XLSX/report exports with correct download handling, filters, loading/error states, and capability guards."
+    },
+    {
+      "id": "AB-FE-05",
+      "title": "Admin products server pagination",
+      "priority": "P1",
+      "status": "TODO",
+      "layer": "frontend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "B",
+      "source": "ADMIN-FRONTEND_TASKS.md plus audit-derived task",
+      "scope": "Use server pagination for admin products, preserve filters, reset page when filters change, and stop full-table fetching."
+    },
+    {
+      "id": "B3.11",
+      "title": "Contact-form spam guard",
+      "priority": "P1",
+      "status": "TODO",
+      "layer": "backend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "F",
+      "source": "backend-tasks.md",
+      "scope": "Implement PostgreSQL-backed per-IP throttling at 5 requests per 10 minutes plus honeypot; no Redis or CAPTCHA."
+    },
+    {
+      "id": "B2.1",
+      "title": "SMS/email notifications",
+      "priority": "P1",
+      "status": "TODO",
+      "layer": "backend",
+      "depends_on": [],
+      "blocks": ["F2.3", "B2.5", "B4.13"],
+      "batch": "F",
+      "source": "backend-tasks.md",
+      "scope": "Build a replaceable transactional notification service using Kavenegar for SMS and SMTP for email."
+    },
+    {
+      "id": "F2.3",
+      "title": "Forgot password",
+      "priority": "P1",
+      "status": "TODO",
+      "layer": "fullstack",
+      "depends_on": ["B2.1"],
+      "blocks": [],
+      "batch": "F",
+      "source": "frontend-tasks.md",
+      "scope": "Implement secure reset tokens, expiry, one-time use, email delivery, backend reset API, request UI, and reset UI."
+    },
+    {
+      "id": "B5.1b",
+      "title": "Audit-log DB tamper resistance",
+      "priority": "P2",
+      "status": "TODO",
+      "layer": "infra_db",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "C",
+      "source": "backend-tasks.md",
+      "scope": "Make audit_logs append-only for the application role with positive INSERT/SELECT and negative UPDATE/DELETE verification."
+    },
+    {
+      "id": "AB-BE-01",
+      "title": "Inventory ledger",
+      "priority": "P2",
+      "status": "TODO",
+      "layer": "backend_db",
+      "depends_on": ["B6.8"],
+      "blocks": [],
+      "batch": "C",
+      "source": "ADMIN-BACKEND_TASKS.md:BE-01",
+      "scope": "Create inventory_logs and record canonical purchase, restock, return, and manual-adjustment events."
+    },
+    {
+      "id": "AB-BE-02",
+      "title": "Variant SKU / price / color fields",
+      "priority": "P2",
+      "status": "TODO",
+      "layer": "backend_db_api",
+      "depends_on": [],
+      "blocks": ["AB-FE-03"],
+      "batch": "C",
+      "source": "ADMIN-BACKEND_TASKS.md:BE-01",
+      "scope": "Add unique SKU, nullable price_override, color_hex, schemas, CRUD support, and idempotent DDL."
+    },
+    {
+      "id": "F5.8",
+      "title": "Remove duplicate /shop catalog fetch",
+      "priority": "P2",
+      "status": "TODO",
+      "layer": "frontend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "D",
+      "source": "frontend-tasks.md",
+      "scope": "Establish one canonical shop catalog request path and eliminate unnecessary full-catalog fetches."
+    },
+    {
+      "id": "F5.7",
+      "title": "Admin chart bundle split",
+      "priority": "P2",
+      "status": "TODO",
+      "layer": "frontend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "D",
+      "source": "frontend-tasks.md",
+      "scope": "Measure the actual production bundle first, then apply evidence-based chart route/code splitting and re-measure."
+    },
+    {
+      "id": "F4.3",
+      "title": "Reusable AdminDataTable",
+      "priority": "P2",
+      "status": "TODO",
+      "layer": "frontend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "F",
+      "source": "frontend-tasks.md",
+      "scope": "Build the canonical admin table abstraction with @tanstack/react-table, controlled server-side state, filters, sorting, pagination, bulk actions, and copy helpers."
+    },
+    {
+      "id": "AB-FE-01",
+      "title": "Admin topbar completion",
+      "priority": "P2",
+      "status": "TODO",
+      "layer": "frontend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "D",
+      "source": "ADMIN-FRONTEND_TASKS.md:FE-01",
+      "scope": "Complete breadcrumbs, profile/avatar actions, command/quick actions, storefront preview, and responsive details without rewriting the existing shell."
+    },
+    {
+      "id": "AB-FE-03",
+      "title": "Two-column product editor + RHF/Zod + swatches",
+      "priority": "P2",
+      "status": "TODO",
+      "layer": "frontend",
+      "depends_on": ["AB-BE-02"],
+      "blocks": [],
+      "batch": "E",
+      "source": "ADMIN-FRONTEND_TASKS.md:FE-04",
+      "scope": "Implement two-column product editor, React Hook Form, Zod, variant matrix, SKU, swatches, size, quantity, and price override."
+    },
+    {
+      "id": "AB-FE-04",
+      "title": "Product image gallery manager",
+      "priority": "P2",
+      "status": "TODO",
+      "layer": "frontend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "D",
+      "source": "ADMIN-FRONTEND_TASKS.md:FE-04",
+      "scope": "Implement drag/drop, preview, reorder, primary-image selection, delete, progress, and retry using MinIO APIs."
+    },
+    {
+      "id": "F3.5b",
+      "title": "Re-check cart stock on window focus",
+      "priority": "P2",
+      "status": "TODO",
+      "layer": "frontend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "D",
+      "source": "frontend-tasks.md",
+      "scope": "Re-run server stock validation when an open cart window regains focus while preserving checkout as final authority."
+    },
+    {
+      "id": "B2.5",
+      "title": "Webhooks + background jobs",
+      "priority": "P2",
+      "status": "TODO",
+      "layer": "backend",
+      "depends_on": ["B2.1"],
+      "blocks": [],
+      "batch": "F",
+      "source": "backend-tasks.md",
+      "scope": "Add order events, background jobs, abandoned-payment reminders, notification integration, idempotency, and retry behavior."
+    },
+    {
+      "id": "B2.3",
+      "title": "PDF invoices",
+      "priority": "P3",
+      "status": "TODO",
+      "layer": "backend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "G",
+      "source": "backend-tasks.md",
+      "scope": "Implement server-generated PDF invoices only if still required after the existing browser invoice flow is confirmed insufficient."
+    },
+    {
+      "id": "F3.4b",
+      "title": "Guest recently viewed",
+      "priority": "P3",
+      "status": "TODO",
+      "layer": "frontend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "F",
+      "source": "frontend-tasks.md",
+      "scope": "Store up to 8 guest product IDs/timestamps in localStorage and merge deterministically into account history on sign-in."
+    },
+    {
+      "id": "AB-FE-06",
+      "title": "Customer 360° profile",
+      "priority": "P3",
+      "status": "TODO",
+      "layer": "fullstack_frontend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "F",
+      "source": "ADMIN-FRONTEND_TASKS.md:FE-08",
+      "scope": "Customer overview, orders, addresses, wishlist, LTV, purchase interval, role entry point, and New/VIP/Wholesale tier display."
+    },
+    {
+      "id": "F1.9",
+      "title": "Lovable preview tooling",
+      "priority": "P3",
+      "status": "TODO",
+      "layer": "frontend_tooling",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "G",
+      "source": "frontend-tasks.md",
+      "scope": "Only implement if useful after Lovable is fully out of the runtime architecture; never reintroduce Lovable/Supabase dependencies."
+    },
+    {
+      "id": "B2.2a",
+      "title": "CSV product import",
+      "priority": "P3",
+      "status": "TODO",
+      "layer": "backend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "F",
+      "source": "backend-tasks.md",
+      "scope": "Implement idempotent upsert using product_id when supplied, otherwise normalized name+category, with partial-field updates and duplicate rejection."
+    },
+    {
+      "id": "B4.13",
+      "title": "Preorder fulfilment flag",
+      "priority": "P3",
+      "status": "TODO",
+      "layer": "backend",
+      "depends_on": ["B2.1"],
+      "blocks": [],
+      "batch": "F",
+      "source": "backend-tasks.md",
+      "scope": "Allow preorder checkout, persist preorder marker, avoid physical stock decrement, expose preorder state to admin, and integrate applicable notifications."
+    }
+  ],
+  "excluded": [
+    {
+      "id": "B4.8",
+      "status": "DROPPED",
+      "reason": "Product variants remain Size × Color; no third dimension."
+    },
+    {
+      "id": "B4.9",
+      "status": "DROPPED",
+      "reason": "Current payment architecture does not justify stock reservation with TTL."
+    },
+    {
+      "id": "B2.6",
+      "status": "OBSOLETE",
+      "reason": "Superseded by the existing backend coupon system and F4.5."
+    }
+  ],
+  "counts": {
+    "total_executable": 27,
+    "P0": 1,
+    "P1": 9,
+    "P2": 11,
+    "P3": 6,
+    "blocked": 0,
+    "dropped": 2,
+    "obsolete": 1,
+    "open_product_decisions": 0
+  }
+}
+```
 
-### P0 — Correctness
+---
 
-#### B6.8 — Per-variant stock restoration on cancellation
+# 7. Master backlog
+
+## P0 — Correctness
+
+### B6.8 — Per-variant stock restoration on cancellation
 
 * **Layer:** Backend + DB + tests
 * **Status:** TODO
 * **Dependencies:** none
-* **Blocks:** AB-BE-01, B4.9
+* **Blocks:** AB-BE-01
 * **Why:** Variant orders decrement `product_variants.stock`, but cancellation currently
-  restores only the aggregate product stock. This silently corrupts inventory.
-* **Required implementation:**
+  restores only aggregate product stock. This silently corrupts inventory.
 
-  1. Add idempotent `order_items.variant_id UUID REFERENCES product_variants(id) ON DELETE SET NULL`
-     in the canonical additive DDL path.
-  2. Ensure seed jobs can apply the DDL independently.
-  3. Persist `line["variant_id"]` during checkout.
-  4. Restore both variant and aggregate stock in one transaction.
-  5. Preserve aggregate-only behavior for legacy `NULL` variant rows.
-  6. Keep repeated cancellation a no-op.
-* **Acceptance tests:**
+### Required implementation
 
-  * variant order decrements both aggregate and variant stock;
-  * cancellation restores both to original values;
-  * second cancellation does not inflate either value;
-  * legacy NULL variant rows still restore aggregate stock safely.
-* **Verification:** live Docker flow + focused pytest + clean-environment DB/seed check.
-* **Audit:** create a new task audit; prior audit only established the defect.
+1. Add idempotent:
+
+   ```sql
+   ALTER TABLE public.order_items
+   ADD COLUMN IF NOT EXISTS variant_id UUID
+   REFERENCES public.product_variants(id)
+   ON DELETE SET NULL;
+   ```
+
+   through the canonical additive DDL path.
+
+2. Ensure seed jobs can independently apply the DDL.
+
+3. Persist `line["variant_id"]` during checkout.
+
+4. Restore both variant and aggregate stock in one transaction.
+
+5. Preserve aggregate-only behavior for legacy `NULL` variant rows.
+
+6. Repeated cancellation must remain a no-op.
+
+### Acceptance tests
+
+* variant order decrements both aggregate and variant stock;
+* cancellation restores both to original values;
+* second cancellation does not inflate either value;
+* legacy `NULL` variant rows still behave safely.
+
+### Verification
+
+* focused pytest;
+* live Docker checkout/cancel flow;
+* clean-environment DB/seed verification.
 
 ---
 
-### P1 — Core product
+# P1 — Core product
 
-#### B6.9 — Narrow refund exception handling
+## B6.9 — Narrow refund exception handling
 
 * **Layer:** Backend
 * **Status:** TODO
 * **Dependencies:** none
-* **Why:** A broad `except Exception` converts unrelated DB/application failures into
-  a false "refund already requested" response.
-* **Required implementation:** narrow expected duplicate/idempotency handling and let
-  unexpected failures surface correctly.
-* **Acceptance tests:** successful request, true duplicate, unrelated DB failure.
-* **Verification:** focused pytest + API smoke/error-path check.
 
-#### AB-BE-03 — Coupon max discount cap
+### Problem
+
+A broad:
+
+```python
+except Exception:
+```
+
+currently turns unrelated failures into a false "refund already requested" response.
+
+### Required implementation
+
+* catch only the expected duplicate/idempotency condition;
+* preserve legitimate duplicate behavior;
+* unexpected DB/application errors must surface correctly;
+* preserve security and error response conventions.
+
+### Acceptance tests
+
+* successful refund request;
+* true duplicate request;
+* unrelated DB failure.
+
+### Verification
+
+Focused pytest + API error-path smoke test.
+
+---
+
+## AB-BE-03 — Coupon max discount cap
 
 * **Layer:** Backend + DB + pricing
 * **Status:** TODO
 * **Dependencies:** none
-* **Source:** ADMIN-BACKEND [BE-02]
-* **Required implementation:**
+* **Source:** ADMIN-BACKEND `[BE-02]`
 
-  * add `coupons.max_discount_cap`;
-  * expose it consistently in schemas/admin CRUD;
-  * cap percentage discounts in the canonical pricing path;
-  * preserve fixed discounts and existing min-order/usage/date rules;
-  * keep checkout and validation calculations identical.
-* **Acceptance tests:** percentage below cap, percentage above cap, no cap, fixed coupon.
-* **Verification:** pytest + checkout API smoke.
+### Required implementation
 
-#### F5.5 — Audit-log viewer
+* add `coupons.max_discount_cap`;
+* expose it in schemas and admin CRUD;
+* cap percentage discounts in the canonical pricing path;
+* preserve fixed discounts;
+* preserve min-order, usage and date rules;
+* use the same calculation rules in coupon validation and checkout.
 
-* **Layer:** Frontend
-* **Status:** TODO
-* **Dependencies:** none
-* **Existing backend:** `GET /admin/audit-logs`
-* **Required implementation:**
+### Acceptance tests
 
-  * typed `api.ts` client;
-  * admin route/view;
-  * action/entity/admin filters;
-  * pagination/offset;
-  * IP + timestamp + old/new values display;
-  * role guard;
-  * loading, empty and error states.
-* **Acceptance:** direct route access respects backend capability.
-* **Verification:** frontend type/lint/build + targeted browser/manual flow if available.
+* percentage discount under cap;
+* percentage discount over cap;
+* percentage without cap;
+* fixed discount;
+* checkout and validation produce identical discount values.
 
-#### F5.6 — Role management UI
+### Verification
 
-* **Layer:** Frontend
-* **Status:** TODO
-* **Dependencies:** none
-* **Existing backend:** `PUT /admin/users/{id}/roles`
-* **Required implementation:**
-
-  * edit role set from users page;
-  * confirmation for privilege changes;
-  * capability-aware visibility;
-  * mutation + cache invalidation;
-  * success/error feedback.
-* **Rule:** backend role/capability model remains authoritative.
-* **Verification:** frontend checks + direct-route authorization scenarios.
-
-#### AB-FE-02 — Admin export controls
-
-* **Layer:** Frontend
-* **Status:** TODO
-* **Dependencies:** none
-* **Existing backend:** `/admin/export/orders.{csv,xlsx}`,
-  `/admin/export/products.{csv,xlsx}`, `/admin/export/report`
-* **Required implementation:**
-
-  * visible export controls;
-  * correct format/download handling;
-  * date filters where endpoint supports them;
-  * loading/error states;
-  * capability guard.
-* **Important:** do not wait for F4.3.
-* **Verification:** browser/download flow + lint/build.
-
-#### AB-FE-05 — Admin products server pagination
-
-* **Layer:** Frontend
-* **Status:** TODO
-* **Dependencies:** none
-* **Required implementation:**
-
-  * use backend pagination for `/admin/products`;
-  * preserve filters/search across pages;
-  * reset page when filters change;
-  * show total/pages and loading state;
-  * eliminate whole-table fetch.
-* **File collision:** shares `admin.products.tsx` with AB-FE-02.
-* **Verification:** network inspection + frontend checks.
-
-#### B3.11 — Contact-form spam guard
-
-* **Layer:** Backend
-* **Status:** BLOCKED
-* **Decision:** D1
-* **Dependencies:** D1
-* **Required implementation after decision:** implement the chosen abuse-control
-  mechanism without creating a second rate-limit/security framework.
-* **Acceptance:** repeated public submissions are controlled; legitimate users still work;
-  error response is safe and useful.
-* **Verification:** API abuse/error-path test.
-
-#### B2.1 — SMS/email notifications
-
-* **Layer:** Backend
-* **Status:** BLOCKED
-* **Decision:** D2
-* **Dependencies:** D2
-* **Required implementation after decision:**
-
-  * chosen provider abstraction;
-  * order placed/paid/shipped/cancelled/refund events as in scope;
-  * failure/retry semantics;
-  * secrets/config handling;
-  * no duplicate notifications on repeated state transitions.
-* **Blocks:** F2.3, B2.5, B4.13.
-
-#### F2.3 — Forgot password
-
-* **Layer:** Full-stack
-* **Status:** BLOCKED
-* **Dependencies:** D2 + B2.1
-* **Required implementation:**
-
-  * reset token generation/storage/expiry;
-  * one-time use;
-  * safe user enumeration behavior;
-  * email delivery;
-  * reset endpoint;
-  * frontend request/reset flows.
-* **Verification:** focused auth tests + mail transport test/stub + frontend flow.
+Pytest + checkout API smoke.
 
 ---
 
-### P2 — Quality / scalability
+## F5.5 — Audit-log viewer
 
-#### B5.1b — Audit-log DB tamper resistance
+* **Layer:** Frontend
+* **Status:** TODO
+* **Dependencies:** none
+* **Backend:** `GET /admin/audit-logs`
+
+### Required implementation
+
+* typed `api.ts` method;
+* dedicated admin route/view;
+* action filter;
+* entity filter;
+* admin filter;
+* pagination/offset;
+* timestamp;
+* IP address;
+* old/new values;
+* role guard;
+* loading state;
+* empty state;
+* error state.
+
+### Acceptance
+
+Direct route entry must respect backend capabilities.
+
+### Verification
+
+Typecheck + lint + build + targeted browser/manual verification.
+
+---
+
+## F5.6 — Role management UI
+
+* **Layer:** Frontend
+* **Status:** TODO
+* **Dependencies:** none
+* **Backend:** `PUT /admin/users/{id}/roles`
+
+### Required implementation
+
+* role-set editor in `/admin/users`;
+* confirmation for privilege changes;
+* capability-aware visibility;
+* mutation handling;
+* cache invalidation;
+* success/error feedback.
+
+### Rule
+
+The backend role/capability model is authoritative.
+
+Do not implement a separate frontend-only permission model.
+
+### Verification
+
+Frontend checks + direct URL authorization scenarios.
+
+---
+
+## AB-FE-02 — Admin export controls
+
+* **Layer:** Frontend
+* **Status:** TODO
+* **Dependencies:** none
+
+### Existing backend endpoints
+
+```text
+/admin/export/orders.csv
+/admin/export/orders.xlsx
+/admin/export/products.csv
+/admin/export/products.xlsx
+/admin/export/report
+```
+
+### Required implementation
+
+* visible export controls;
+* correct file/download handling;
+* supported date filters;
+* loading states;
+* error states;
+* capability guards.
+
+### Important
+
+Do not wait for `F4.3`.
+
+### Verification
+
+Real browser download flow + typecheck/lint/build.
+
+---
+
+## AB-FE-05 — Admin products server pagination
+
+* **Layer:** Frontend
+* **Status:** TODO
+* **Dependencies:** none
+
+### Required implementation
+
+* server-side pagination;
+* preserve filters/search between pages;
+* reset page when filters change;
+* display total/pages;
+* loading state;
+* eliminate whole-table loading.
+
+### File collision
+
+Shares `admin.products.tsx` with AB-FE-02.
+
+### Verification
+
+Network inspection + frontend checks.
+
+---
+
+## B3.11 — Contact-form spam guard
+
+* **Layer:** Backend
+* **Status:** TODO
+* **Dependencies:** resolved D1
+
+### Required implementation
+
+Implement:
+
+* PostgreSQL-backed per-IP throttle;
+* maximum 5 submissions / 10 minutes / IP;
+* honeypot field;
+* safe response on abuse;
+* no Redis;
+* no CAPTCHA;
+* no second rate-limit framework.
+
+### Acceptance
+
+* repeated automated submissions are throttled;
+* legitimate contact form continues working;
+* honeypot submissions are rejected;
+* authenticated and guest requests are protected.
+
+### Verification
+
+Focused API abuse tests + live smoke.
+
+---
+
+## B2.1 — SMS/email notifications
+
+* **Layer:** Backend
+* **Status:** TODO
+* **Dependencies:** resolved D2
+
+### Provider architecture
+
+```text
+Business Event
+      ↓
+Notification Service
+      ├── SMS Adapter → Kavenegar
+      └── Email Adapter → SMTP
+```
+
+### Scope
+
+Implement only:
+
+* order created;
+* payment confirmed;
+* order shipped;
+* order cancelled;
+* refund approved/settled;
+* password reset;
+* preorder-related transactional notification where required.
+
+### Requirements
+
+* provider failures do not corrupt business transactions;
+* notification retries are safe;
+* repeated lifecycle transitions do not duplicate messages;
+* credentials come from environment/config;
+* business services do not call provider-specific SDKs directly.
+
+### Verification
+
+Provider adapter tests + idempotency/error-path tests + integration test with
+mock/stub transport.
+
+---
+
+## F2.3 — Forgot password
+
+* **Layer:** Full-stack
+* **Status:** TODO
+* **Dependencies:** B2.1 notification transport
+
+### Required implementation
+
+* reset token generation;
+* secure token storage;
+* expiration;
+* one-time consumption;
+* safe user enumeration behavior;
+* reset email;
+* reset endpoint;
+* reset request UI;
+* reset form UI.
+
+### Verification
+
+Focused auth tests + notification stub + frontend flow.
+
+---
+
+# P2 — Quality / scalability
+
+## B5.1b — Audit-log DB tamper resistance
 
 * **Layer:** Infra/DB
 * **Status:** TODO
 * **Dependencies:** none
-* **Required implementation:** make `audit_logs` append-only for the application role;
-  allow INSERT/SELECT, deny UPDATE/DELETE.
-* **Verification:** clean DB bootstrap + negative SQL test + positive audit INSERT.
 
-#### AB-BE-01 — Inventory ledger
+### Required implementation
+
+Make `audit_logs` append-only for the application role:
+
+* INSERT allowed;
+* SELECT allowed;
+* UPDATE denied;
+* DELETE denied.
+
+### Verification
+
+* clean DB bootstrap;
+* negative UPDATE/DELETE checks;
+* positive audit INSERT.
+
+---
+
+## AB-BE-01 — Inventory ledger
 
 * **Layer:** Backend + DB
 * **Status:** TODO
 * **Dependencies:** B6.8
-* **Required implementation:**
 
-  * `inventory_logs` with variant_id/change/reason/created_by/timestamp;
-  * canonical writes from purchase/restock/return/manual adjustment paths;
-  * no second inventory accounting system.
-* **Acceptance:** every supported stock mutation creates exactly one appropriate ledger event.
-* **Verification:** pytest + live stock mutation flow.
+### Required implementation
 
-#### AB-BE-02 — Variant SKU / price / color fields
+Create:
+
+```text
+inventory_logs
+```
+
+with:
+
+* `id`;
+* `variant_id`;
+* `change_amount`;
+* `reason`;
+* `created_by`;
+* `created_at`.
+
+Reasons:
+
+```text
+purchase
+restock
+return
+manual_adjustment
+```
+
+### Rule
+
+This must become the canonical inventory history.
+
+Do not introduce a second inventory accounting mechanism.
+
+### Acceptance
+
+Every supported stock mutation generates one appropriate ledger event.
+
+### Verification
+
+Pytest + live stock mutation flow.
+
+---
+
+## AB-BE-02 — Variant SKU / price / color fields
 
 * **Layer:** Backend + DB + API
 * **Status:** TODO
 * **Dependencies:** none
-* **Required implementation:**
+* **Blocks:** AB-FE-03
 
-  * unique SKU;
-  * nullable `price_override`;
-  * `color_hex`;
-  * schema/API support;
-  * idempotent DDL.
-* **Blocks:** AB-FE-03.
-* **Verification:** migration/bootstrap + CRUD tests.
+### Required implementation
 
-#### F5.8 — Remove duplicate /shop catalog fetch
+Add/support:
+
+* globally unique SKU;
+* nullable `price_override`;
+* `color_hex`;
+* schemas;
+* CRUD;
+* idempotent DDL.
+
+### Verification
+
+Clean bootstrap + CRUD tests.
+
+---
+
+## F5.8 — Remove duplicate `/shop` catalog fetch
 
 * **Layer:** Frontend
 * **Status:** TODO
 * **Dependencies:** none
-* **Required implementation:** one canonical catalog request path for each shop state;
-  avoid simultaneous full catalog + filtered list fetches.
-* **Acceptance:** normal shop visit and filtered/search visit issue only required requests.
-* **Verification:** network trace + build/type/lint.
 
-#### F5.7 — Admin chart bundle split
+### Problem
+
+`/shop` currently triggers both:
+
+```text
+catalogQuery
++
+filtered products query
+```
+
+### Required implementation
+
+Establish one canonical request path for each shop state.
+
+### Acceptance
+
+Normal, filtered and search visits must not issue unnecessary full-catalog requests.
+
+### Verification
+
+Network inspection + typecheck/lint/build.
+
+---
+
+## F5.7 — Admin chart bundle split
 
 * **Layer:** Frontend
 * **Status:** TODO
 * **Dependencies:** measurement first
-* **Required implementation:** first measure current build, identify actual direct/transitive
-  contributors, then route/code split only where evidence supports it.
-* **Do not:** assume lodash is a direct dependency or remove it blindly.
-* **Verification:** before/after bundle measurement + build.
 
-#### F4.3 — Reusable AdminDataTable
+### Required workflow
+
+1. Measure the current production bundle.
+2. Identify actual contributors.
+3. Apply evidence-based route/code splitting.
+4. Build again.
+5. Compare before/after size.
+
+### Important
+
+Do not assume lodash is a direct dependency.
+
+Do not remove dependencies blindly.
+
+### Verification
+
+Documented before/after bundle measurement + successful build.
+
+---
+
+## F4.3 — Reusable AdminDataTable
 
 * **Layer:** Frontend
-* **Status:** BLOCKED
-* **Decision:** D8
-* **Required implementation after decision:**
+* **Status:** TODO
+* **Dependencies:** resolved D8
 
-  * canonical table abstraction;
-  * search/filter/sort;
-  * server pagination;
-  * bulk actions;
-  * copy helpers;
-  * shared toolbar.
-* **Important:** exports can be implemented independently by AB-FE-02.
-* **Verification:** multiple consuming admin screens, not just the component in isolation.
+### Canonical library
 
-#### AB-FE-01 — Admin topbar completion
+```text
+@tanstack/react-table
+```
+
+### Required implementation
+
+* reusable table abstraction;
+* search;
+* filter chips;
+* sorting;
+* server-side pagination;
+* bulk selection;
+* bulk actions;
+* copy helpers;
+* shared toolbar;
+* consistent loading/empty/error states.
+
+### Important
+
+Export controls remain independent in `AB-FE-02`.
+
+### Verification
+
+Use the component in multiple real admin screens.
+
+---
+
+## AB-FE-01 — Admin topbar completion
 
 * **Layer:** Frontend
 * **Status:** TODO
 * **Dependencies:** none
-* **Required implementation on existing shell:**
 
-  * breadcrumbs;
-  * staff profile/avatar menu;
-  * command/quick actions where appropriate;
-  * storefront preview link;
-  * responsive details.
-* **Do not rewrite F4.2/AdminLayout.**
-* **Verification:** desktop + mobile route navigation and role scenarios.
+### Required implementation
 
-#### AB-FE-03 — Two-column product editor + RHF/Zod + swatches
+Build on the existing F4.2 shell:
+
+* breadcrumbs;
+* staff profile/avatar actions;
+* command/quick actions where appropriate;
+* storefront preview link;
+* responsive details.
+
+### Do not
+
+Rewrite `AdminLayout` or replace the existing role-gated shell.
+
+### Verification
+
+Desktop + mobile + multiple role scenarios.
+
+---
+
+## AB-FE-03 — Two-column product editor + RHF/Zod + swatches
 
 * **Layer:** Frontend
 * **Status:** TODO
 * **Dependencies:** AB-BE-02
-* **Required implementation:**
 
-  * two-column product editor;
-  * React Hook Form;
-  * Zod schema;
-  * variant matrix;
-  * SKU;
-  * color swatch;
-  * size/quantity;
-  * price override.
-* **Rule:** use existing MinIO upload flow; never direct Supabase storage.
-* **Verification:** create/edit validation + persisted backend values.
+### Required implementation
 
-#### AB-FE-04 — Product image gallery manager
+* two-column layout;
+* React Hook Form;
+* Zod schema;
+* product details;
+* variant matrix;
+* SKU;
+* color swatch;
+* size;
+* quantity;
+* price override.
 
-* **Layer:** Frontend
-* **Status:** TODO
-* **Dependencies:** none
-* **Required implementation:**
+### Storage rule
 
-  * drag/drop;
-  * preview;
-  * reorder;
-  * primary image;
-  * delete;
-  * progress/retry.
-* **Canonical storage:** `POST /storage/upload-url` + `POST /storage/sign` + MinIO.
-* **Verification:** upload/reorder/delete on real local stack.
+Use the existing MinIO flow:
 
-#### F3.5b — Re-check cart stock on window focus
+```text
+POST /storage/upload-url
+POST /storage/sign
+```
 
-* **Layer:** Frontend
-* **Status:** TODO
-* **Dependencies:** none
-* **Required implementation:** re-run stock validation on focus for an open cart;
-  maintain server-side checkout validation as the final authority.
-* **Verification:** stale stock scenario + focus event.
+Never direct Supabase storage.
 
-#### B2.5 — Webhooks + background jobs
+### Verification
 
-* **Layer:** Backend
-* **Status:** BLOCKED
-* **Decision:** D2
-* **Dependencies:** D2
-* **Required implementation after decision:**
-
-  * order events;
-  * background job mechanism;
-  * abandoned-payment reminders;
-  * notification integration;
-  * idempotency/retry behavior.
-* **Verification:** worker execution + restart/retry behavior.
+Create/edit + validation + persisted backend values.
 
 ---
 
-### P3 — Future
+## AB-FE-04 — Product image gallery manager
 
-#### B2.3 — PDF invoices
+* **Layer:** Frontend
+* **Status:** TODO
+* **Dependencies:** none
+
+### Required implementation
+
+* drag/drop;
+* preview;
+* reorder;
+* primary image;
+* delete;
+* progress;
+* retry/error handling.
+
+### Canonical storage
+
+```text
+/storage/upload-url
+/storage/sign
+→ MinIO
+```
+
+### Verification
+
+Real upload/reorder/delete flow on local Docker stack.
+
+---
+
+## F3.5b — Re-check cart stock on window focus
+
+* **Layer:** Frontend
+* **Status:** TODO
+* **Dependencies:** none
+
+### Required implementation
+
+When the cart window/tab receives focus:
+
+```text
+window focus
+     ↓
+stockCheck()
+     ↓
+refresh cart availability state
+```
+
+Checkout server-side validation remains the final authority.
+
+### Verification
+
+Simulate stale stock while the cart is open, then focus the window and verify
+the UI updates.
+
+---
+
+## B2.5 — Webhooks + background jobs
+
+* **Layer:** Backend
+* **Status:** TODO
+* **Dependencies:** B2.1 notification infrastructure
+
+### Required implementation
+
+* order events;
+* background job mechanism;
+* abandoned-payment reminders;
+* notification integration;
+* idempotent job execution;
+* retry behavior.
+
+### Verification
+
+Worker execution + restart/retry test + duplicate-event test.
+
+---
+
+# P3 — Future
+
+## B2.3 — PDF invoices
 
 * **Layer:** Backend
 * **Status:** TODO
 * **Dependencies:** none
-* **Before coding:** confirm that server-generated PDF is still required because F4.4
-  already provides browser invoice printing.
-* **Verification:** generated PDF opens correctly and includes order data.
 
-#### B4.8 — Product model dimension
+### Before coding
 
-* **Layer:** Backend + catalog
-* **Status:** BLOCKED
-* **Decision:** D7(a)
-* **Rule:** do not invent a third variant dimension.
-* **Verification:** schema + CRUD + filtering + frontend contract if approved.
+Confirm server-generated PDF is still required because F4.4 already provides
+browser invoice printing.
 
-#### F3.4b — Guest recently viewed
+### Verification
+
+Generated PDF must contain correct order data and open correctly.
+
+---
+
+## F3.4b — Guest recently viewed
 
 * **Layer:** Frontend
-* **Status:** BLOCKED
-* **Decision:** D7(c)
-* **Likely shape:** localStorage guest history + merge into account history on login.
-* **Rule:** use the decision chosen for merge/retention, do not improvise.
-* **Verification:** signed-out browse → sign-in → merged display.
+* **Status:** TODO
+* **Dependencies:** resolved D7(c)
 
-#### AB-FE-06 — Customer 360° profile
+### Required behavior
+
+* localStorage;
+* maximum 8 product IDs/timestamps;
+* dedupe;
+* newest wins;
+* merge with account history on sign-in.
+
+### Verification
+
+```text
+guest browse
+    ↓
+localStorage
+    ↓
+sign in
+    ↓
+merge
+    ↓
+dedupe
+    ↓
+account recently-viewed
+```
+
+---
+
+## AB-FE-06 — Customer 360° profile
 
 * **Layer:** Full-stack/frontend
 * **Status:** TODO
-* **Dependencies:** core profile is unblocked; tier badge depends on D7(b)
-* **Required implementation:**
+* **Dependencies:** none
 
-  * customer overview;
-  * order history;
-  * saved addresses;
-  * wishlist;
-  * LTV;
-  * purchase interval;
-  * role management entry point integration.
-* **Tier badge:** New/VIP/Wholesale only after D7(b).
-* **Verification:** data consistency with existing APIs and capability guards.
+### Required implementation
 
-#### F1.9 — Lovable preview tooling
+* customer overview;
+* registration date;
+* order history;
+* saved addresses;
+* wishlist;
+* LTV;
+* average days between purchases;
+* role management entry point;
+* customer tier.
+
+### Tier rules
+
+```text
+New       = fewer than 3 delivered orders
+VIP       = 3+ delivered orders
+Wholesale = explicitly assigned by staff
+```
+
+Wholesale takes precedence over New/VIP.
+
+If an explicit Wholesale representation does not yet exist in the backend,
+add the minimum canonical customer-tier representation required by this task.
+
+Do not create a second authorization role system.
+
+### Verification
+
+Data must match existing account/order/address/wishlist sources and obey admin
+capabilities.
+
+---
+
+## F1.9 — Lovable preview tooling
 
 * **Layer:** Frontend tooling
 * **Status:** TODO
 * **Priority:** P3
-* **Required implementation:** only if it remains useful after the app is fully independent
-  of Lovable; do not reintroduce Lovable/Supabase architecture.
+* **Dependencies:** none
 
-#### B2.2a — CSV product import
+Only implement if the tooling still provides value after the app is fully
+independent of Lovable.
 
-* **Layer:** Backend
-* **Status:** BLOCKED
-* **Decision:** D3
-* **Required implementation after decision:**
+Do not reintroduce Lovable/Supabase architecture.
 
-  * chosen upsert policy;
-  * validation/reporting;
-  * idempotency;
-  * transaction boundaries;
-  * error row reporting.
-* **Verification:** duplicate input, partial invalid input, retry/idempotency.
+---
 
-#### B4.13 — Preorder fulfilment flag
+## B2.2a — CSV product import
 
 * **Layer:** Backend
-* **Status:** BLOCKED
-* **Decisions:** D4 + D2 for notification half
-* **Required implementation after decision:**
+* **Status:** TODO
+* **Dependencies:** resolved D3
 
-  * order-level preorder marker;
-  * checkout availability semantics;
-  * fulfilment semantics;
-  * admin visibility;
-  * notifications as scoped.
-* **Verification:** preorder checkout, fulfilment transitions, cancellation/refund behavior.
+### Required implementation
 
-## 7. Explicitly not executable
+* idempotent upsert;
+* `product_id` canonical key when provided;
+* otherwise normalized `name + category`;
+* only supplied columns update;
+* duplicates inside one CSV rejected;
+* validation/reporting;
+* transactional boundaries;
+* deterministic retry behavior.
 
-### B2.6 — Coupon admin UI support
+### Verification
 
-* **Status:** OBSOLETE
-* **Reason:** superseded by the current backend/admin implementation and F4.5.
-* **Action:** do not implement.
+* insert new product;
+* update existing by ID;
+* update existing by normalized name/category;
+* omitted fields remain unchanged;
+* duplicate rows fail clearly;
+* repeated import is idempotent.
 
-### Historical duplicate IDs
+---
 
-`B6.1` appears more than once in `backend-tasks.md`, and `B6.3` overlaps
-the order-lifecycle item. This file uses the meaning-specific IDs already established
-by the audit. Do not create another B6.x task merely because an old checkbox still
-exists.
+## B4.13 — Preorder fulfilment flag
 
-## 8. Dependency graph
+* **Layer:** Backend
+* **Status:** TODO
+* **Dependencies:** B2.1
+
+### Required implementation
+
+* preorder marker on order/item;
+* allow checkout for `availability=preorder`;
+* do not decrement physical inventory for preorder items;
+* preserve existing order state machine;
+* expose preorder information to admin;
+* use `available_at` as fulfillment readiness information;
+* integrate applicable notifications.
+
+### Important
+
+Do not create new order status strings.
+
+### Verification
+
+Test:
+
+```text
+preorder product
+    ↓
+checkout
+    ↓
+payment
+    ↓
+order marked preorder
+    ↓
+physical stock unchanged
+    ↓
+admin can identify item
+```
+
+Also test cancellation/refund behavior.
+
+---
+
+# 8. Explicitly not executable
+
+## B4.8 — Product model dimension
+
+**Status: DROPPED**
+
+Reason:
+
+Product variants remain permanently scoped to:
+
+```text
+Size × Color
+```
+
+No third dimension is required for the current roadmap.
+
+Do not implement.
+
+---
+
+## B4.9 — Stock reservation with TTL
+
+**Status: DROPPED**
+
+Reason:
+
+The current payment architecture does not justify reservation/TTL complexity.
+
+Keep transactional stock decrement at order creation.
+
+Do not implement.
+
+---
+
+## B2.6 — Coupon admin UI support
+
+**Status: OBSOLETE**
+
+Reason:
+
+Superseded by the existing backend coupon system and `F4.5`.
+
+Do not implement.
+
+---
+
+## Historical duplicate IDs
+
+`B6.1` appears multiple times in `backend-tasks.md`, while `B6.3` overlaps the
+order-lifecycle item.
+
+Do not create another task because of these historical identifier collisions.
+
+---
+
+# 9. Dependency graph
 
 ```text
 B6.8
-├──→ AB-BE-01
-└──→ B4.9 (after D5)
+└──→ AB-BE-01
 
 AB-BE-02
 └──→ AB-FE-03
 
-D1
-└──→ B3.11
+B2.1
+├──→ F2.3
+├──→ B2.5
+└──→ B4.13
 
-D2
-└──→ B2.1
-      ├──→ F2.3
-      ├──→ B2.5
-      └──→ B4.13 (also D4)
+F3.4b
+└── guest localStorage → login merge
 
-D3
-└──→ B2.2a
+AB-FE-06
+└── resolved customer tier rules
 
-D5 + B6.8
-└──→ B4.9
+F4.3
+└── @tanstack/react-table
 
-D7(a)
-└──→ B4.8
+B4.8
+└── DROPPED
 
-D7(c)
-└──→ F3.4b
-
-D7(b)
-└──→ AB-FE-06 tier badge
-
-D8
-└──→ F4.3
+B4.9
+└── DROPPED
 ```
 
-## 9. Recommended agent batches
+---
 
-### Batch A — Critical backend
+# 10. Recommended execution batches
+
+## Batch A — Critical backend
 
 Run first:
 
@@ -598,12 +1778,16 @@ B6.9
 AB-BE-03
 ```
 
-B6.8 must finish before AB-BE-01.
+`B6.8` must finish before `AB-BE-01`.
 
-### Batch B — Existing admin backend UI gaps
+---
 
-Can run in parallel with Batch A, except AB-FE-02 and AB-FE-05 should not
-edit `admin.products.tsx` concurrently:
+## Batch B — Admin frontend gaps
+
+Can run in parallel with Batch A.
+
+However, `AB-FE-02` and `AB-FE-05` should not modify
+`admin.products.tsx` concurrently.
 
 ```text
 F5.5
@@ -612,7 +1796,9 @@ AB-FE-02
 AB-FE-05
 ```
 
-### Batch C — Backend quality/infrastructure
+---
+
+## Batch C — Backend quality / infrastructure
 
 ```text
 B5.1b
@@ -620,9 +1806,11 @@ AB-BE-01
 AB-BE-02
 ```
 
-AB-BE-01 starts after B6.8.
+`AB-BE-01` begins after `B6.8`.
 
-### Batch D — Frontend quality
+---
+
+## Batch D — Frontend quality
 
 ```text
 F5.8
@@ -632,102 +1820,312 @@ AB-FE-04
 F3.5b
 ```
 
-### Batch E — Product editor
+These can mostly run in parallel because they touch different concerns.
+
+---
+
+## Batch E — Product editor
 
 ```text
 AB-FE-03
 ```
 
-Start only after AB-BE-02.
+Start after `AB-BE-02`.
 
-### Batch F — Decision-gated work
+---
+
+## Batch F — Resolved-decision work
+
+These are no longer blocked, but some have task dependencies:
 
 ```text
-D1 → B3.11
-D2 → B2.1 → F2.3 → B2.5 → B4.13
-D3 → B2.2a
-D5 → B4.9
-D7 → B4.8 / F3.4b / AB-FE-06
-D8 → F4.3
+B3.11
+B2.1
+F2.3
+B2.5
+B2.2a
+B4.13
+F3.4b
+F4.3
+AB-FE-06
 ```
 
-### Batch G — P3
+Notification chain:
+
+```text
+B2.1
+├──→ F2.3
+├──→ B2.5
+└──→ B4.13
+```
+
+---
+
+## Batch G — P3
 
 ```text
 B2.3
 F1.9
 ```
 
-## 10. Count reconciliation
+These should not delay P0/P1/P2 work.
 
-The earlier full audit reported **24 actionable items**, but its priority tables and
-existing task files do not reconcile with that number.
+---
 
-For execution purposes this Master Backlog deliberately counts every unique remaining
-implementation unit exactly once:
+# 11. Master backlog count
 
-* **19 immediately executable tasks.**
-* **10 decision-gated tasks.**
-* **29 total remaining implementation units.**
-* B2.1 and B4.9 are explicitly included because both exist as real open tasks in the
-  repository and were omitted from the audit's headline priority accounting.
-* B2.6 is excluded because it is obsolete.
-* D1–D9 are decisions, not implementation units.
+After resolving the decisions:
 
-The old checkbox files are historical and may still show stale `[ ]` markers such as
-B6.10. Do not reopen or reimplement work solely because a legacy checkbox is unticked.
+### Remaining implementation units
 
-## 11. Documentation synchronization
+**27**
 
-When a task reaches DONE, the agent must synchronize:
+### Ready for execution
+
+**27**
+
+### Blocked
+
+**0**
+
+### Dropped
+
+**2**
+
+```text
+B4.8
+B4.9
+```
+
+### Obsolete
+
+**1**
+
+```text
+B2.6
+```
+
+### Product decisions open
+
+**0**
+
+D1–D9 are resolved.
+
+---
+
+# 12. Priority distribution
+
+| Priority  | Remaining |
+| --------- | --------: |
+| P0        |         1 |
+| P1        |         9 |
+| P2        |        11 |
+| P3        |         6 |
+| **Total** |    **27** |
+
+Priority is execution guidance, not permission to rewrite requirements.
+
+---
+
+# 13. Documentation synchronization
+
+When a task reaches `DONE`, synchronize:
 
 1. the relevant checkbox in `backend-tasks.md` or `frontend-tasks.md`;
 2. `plan/session-log.md`;
 3. a task audit in `plan/audit/`;
 4. this Master Backlog;
-5. affected README/FEATURES/roadmap/design docs when the task changes their claims.
+5. affected README/FEATURES/roadmap/design documents where the task changes their claims.
 
-Known documentation drift to clean deliberately:
+Known documentation drift:
 
-* B6.10 is implemented but unticked.
-* B2.6 is obsolete but open.
-* duplicate B6.1 identifiers exist.
+* `B6.10` is implemented but unticked.
+* `B2.6` is obsolete but open.
+* duplicate `B6.1` identifiers exist.
 * old ADMIN specs contain Supabase/RLS/RPC mechanism wording.
-* some completed backend features originally lacked frontend tracking.
+* some completed backend features historically lacked frontend tracking.
 
 Do not treat documentation cleanup as justification for unrelated code changes.
 
-## 12. Frozen invariants
+---
 
-Agents must not alter these without an explicit product decision:
+# 14. Frozen invariants
 
-* Order statuses:
-  `pending → processing → shipped → delivered` plus terminal `cancelled`.
-* Money rules already established by the project.
-* Backend authorization as the authoritative security boundary.
-* MinIO storage flow.
-* `src/lib/api.ts` as the frontend HTTP/data boundary.
+Agents must not alter these without an explicit new product decision:
 
-## 13. Audit baseline
+### Order statuses
 
-Primary source audit:
+```text
+pending
+processing
+shipped
+delivered
+cancelled
+```
 
-`plan/audit/2026-09-22-full-backlog-audit.md`
+`cancelled` and `delivered` remain terminal according to the existing lifecycle rules.
 
-Prior verification reported in that audit came from earlier sessions. Agents must not
-claim those checks were rerun unless they actually rerun them.
+Do not introduce statuses such as:
 
-The audit itself did not execute tests. In particular, B6.8 requires fresh runtime
-verification as part of its implementation.
+```text
+paid
+placed
+approved
+fulfilled
+```
 
-## 14. Current execution pointer
+into the existing order state machine unless a future explicit decision says so.
 
-**START HERE: `B6.8`**
+### Money
 
-After B6.8 is complete, update this section to point to the next highest-priority,
-unblocked task.
+Existing cart/pricing/money rules remain unchanged.
 
-Last reconciled against:
+### Authorization
+
+Backend authorization remains authoritative.
+
+### Storage
+
+Use MinIO through the existing storage endpoints.
+
+### Frontend HTTP
+
+`src/lib/api.ts` remains the frontend HTTP/data boundary.
+
+### Architecture
+
+Do not reintroduce:
+
+* Supabase;
+* Supabase Auth;
+* Supabase Storage;
+* RLS;
+* Postgres RPC;
+* `createServerFn`;
+* duplicate API clients;
+* duplicate auth/role systems.
+
+---
+
+# 15. Audit baseline
+
+Primary audit:
+
+```text
+plan/audit/2026-09-22-full-backlog-audit.md
+```
+
+Important:
+
+The audit itself did not execute tests in its own session.
+
+Prior verification figures mentioned by that audit come from earlier audit files and
+must not be described as freshly rerun.
+
+In particular:
+
+`B6.8` still requires fresh runtime verification after implementation.
+
+---
+
+# 16. Current execution pointer
+
+## START HERE
+
+```text
+B6.8
+```
+
+After `B6.8` is completed:
+
+1. update this pointer;
+2. update the task status;
+3. link the new audit;
+4. record the actual verification level;
+5. identify the next highest-priority `TODO`.
+
+The execution pointer must always identify a single concrete next task.
+
+---
+
+# 17. Agent selection rule
+
+When an agent is asked:
+
+> "What should I work on next?"
+
+It must:
+
+1. read this file;
+2. parse the machine-readable task index;
+3. find the first `TODO` according to priority and dependency order;
+4. verify the task is still genuinely incomplete in the live codebase;
+5. execute only that task;
+6. follow Rules 0–15;
+7. produce an audit;
+8. update this file.
+
+It must **not** select work by:
+
+* old checkbox ordering;
+* stale ADMIN wording;
+* filename alone;
+* spec wording that conflicts with the live repository;
+* an unticked checkbox that is already implemented;
+* a new feature discovered during reconnaissance.
+
+---
+
+# 18. Agent stop conditions
+
+An agent must stop and report instead of improvising when:
+
+* a supposedly TODO task is already implemented;
+* the live contract contradicts this backlog;
+* implementing the task would require changing a frozen invariant;
+* a required external credential/secret is missing;
+* the task requires a product decision not present in this file;
+* a shared abstraction would need an unrelated refactor;
+* a test would have to be weakened to pass.
+
+The agent must convert newly discovered independent work into a separate backlog
+item instead of silently absorbing it.
+
+---
+
+# 19. Definition of DONE
+
+A task is `DONE` only when all applicable conditions are true:
+
+```text
+implementation exists
+        +
+contract is correct
+        +
+authorization is verified
+        +
+error paths are verified
+        +
+tests are passing
+        +
+clean-environment checks done where required
+        +
+audit file written
+        +
+task checkbox synchronized
+        +
+session-log updated
+        +
+Master Backlog updated
+```
+
+"Code exists" is not enough.
+
+---
+
+# 20. Reconciliation record
+
+This Master Backlog was reconciled against:
 
 * `plan/audit/2026-09-22-full-backlog-audit.md`
 * `plan/backend-tasks.md`
@@ -735,4 +2133,17 @@ Last reconciled against:
 * `plan/ADMIN-BACKEND_TASKS.md`
 * `plan/ADMIN-FRONTEND_TASKS.md`
 
-Reconciliation date: **2026-09-22**
+Reconciliation date:
+
+**2026-09-22**
+
+Current state:
+
+```text
+27 remaining implementation units
+0 blocked implementation units
+2 dropped
+1 obsolete
+9 product decisions resolved
+NEXT = B6.8
+```
