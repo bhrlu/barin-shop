@@ -248,6 +248,11 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   fixed in the DB. Reject self-demotion and removal of the last holder of the
   `users` capability with 409, with a test. The F5.6 UI already disables the
   caller's own row, but that is UX only.
+- [ ] **B5.4b `include_inactive` follows `is_admin`, not the `catalog` capability**
+  (`NEW-ABFE05-1`, discovered during AB-FE-05) — `GET /products` shows inactive
+  products only to admin/super_admin, so an `order_manager` (who may edit the
+  catalogue) never sees inactive products in `/admin/products` and cannot
+  re-activate them. Gate it on `has_capability(roles, "catalog")`, with a test.
 
 ## Audit follow-ups (2026-09-22 full-stack audit)
 

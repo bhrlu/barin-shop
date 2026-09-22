@@ -447,7 +447,8 @@ B2.1
 
 Execute them sequentially unless file ownership is explicitly separated.
 `AB-FE-02` is DONE (2026-09-22) — it only added the export buttons to the page
-header (`ProductsExportButtons`), so `AB-FE-05` is free to proceed.
+header (`ProductsExportButtons`). `AB-FE-05` is DONE too (2026-09-22). Both
+changes to the file shipped in sequence; the collision is closed.
 
 ---
 
@@ -476,7 +477,7 @@ header (`ProductsExportButtons`), so `AB-FE-05` is free to proceed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "AB-FE-05",
+    "agent_start_task": "B3.11",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -577,13 +578,16 @@ header (`ProductsExportButtons`), so `AB-FE-05` is free to proceed.
       "id": "AB-FE-05",
       "title": "Admin products server pagination",
       "priority": "P1",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "frontend",
       "depends_on": [],
       "blocks": [],
       "batch": "B",
       "source": "ADMIN-FRONTEND_TASKS.md plus audit-derived task",
-      "scope": "Use server pagination for admin products, preserve filters, reset page when filters change, and stop full-table fetching."
+      "scope": "Use server pagination for admin products, preserve filters, reset page when filters change, and stop full-table fetching.",
+      "audit": "plan/audit/2026-09-22-abfe05-admin-products-pagination.md",
+      "verification_level": "browser tested",
+      "completed": "2026-09-22"
     },
     {
       "id": "B3.11",
@@ -918,6 +922,48 @@ header (`ProductsExportButtons`), so `AB-FE-05` is free to proceed.
       "discovered_as": "NEW-ABFE02-1",
       "discovered_during": "AB-FE-02",
       "scope": "services/exports.py::parse_range must honour a supplied UTC offset (astimezone, naive stays UTC); add a UTF-8 BOM to the CSV exports for Excel; Persian 422 detail for bad dates; pytest for the offset case."
+    },
+    {
+      "id": "B5.4b",
+      "title": "include_inactive follows is_admin, not the catalog capability",
+      "priority": "P2",
+      "status": "TODO",
+      "layer": "backend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "C",
+      "source": "backend-tasks.md",
+      "discovered_as": "NEW-ABFE05-1",
+      "discovered_during": "AB-FE-05",
+      "scope": "GET /products honours include_inactive only for admin/super_admin; gate it on has_capability(roles, \"catalog\") so order_manager sees and can re-activate inactive products in /admin/products; add a test."
+    },
+    {
+      "id": "F5.11",
+      "title": "/shop leaks invalid URL params to the API",
+      "priority": "P3",
+      "status": "TODO",
+      "layer": "frontend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "D",
+      "source": "frontend-tasks.md",
+      "discovered_as": "NEW-ABFE05-2",
+      "discovered_during": "AB-FE-05",
+      "scope": "shop.tsx validateSearch omits rejected keys, so the router's merge over the parent's raw search passes ?page=abc / ?category=hack to GET /products (422 / wrong filter); return rejected keys as explicit undefined, as admin.products.tsx does."
+    },
+    {
+      "id": "F5.12",
+      "title": "Cart provider loads the whole catalogue on every route",
+      "priority": "P2",
+      "status": "TODO",
+      "layer": "frontend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "D",
+      "source": "frontend-tasks.md",
+      "discovered_as": "NEW-ABFE05-3",
+      "discovered_during": "AB-FE-05",
+      "scope": "CartProvider in __root.tsx runs catalogQuery (all products, include_inactive=true) on every page incl. admin; fetch only the cart's products or defer until the cart is used. Related to F5.8."
     }
   ],
   "excluded": [
@@ -938,13 +984,13 @@ header (`ProductsExportButtons`), so `AB-FE-05` is free to proceed.
     }
   ],
   "counts": {
-    "total_executable": 34,
-    "done": 6,
-    "open": 28,
+    "total_executable": 37,
+    "done": 7,
+    "open": 30,
     "P0": 0,
-    "P1": 4,
-    "P2": 14,
-    "P3": 10,
+    "P1": 3,
+    "P2": 16,
+    "P3": 11,
     "blocked": 0,
     "dropped": 2,
     "obsolete": 1,
@@ -1257,8 +1303,34 @@ Real browser download flow + typecheck/lint/build.
 ## AB-FE-05 — Admin products server pagination
 
 * **Layer:** Frontend
-* **Status:** TODO
+* **Status:** DONE (2026-09-22)
 * **Dependencies:** none
+* **Audit:** [`plan/audit/2026-09-22-abfe05-admin-products-pagination.md`](audit/2026-09-22-abfe05-admin-products-pagination.md)
+* **Verification level:** browser tested (36/36 headless-Chromium checks over 25
+  throwaway fixture products, 45 total / 3 pages. Covered: paging, URL state,
+  refresh, filters that survive paging and reset it, junk and out-of-range URLs,
+  delete/edit/variant invalidation, dimmed placeholder, skeleton, error + retry,
+  support guard, storefront unaffected, 375 px. Fixtures were removed afterwards.
+  tsc/lint/build; pytest 72, `api_smoke.py` 196/0; F5.5/F5.6/AB-FE-02 suites
+  re-run green)
+* **Delivered:**
+  * `/admin/products` reads 20-row pages of
+    `GET /products?include_inactive=true` under `["admin-products"]` instead of
+    the whole `["catalog"]`;
+  * URL `?page=&category=&availability=`, server total, shared `Pager`;
+  * skeleton, error and empty states; an out-of-range page goes to the last page;
+  * save, delete and variant changes invalidate the list.
+  * Also fixed on this route: TanStack's merge of validated over raw search
+    leaked invalid params, so rejected keys are now returned as `undefined`.
+* **Not eliminated:** one bare catalogue fetch still happens on every route
+  (admin included). It comes from `CartProvider`, not this page, and is
+  recorded as F5.12.
+* **Discovered:**
+  * `B5.4b` (was `NEW-ABFE05-1`) — `include_inactive` is gated on `is_admin`,
+    not the catalog capability;
+  * `F5.11` (was `NEW-ABFE05-2`) — `/shop` leaks invalid URL params;
+  * `F5.12` (was `NEW-ABFE05-3`) — `CartProvider` loads the whole catalogue
+    everywhere.
 
 ### Required implementation
 
@@ -2037,6 +2109,94 @@ AB-FE-02 browser flow.
 
 ---
 
+## B5.4b — `include_inactive` follows `is_admin`, not the `catalog` capability
+
+* **Layer:** Backend
+* **Status:** TODO
+* **Priority:** P2
+* **Batch:** C
+* **Dependencies:** none
+* **Discovered as:** `NEW-ABFE05-1` during `AB-FE-05` — legacy discovery ID only.
+* **Source:** `backend-tasks.md` B5.4b
+
+### Problem
+
+`GET /products?include_inactive=true` returns inactive rows only for
+admin/super_admin (`AuthUser.is_admin`). `order_manager` holds the `catalog`
+capability, so it may edit products, but it never sees inactive products in
+`/admin/products` and cannot re-activate them. Measured: 39 of 44 rows are
+visible to order_manager.
+
+### Required implementation
+
+Gate `include_inactive` on `has_capability(user.roles, "catalog")`; everything else
+unchanged.
+
+### Verification
+
+pytest for anonymous / customer / support / order_manager / admin, `api_smoke.py`,
+and a browser re-run of the AB-FE-05 script as order_manager.
+
+---
+
+## F5.11 — `/shop` leaks invalid URL params to the API
+
+* **Layer:** Frontend
+* **Status:** TODO
+* **Priority:** P3
+* **Batch:** D
+* **Dependencies:** none
+* **Discovered as:** `NEW-ABFE05-2` during `AB-FE-05` — legacy discovery ID only.
+* **Source:** `frontend-tasks.md` F5.11
+
+### Problem
+
+TanStack Router merges a route's validated search over the parent's raw one, so
+keys that `shop.tsx`'s `validateSearch` omits survive raw. `/shop?page=abc` sends
+`page=abc` (422, retried 3×, no products), and `?category=hack` filters on it.
+
+### Required implementation
+
+Return rejected keys as explicit `undefined` (the pattern in
+`admin.products.tsx`); keep every valid param unchanged.
+
+### Verification
+
+Browser: junk params → canonical URL and a valid request; existing shop filters
+unaffected.
+
+---
+
+## F5.12 — Cart provider loads the whole catalogue on every route
+
+* **Layer:** Frontend
+* **Status:** TODO
+* **Priority:** P2
+* **Batch:** D
+* **Dependencies:** none (related to `F5.8`)
+* **Discovered as:** `NEW-ABFE05-3` during `AB-FE-05` — legacy discovery ID only.
+* **Source:** `frontend-tasks.md` F5.12
+
+### Problem
+
+`CartProvider` in `__root.tsx` runs `catalogQuery` (every product,
+`include_inactive=true`) on every page, admin pages included, to price and
+stock-check the cart. It fires 1× on `/admin/products` and 1× on `/admin/orders`
+alike.
+
+### Required implementation
+
+Load only what the cart needs (its product ids) or defer until the cart is used,
+without changing cart money/stock rules (the backend stays authoritative at
+checkout).
+
+### Verification
+
+Network inspection on storefront and admin routes; cart, checkout and
+stock-issue flows re-tested.
+
+---
+
 # 8. Explicitly not executable
 
 ## B4.8 — Product model dimension
@@ -2152,7 +2312,7 @@ However, `AB-FE-02` and `AB-FE-05` should not modify
 F5.5   (DONE 2026-09-22)
 F5.6   (DONE 2026-09-22)
 AB-FE-02 (DONE 2026-09-22)
-AB-FE-05
+AB-FE-05 (DONE 2026-09-22)
 F5.9
 ```
 
@@ -2171,6 +2331,7 @@ AB-BE-02
 B5.1c
 B5.4a
 B2.2b
+B5.4b
 ```
 
 `AB-BE-01` begins after `B6.8`.
@@ -2186,6 +2347,8 @@ AB-FE-01
 AB-FE-04
 F3.5b
 F5.10
+F5.11
+F5.12
 ```
 
 These can mostly run in parallel because they touch different concerns.
@@ -2246,12 +2409,13 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**28** (6 completed: B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02; 7 added by
-discovery: NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10, B2.2b)
+**30** (7 completed: B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02, AB-FE-05;
+10 added by discovery: NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10, B2.2b,
+B5.4b, F5.11, F5.12)
 
 ### Ready for execution
 
-**28**
+**30**
 
 ### Blocked
 
@@ -2287,12 +2451,12 @@ D1–D9 are resolved.
 | Priority  | Remaining |
 | --------- | --------: |
 | P0        |         0 |
-| P1        |         4 |
-| P2        |        14 |
-| P3        |        10 |
-| **Total** |    **28** |
+| P1        |         3 |
+| P2        |        16 |
+| P3        |        11 |
+| **Total** |    **30** |
 
-Recomputed from the JSON index on 2026-09-22 (AB-FE-02 session).
+Recomputed from the JSON index on 2026-09-22 (AB-FE-05 session).
 
 Priority is execution guidance, not permission to rewrite requirements.
 
@@ -2406,21 +2570,25 @@ were freshly executed.
 ## START HERE
 
 ```text
-AB-FE-05
+B3.11
 ```
 
 Batch A (`B6.8`, `B6.9`, `AB-BE-03`) is complete — audits
 [B6.8](audit/2026-09-22-b68-variant-stock-restore.md),
 [B6.9](audit/2026-09-22-b69-refund-exception-handling.md),
-[AB-BE-03](audit/2026-09-22-abbe03-coupon-max-discount-cap.md) — and so are
+[AB-BE-03](audit/2026-09-22-abbe03-coupon-max-discount-cap.md) — and so is every P1 in Batch B:
 `F5.5` ([audit](audit/2026-09-22-f55-audit-log-viewer.md)), `F5.6`
-([audit](audit/2026-09-22-f56-role-management-ui.md)) and `AB-FE-02`
-([audit](audit/2026-09-22-abfe02-admin-export-controls.md)). `AB-FE-05` (admin
-products server pagination) is the highest-priority open task: P1, Batch B, no
-dependencies, next in the index after AB-FE-02. The `admin.products.tsx`
-collision with AB-FE-02 is cleared.
+([audit](audit/2026-09-22-f56-role-management-ui.md)), `AB-FE-02`
+([audit](audit/2026-09-22-abfe02-admin-export-controls.md)) and `AB-FE-05`
+([audit](audit/2026-09-22-abfe05-admin-products-pagination.md)). Batch B keeps
+only `F5.9` (P2).
 
-After `AB-FE-05` is completed:
+`B3.11` (contact-form spam guard) is the highest-priority open task: the first of
+the three remaining P1s in index order, Batch F, no task dependencies. Its product
+decision is D1 (resolved). It is backend + DB work: Rules 11–14 apply, including a
+clean-environment run if it touches DDL.
+
+After `B3.11` is completed:
 
 1. update this pointer;
 2. update the task status;
@@ -2524,14 +2692,16 @@ Reconciliation date:
 Current state:
 
 ```text
-28 remaining implementation units
-  (21 of the original 27, plus NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10
-   and B2.2b — the last five discovered as NEW-ABBE03-1, NEW-F55-1, NEW-F56-1,
-   NEW-F56-2 and NEW-ABFE02-1 — found during them)
-6 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02)
+30 remaining implementation units
+  (20 of the original 27, plus NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10,
+   B2.2b, B5.4b, F5.11 and F5.12 — the last eight discovered as NEW-ABBE03-1,
+   NEW-F55-1, NEW-F56-1, NEW-F56-2, NEW-ABFE02-1 and NEW-ABFE05-1/2/3 — found
+   during them)
+7 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02,
+  AB-FE-05)
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = AB-FE-05
+NEXT = B3.11
 ```

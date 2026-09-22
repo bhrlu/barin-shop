@@ -390,6 +390,25 @@ conflict (DESIGN_SYSTEM.md §5).
   backend now exposes `Content-Disposition` via CORS. Loading, validation and
   Persian error states. Browser tested.
   → audit: [2026-09-22-abfe02-admin-export-controls.md](audit/2026-09-22-abfe02-admin-export-controls.md)
+- [x] **AB-FE-05 Admin products server pagination** (from `[FE-04]`, completes
+  F2.5) — `/admin/products` no longer renders the whole `useCatalog()` list. It
+  reads 20-row pages of `GET /products?include_inactive=true` under its own
+  `["admin-products"]` key, with URL-driven `?page=&category=&availability=`
+  (filters survive paging; any filter change resets the page), the server total,
+  the shared `Pager`, skeleton/error/empty states, and an out-of-range page →
+  last page. Save, delete and variant changes invalidate it. Browser tested.
+  → audit: [2026-09-22-abfe05-admin-products-pagination.md](audit/2026-09-22-abfe05-admin-products-pagination.md)
+- [ ] **F5.11 `/shop` leaks invalid URL params to the API** (`NEW-ABFE05-2`,
+  discovered during AB-FE-05) — TanStack Router merges a route's validated search
+  over the parent's raw one, so keys `validateSearch` *omits* survive raw:
+  `/shop?page=abc` sends `page=abc` (422, retried 3×, no products) and
+  `?category=hack` filters on it. Return rejected keys as explicit `undefined`
+  (the AB-FE-05 fix in `admin.products.tsx`).
+- [ ] **F5.12 Cart provider loads the whole catalogue on every route**
+  (`NEW-ABFE05-3`, discovered during AB-FE-05) — `CartProvider` in `__root.tsx`
+  runs `catalogQuery` (all products, `include_inactive=true`) on every page, admin
+  pages included, to price and stock-check the cart. Fetch only the cart's products
+  (or defer until the cart is used). Related to F5.8 but broader.
 
 ## Rules reminder
 

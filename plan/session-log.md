@@ -1924,3 +1924,59 @@ filename into `_`, so the saved name uses a space instead.
 
 **Next backlog pointer** — `AB-FE-05` (admin products server pagination); the
 `admin.products.tsx` collision with AB-FE-02 is cleared.
+
+## 2026-09-22 — AB-FE-05 admin products server pagination
+
+**AB-FE-05 — done.** `/admin/products` no longer renders the whole
+`useCatalog()` list:
+- It reads 20-row pages of `GET /products?include_inactive=true` under its own
+  `["admin-products"]` key. The shared `["catalog"]` stays for the storefront.
+- Page, category and availability live in the URL. Filters survive paging, and
+  any filter change resets the page.
+- Server total in the heading, the shared `Pager`, and `keepPreviousData` so a
+  page change dims the old rows instead of blanking.
+- Skeleton, error + retry, and filtered/unfiltered empty states. An out-of-range
+  page moves to the last page (only once real data is known).
+- Product save/delete and `VariantEditor` invalidate the new key.
+
+**Router bug fixed on this route** — TanStack Router merges a route's validated
+search over the parent's raw search, so keys that `validateSearch` omits leak
+through (`?page=abc` reached the API). Rejected keys are now returned as explicit
+`undefined`. `/shop` has the same leak (F5.11).
+
+**Verification**
+- Frontend: tsc clean; lint 0 errors; build OK.
+- Backend (untouched): pytest 72, ruff clean, `api_smoke.py` 196/0.
+- Headless Chromium over 25 throwaway fixture products (45 total, 3 pages): 36/36,
+  run twice. The fixtures were deleted and the catalogue is back to 20.
+- F5.5 / F5.6 / AB-FE-02 suites re-run: 35/35, 40/40, 45/45.
+- Level: *browser tested*.
+- Earlier runs had timing failures (the script read placeholder rows), fixed by
+  waiting for the response and for `aria-busy` to clear. One hollow `|| true`
+  assertion in my script was replaced by a real check before the passing runs.
+
+**What was explicitly NOT done**
+- No text search: `GET /products` has no `q`.
+- Remaining whole-catalogue fetch: `CartProvider` in `__root.tsx` fetches the
+  catalogue on every route (1× on `/admin/products`, 1× on `/admin/orders`).
+  Recorded as `F5.12` (P2).
+- `B5.4b` (P2, backend): `include_inactive` is gated on `is_admin`, so
+  order_manager sees 39 of 44 rows and cannot re-activate products.
+- `F5.11` (P3): the `/shop` URL param leak.
+- Delete still has no confirmation.
+- Docs left untouched: `backend/README.md`, `infra/README.md`,
+  `vogue-vintage-vibes/README.md` and the spec.
+
+**Decisions taken**
+1. A separate `["admin-products"]` query instead of changing `catalogQuery`,
+   because six storefront and admin consumers depend on it.
+2. Category and availability were chosen as the page's filters because they are
+   the server-supported facets that matter to catalogue work.
+3. Page size 20, like the other admin lists.
+4. The `validateSearch` explicit-`undefined` rule was documented in
+   DESIGN_SYSTEM.md for future routes.
+
+→ audit: [2026-09-22-abfe05-admin-products-pagination.md](audit/2026-09-22-abfe05-admin-products-pagination.md)
+
+**Next backlog pointer** — `B3.11` (contact-form spam guard, P1, Batch F; backend +
+DB). Batch B is complete apart from F5.9 (P2).

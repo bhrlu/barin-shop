@@ -60,6 +60,7 @@ export function VariantEditor({ product }: { product: AdminProduct }) {
     void queryClient.invalidateQueries({ queryKey: ["admin-variants", product.id] });
     void queryClient.invalidateQueries({ queryKey: ["product", product.id, "variants"] });
     void queryClient.invalidateQueries({ queryKey: ["catalog"] });
+    void queryClient.invalidateQueries({ queryKey: ["admin-products"] });
     void queryClient.invalidateQueries({ queryKey: ["admin-inventory"] });
     void queryClient.invalidateQueries({ queryKey: ["admin-low-stock"] });
   };

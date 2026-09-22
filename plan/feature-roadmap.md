@@ -78,7 +78,7 @@ Unchecked items are not yet implemented.
 
 ## 8. Admin Panel
 - ✅ Dashboard, product management with image gallery, order management, user list
-- [x] Pagination on all growing lists (shop, orders, users, payments, messages, reviews) — **envelope API + shared Pager done (F2.5)**
+- [x] Pagination on all growing lists (shop, orders, users, payments, messages, reviews, admin products) — **envelope API + shared Pager done (F2.5); admin products moved off the full catalogue with URL-driven page + category/availability filters (AB-FE-05)**
 - [x] Daily/monthly sales reports with charts — **KPI endpoint + charts done (B5.2/F2.6)**
 - [x] Best-sellers, top customers, and inventory reports — **best-sellers + daily/monthly report endpoint done (B2.2 `/admin/export/report`), shown as the «گزارش فروش همین بازه» panel on `/admin/orders` (AB-FE-02); top customers & inventory report UI still open**
 - [x] Excel/CSV export of orders — **done (B2.2: `/admin/export/orders.{csv,xlsx}` + products exports, StaffOrders guard); UI on `/admin/orders` (date range + status) and `/admin/products` (AB-FE-02)**

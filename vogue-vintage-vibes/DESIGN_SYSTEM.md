@@ -302,7 +302,13 @@ Merged from the repo and spec B1 (global invariants); both are binding.
 - **Shop filters live in the URL.** `shop.tsx` reads every filter/sort from
   `validateSearch` and links to the next state (helper `clean()` drops empty
   values), so filters are shareable and the list is filtered by the backend — never
-  re-filter `useCatalog()` client-side.
+  re-filter `useCatalog()` client-side. `/admin/products` does the same for
+  `page`/`category`/`availability` (AB-FE-05).
+- **`validateSearch` must return rejected keys as `undefined`, not omit them.**
+  TanStack Router merges a route's validated search over the parent's raw search
+  (the root has no validator), so an omitted key survives raw (`?page=abc` reached
+  the API as `page=abc`). See `admin.products.tsx`; `/shop` still omits keys
+  (F5.11).
 - **Client-side lists:** cart (`sandeh-cart-v1`) and compare
   (`sandeh-compare-v1`, cap 4) are localStorage providers in `@/lib` wrapped around
   the app in `__root.tsx`; use their hooks (`useCart`, `useCompare`) rather than
