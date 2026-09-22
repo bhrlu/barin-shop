@@ -317,8 +317,9 @@ conflict (DESIGN_SYSTEM.md §5).
 - [ ] **F4.3 Reusable admin data grid** (`[FE-02]`) — search, filter chips, sort,
   pagination, bulk actions, copy-to-clipboard for tracking codes/phones. Needs a
   **decision to install `@tanstack/react-table`**; overlaps F2.5 (pagination).
-  When built, its toolbar should host the export buttons for the new
-  `/admin/export/*.{csv,xlsx}` endpoints (B2.2).
+  The export buttons for `/admin/export/*.{csv,xlsx}` (B2.2) shipped on their
+  own in AB-FE-02 (`components/admin/ExportControls.tsx`); when the grid is
+  built, its toolbar can host them.
 - [x] **F4.4 Order detail drawer + invoice printing** (`[FE-05]`) — `Sheet` with the
   fulfilment stepper, customer address box with copy, itemised breakdown, postal
   tracking input (F2.8) and a `@media print` A4/A5 invoice (no print stylesheet
@@ -380,6 +381,15 @@ conflict (DESIGN_SYSTEM.md §5).
   access" notice, but the sidebar still lists داشبورد / پیام‌ها / نظرات because
   `admin.tsx` falls back to `ROLE_TAB_KEYS["support"]` for any unknown role. No
   data leaks (every call is gated), but the nav should be empty for non-staff.
+- [x] **AB-FE-02 Admin export controls** (`[FE-02]` export + `[BE-08]`, from the
+  Master Backlog) — B2.2's exports had no UI. `/admin/orders` now has a panel:
+  inclusive local date range + order status → «خروجی CSV» / «خروجی Excel», plus a
+  collapsible sales report (best-sellers, daily). `/admin/products` has catalog
+  CSV/Excel buttons. Files are authenticated blob downloads through
+  `api.ts::requestFile()` and keep the server's RFC-6266 Persian filename; the
+  backend now exposes `Content-Disposition` via CORS. Loading, validation and
+  Persian error states. Browser tested.
+  → audit: [2026-09-22-abfe02-admin-export-controls.md](audit/2026-09-22-abfe02-admin-export-controls.md)
 
 ## Rules reminder
 

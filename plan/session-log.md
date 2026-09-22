@@ -1865,3 +1865,62 @@ The F5.5 audit carries a note.
 
 **Next backlog pointer** — `AB-FE-02` (admin export controls; don't run it in
 parallel with AB-FE-05 because both edit `admin.products.tsx`).
+
+## 2026-09-22 — AB-FE-02 admin export controls
+
+**AB-FE-02 — done.** B2.2's exports now have a UI:
+- `/admin/orders` has an export panel. Pick a local date range (both days
+  inclusive, default the last 30 days) and an order status, then «خروجی CSV» /
+  «خروجی Excel». A Jalali preview shows the chosen range, and a collapsible
+  «گزارش فروش همین بازه» shows best-sellers and daily rows from
+  `/admin/export/report`.
+- `/admin/products` has catalog CSV/Excel buttons.
+- Files download through a new `api.ts::requestFile()`: bearer token, the same
+  `ApiError`, and the server's RFC-6266 Persian filename. It shares
+  `authHeaders` / `parseBody` / `apiError`, which were extracted from `request()`
+  without changing its behaviour.
+- New component `components/admin/ExportControls.tsx`.
+- One backend line: CORS `expose_headers=["Content-Disposition"]`. The browser
+  cannot read the filename cross-origin otherwise. Covered by the new
+  `tests/test_cors_expose.py`.
+
+**Contract quirks handled in the UI** — `to` is exclusive and `parse_range` drops
+any UTC offset, so `exportRange()` sends local midnight of `from` and of the day
+after `to` as offset-less UTC. Chromium turns the Persian ZWNJ in the server
+filename into `_`, so the saved name uses a space instead.
+
+**Verification**
+- Backend: pytest 72 passed against the live DB (2 new tests; the positive one
+  fails without the change); ruff clean; `api_smoke.py` 196/0.
+- Frontend: tsc clean; lint 0 errors; build OK.
+- Headless Chromium in Asia/Tehran with real downloads: 45/45 (run twice). The
+  first run was 44/45 because of the ZWNJ, fixed as above.
+- F5.5 and F5.6 suites re-run 35/35 and 40/40 through the refactored `request()`.
+- Level: *browser tested*. No clean-environment run: this is a middleware
+  argument, not infra/DDL/seed/env config.
+
+**What was explicitly NOT done**
+- `B2.2b` (discovered as `NEW-ABFE02-1`, P3), recorded and not fixed:
+  `parse_range` offset handling, a CSV UTF-8 BOM for Excel, and the English 422
+  detail.
+- No Jalali date picker (dependency decision); native inputs plus a Jalali
+  preview.
+- Report buckets stay UTC days / Gregorian months as the backend returns them.
+- Not touched: AB-FE-05, F4.3, F5.9, F5.10.
+- Docs left untouched: `infra/README.md`, `vogue-vintage-vibes/README.md` and
+  the spec.
+
+**Decisions taken**
+1. The backend CORS change was allowed because the existing contract could not
+   meet the "honour the RFC-6266 filename" acceptance criterion cross-origin.
+2. The capability guard relies on the backend plus the existing role-gated tabs.
+   `/admin/orders` and `/admin/products` are granted to exactly the `orders`
+   capability roles, so no third copy of the role matrix was added.
+3. The report only displays backend figures; the frontend sums nothing.
+4. The stale FEATURES.md rows ۶.۱۲ and ۶.۱۵ (no reports / no Excel) were
+   corrected.
+
+→ audit: [2026-09-22-abfe02-admin-export-controls.md](audit/2026-09-22-abfe02-admin-export-controls.md)
+
+**Next backlog pointer** — `AB-FE-05` (admin products server pagination); the
+`admin.products.tsx` collision with AB-FE-02 is cleared.

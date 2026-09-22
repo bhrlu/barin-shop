@@ -181,6 +181,7 @@ Per the comment at the top of `styles.css`:
 | `CompareBar.tsx` | Sticky bar above the footer showing the comparison basket (count, clear, link to `/compare`); hidden while empty. Rendered once from `__root.tsx`. |
 | `CancelOrderButton.tsx` | Mutation calling `api.cancelOrder`. |
 | `admin/ProductImageManager.tsx` | Upload (`api.uploadImage`) + URL entry + reorder + primary-image badge. |
+| `admin/ExportControls.tsx` | AB-FE-02: `OrdersExportPanel` (local date range + status → CSV/Excel, Jalali range preview, collapsible sales report) and `ProductsExportButtons`. Downloads go through `api.adminExport*` → `requestFile()` (bearer token, RFC-6266 filename, ZWNJ → space for Chromium); one download at a time, Persian inline errors. |
 | `admin/VariantEditor.tsx` | Per-product size × colour stock CRUD (`/products/{id}/variants`, `/variants/{id}`): datalist-backed size/colour inputs, per-row save (never on-blur) and delete; invalidates the admin list, the storefront variant query, the catalog and the inventory queries. |
 | `product/VariantPicker.tsx` | Size × colour selection with per-combination availability (disabled sold-out/deactivated combos, disabled colours) and an `aria-live` stock line. Uses `@/lib/variants` — never re-implement the rule. |
 | `product/ReviewsSection.tsx` | Rating summary + 1–5 distribution, review list (seller replies, Jalali dates), star-input write/edit form; one review per customer per product (backend upserts). |

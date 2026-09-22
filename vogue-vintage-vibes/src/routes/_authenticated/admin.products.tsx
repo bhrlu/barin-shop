@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ProductImageManager } from "@/components/admin/ProductImageManager";
 import { VariantEditor } from "@/components/admin/VariantEditor";
+import { ProductsExportButtons } from "@/components/admin/ExportControls";
 
 export const Route = createFileRoute("/_authenticated/admin/products")({
   component: AdminProducts,
@@ -178,11 +179,14 @@ function AdminProducts() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg">فهرست محصولات {all.length ? `(${toFa(all.length)})` : ""}</h2>
-        <Button onClick={() => setForm(emptyForm)} className="gap-2">
-          <Plus className="size-4" /> محصول جدید
-        </Button>
+        <div className="flex flex-wrap items-start gap-2">
+          <ProductsExportButtons />
+          <Button onClick={() => setForm(emptyForm)} className="gap-2">
+            <Plus className="size-4" /> محصول جدید
+          </Button>
+        </div>
       </div>
 
       {form && (

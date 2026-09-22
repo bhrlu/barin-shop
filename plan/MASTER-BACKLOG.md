@@ -446,6 +446,8 @@ B2.1
 `admin.products.tsx`.
 
 Execute them sequentially unless file ownership is explicitly separated.
+`AB-FE-02` is DONE (2026-09-22) — it only added the export buttons to the page
+header (`ProductsExportButtons`), so `AB-FE-05` is free to proceed.
 
 ---
 
@@ -474,7 +476,7 @@ Execute them sequentially unless file ownership is explicitly separated.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "AB-FE-02",
+    "agent_start_task": "AB-FE-05",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -560,13 +562,16 @@ Execute them sequentially unless file ownership is explicitly separated.
       "id": "AB-FE-02",
       "title": "Admin export controls",
       "priority": "P1",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "frontend",
       "depends_on": [],
       "blocks": [],
       "batch": "B",
       "source": "ADMIN-FRONTEND_TASKS.md plus audit-derived task",
-      "scope": "Expose existing order/product CSV/XLSX/report exports with correct download handling, filters, loading/error states, and capability guards."
+      "scope": "Expose existing order/product CSV/XLSX/report exports with correct download handling, filters, loading/error states, and capability guards.",
+      "audit": "plan/audit/2026-09-22-abfe02-admin-export-controls.md",
+      "verification_level": "browser tested",
+      "completed": "2026-09-22"
     },
     {
       "id": "AB-FE-05",
@@ -899,6 +904,20 @@ Execute them sequentially unless file ownership is explicitly separated.
       "discovered_as": "NEW-F56-2",
       "discovered_during": "F5.6",
       "scope": "admin.tsx falls back to ROLE_TAB_KEYS[\"support\"] for unknown roles, so a customer on /admin/* sees dashboard/messages/reviews tabs next to the no-access notice; render no tabs for non-staff roles."
+    },
+    {
+      "id": "B2.2b",
+      "title": "Export date/encoding correctness",
+      "priority": "P3",
+      "status": "TODO",
+      "layer": "backend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "C",
+      "source": "backend-tasks.md",
+      "discovered_as": "NEW-ABFE02-1",
+      "discovered_during": "AB-FE-02",
+      "scope": "services/exports.py::parse_range must honour a supplied UTC offset (astimezone, naive stays UTC); add a UTF-8 BOM to the CSV exports for Excel; Persian 422 detail for bad dates; pytest for the offset case."
     }
   ],
   "excluded": [
@@ -919,13 +938,13 @@ Execute them sequentially unless file ownership is explicitly separated.
     }
   ],
   "counts": {
-    "total_executable": 33,
-    "done": 5,
+    "total_executable": 34,
+    "done": 6,
     "open": 28,
     "P0": 0,
-    "P1": 5,
+    "P1": 4,
     "P2": 14,
-    "P3": 9,
+    "P3": 10,
     "blocked": 0,
     "dropped": 2,
     "obsolete": 1,
@@ -1183,9 +1202,28 @@ Frontend checks + direct URL authorization scenarios.
 
 ## AB-FE-02 — Admin export controls
 
-* **Layer:** Frontend
-* **Status:** TODO
+* **Layer:** Frontend (+ one backend CORS line)
+* **Status:** DONE (2026-09-22)
 * **Dependencies:** none
+* **Audit:** [`plan/audit/2026-09-22-abfe02-admin-export-controls.md`](audit/2026-09-22-abfe02-admin-export-controls.md)
+* **Verification level:** browser tested (45/45 headless-Chromium checks with
+  real download events in `Asia/Tehran`: authority matrix, page guards,
+  filename, file contents = direct API, inclusive local-day bounds, status
+  filter, xlsx `PK`, loading + no double request, validation, 403/422/500/network
+  errors, report parity + empty/error, fallback filename, 375 px; pytest 72
+  passed incl. 2 new CORS tests, ruff clean, `api_smoke.py` 196/0, tsc/lint/build;
+  F5.5/F5.6 suites re-run green through the refactored `request()`)
+* **Delivered:**
+  * `/admin/orders` panel: inclusive local date range + status → CSV/Excel,
+    Jalali range preview, collapsible sales report from `/admin/export/report`.
+  * `/admin/products` catalog CSV/Excel buttons.
+  * `api.ts::requestFile()` (bearer token, RFC-6266 filename) sharing the token and
+    error helpers extracted from `request()`, plus `exportRange()`, which sends
+    local midnights as naive UTC with an exclusive `to`.
+  * Backend: `expose_headers=["Content-Disposition"]` on CORS (the cross-origin
+    download could not read the filename otherwise) + `tests/test_cors_expose.py`.
+* **Discovered:** `B2.2b` (was `NEW-ABFE02-1`) — `parse_range` drops a supplied UTC
+  offset; CSV lacks a UTF-8 BOM; English 422 detail.
 
 ### Existing backend endpoints
 
@@ -1962,6 +2000,43 @@ Typecheck + lint + build; browser check as customer and as each staff role.
 
 ---
 
+## B2.2b — Export date/encoding correctness
+
+* **Layer:** Backend
+* **Status:** TODO
+* **Priority:** P3
+* **Batch:** C
+* **Dependencies:** none
+* **Discovered as:** `NEW-ABFE02-1` during `AB-FE-02` — legacy discovery ID only;
+  `B2.2b` is the executable ID.
+* **Source:** `backend-tasks.md` B2.2b
+
+### Problem
+
+* `services/exports.py::parse_range` calls `.replace(tzinfo=UTC)`, so an explicit
+  offset is dropped: `from=2026-09-22T00:00:00+03:30` is read as UTC midnight.
+* CSV exports have no UTF-8 BOM, so Excel may garble Persian text when the `.csv`
+  is opened directly.
+* A bad date returns an English 422 detail.
+
+The AB-FE-02 UI already sends offset-less UTC bounds and validates dates, so it is
+unaffected.
+
+### Required implementation
+
+* Convert aware inputs with `astimezone(UTC)`; keep naive input as UTC (the UI's
+  format).
+* Prefix CSV bodies with a BOM.
+* Persian 422 detail.
+* Keep the exclusive `to` and every other contract detail.
+
+### Verification
+
+pytest for naive/offset/inverted ranges and the BOM; `api_smoke.py`; re-run the
+AB-FE-02 browser flow.
+
+---
+
 # 8. Explicitly not executable
 
 ## B4.8 — Product model dimension
@@ -2076,7 +2151,7 @@ However, `AB-FE-02` and `AB-FE-05` should not modify
 ```text
 F5.5   (DONE 2026-09-22)
 F5.6   (DONE 2026-09-22)
-AB-FE-02
+AB-FE-02 (DONE 2026-09-22)
 AB-FE-05
 F5.9
 ```
@@ -2095,6 +2170,7 @@ AB-BE-01
 AB-BE-02
 B5.1c
 B5.4a
+B2.2b
 ```
 
 `AB-BE-01` begins after `B6.8`.
@@ -2170,8 +2246,8 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**28** (5 completed: B6.8, B6.9, AB-BE-03, F5.5, F5.6; 6 added by discovery:
-NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10)
+**28** (6 completed: B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02; 7 added by
+discovery: NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10, B2.2b)
 
 ### Ready for execution
 
@@ -2211,12 +2287,12 @@ D1–D9 are resolved.
 | Priority  | Remaining |
 | --------- | --------: |
 | P0        |         0 |
-| P1        |         5 |
+| P1        |         4 |
 | P2        |        14 |
-| P3        |         9 |
+| P3        |        10 |
 | **Total** |    **28** |
 
-Recomputed from the JSON index on 2026-09-22 (F5.6 session).
+Recomputed from the JSON index on 2026-09-22 (AB-FE-02 session).
 
 Priority is execution guidance, not permission to rewrite requirements.
 
@@ -2330,20 +2406,21 @@ were freshly executed.
 ## START HERE
 
 ```text
-AB-FE-02
+AB-FE-05
 ```
 
 Batch A (`B6.8`, `B6.9`, `AB-BE-03`) is complete — audits
 [B6.8](audit/2026-09-22-b68-variant-stock-restore.md),
 [B6.9](audit/2026-09-22-b69-refund-exception-handling.md),
 [AB-BE-03](audit/2026-09-22-abbe03-coupon-max-discount-cap.md) — and so are
-`F5.5` ([audit](audit/2026-09-22-f55-audit-log-viewer.md)) and `F5.6`
-([audit](audit/2026-09-22-f56-role-management-ui.md)). `AB-FE-02` (admin export
-controls) is the highest-priority open task: P1, Batch B, no dependencies, next
-in the index after F5.6. It edits `admin.products.tsx`, so do not run it in
-parallel with `AB-FE-05`.
+`F5.5` ([audit](audit/2026-09-22-f55-audit-log-viewer.md)), `F5.6`
+([audit](audit/2026-09-22-f56-role-management-ui.md)) and `AB-FE-02`
+([audit](audit/2026-09-22-abfe02-admin-export-controls.md)). `AB-FE-05` (admin
+products server pagination) is the highest-priority open task: P1, Batch B, no
+dependencies, next in the index after AB-FE-02. The `admin.products.tsx`
+collision with AB-FE-02 is cleared.
 
-After `AB-FE-02` is completed:
+After `AB-FE-05` is completed:
 
 1. update this pointer;
 2. update the task status;
@@ -2448,13 +2525,13 @@ Current state:
 
 ```text
 28 remaining implementation units
-  (22 of the original 27, plus NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a and
-   F5.10 — the last four discovered as NEW-ABBE03-1, NEW-F55-1, NEW-F56-1 and
-   NEW-F56-2 — found during them)
-5 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5, F5.6)
+  (21 of the original 27, plus NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10
+   and B2.2b — the last five discovered as NEW-ABBE03-1, NEW-F55-1, NEW-F56-1,
+   NEW-F56-2 and NEW-ABFE02-1 — found during them)
+6 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02)
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = AB-FE-02
+NEXT = AB-FE-05
 ```

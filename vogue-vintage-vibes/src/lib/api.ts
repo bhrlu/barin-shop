@@ -56,11 +56,36 @@ function messageFrom(detail: unknown, fallback: string): string {
   return fallback;
 }
 
-async function request<T>(path: string, init?: RequestInit & { json?: unknown }): Promise<T> {
-  const { json, body: rawBody, ...rest } = init ?? {};
-  const headers = new Headers(rest.headers);
+/** Headers with the stored bearer token attached (every backend call). */
+function authHeaders(init?: HeadersInit): Headers {
+  const headers = new Headers(init);
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  return headers;
+}
+
+/** Response text → JSON when it parses, the raw string otherwise, null when empty. */
+function parseBody(text: string): unknown {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+/** The error every failed backend call throws: FastAPI's `detail`, else the body. */
+function apiError(status: number, data: unknown): ApiError {
+  const detail =
+    data && typeof data === "object" && "detail" in data
+      ? (data as { detail: unknown }).detail
+      : data;
+  return new ApiError(status, messageFrom(detail, `خطای سرور (${status})`), detail);
+}
+
+async function request<T>(path: string, init?: RequestInit & { json?: unknown }): Promise<T> {
+  const { json, body: rawBody, ...rest } = init ?? {};
+  const headers = authHeaders(rest.headers);
   let body = rawBody;
   if (json !== undefined) {
     headers.set("Content-Type", "application/json");
@@ -70,23 +95,36 @@ async function request<T>(path: string, init?: RequestInit & { json?: unknown })
   if (body !== undefined) finalInit.body = body;
   const res = await fetch(`${API_URL}${path}`, finalInit);
   if (res.status === 204) return undefined as T;
-  let data: unknown = null;
-  const text = await res.text();
-  if (text) {
+  const data = parseBody(await res.text());
+  if (!res.ok) throw apiError(res.status, data);
+  return data as T;
+}
+
+/** A downloaded file: the body plus the name the server chose (null if none). */
+export type DownloadedFile = { blob: Blob; filename: string | null };
+
+/** RFC 6266 filename: the UTF-8 `filename*` when present, else `filename`. */
+function filenameFrom(disposition: string | null): string | null {
+  if (!disposition) return null;
+  const extended = /filename\*\s*=\s*[^']*'[^']*'([^;]+)/i.exec(disposition);
+  if (extended?.[1]) {
     try {
-      data = JSON.parse(text);
+      return decodeURIComponent(extended[1].trim());
     } catch {
-      data = text;
+      /* malformed escape — fall back to the plain name */
     }
   }
-  if (!res.ok) {
-    const detail =
-      data && typeof data === "object" && "detail" in data
-        ? (data as { detail: unknown }).detail
-        : data;
-    throw new ApiError(res.status, messageFrom(detail, `خطای سرور (${res.status})`), detail);
-  }
-  return data as T;
+  const plain = /filename\s*=\s*(?:"([^"]+)"|([^;]+))/i.exec(disposition);
+  return (plain?.[1] ?? plain?.[2])?.trim() || null;
+}
+
+/** GET a file (AB-FE-02): same bearer token and `ApiError` as `request()`, but
+ * the body comes back as a Blob. The backend must expose `Content-Disposition`
+ * via CORS for the filename to be readable cross-origin. */
+async function requestFile(path: string): Promise<DownloadedFile> {
+  const res = await fetch(`${API_URL}${path}`, { headers: authHeaders() });
+  if (!res.ok) throw apiError(res.status, parseBody(await res.text()));
+  return { blob: await res.blob(), filename: filenameFrom(res.headers.get("Content-Disposition")) };
 }
 
 // ---------------------------------------------------------------------------
@@ -439,6 +477,47 @@ export type AdminStats = {
   }[];
 };
 
+export type ExportFormat = "csv" | "xlsx";
+
+/** Bounds for `/admin/export/*`, already in the backend's wire format — build
+ * them with `exportRange()`. Omitted bounds default server-side to 30 days. */
+export type ExportRange = { from?: string; to?: string };
+
+/** `GET /admin/export/report` (B2.2). Buckets are UTC days/months; `orders`
+ * counts every order, `revenue` excludes cancelled ones; best-sellers exclude
+ * cancelled orders and are capped at 10. */
+export type SalesReport = {
+  from: string;
+  to: string;
+  daily: { day: string; orders: number; revenue: number }[];
+  monthly: { month: string; orders: number; revenue: number }[];
+  bestSellers: { productId: string | null; name: string; units: number; revenue: number }[];
+};
+
+/**
+ * Turn an inclusive local calendar range (`YYYY-MM-DD` from `<input type=date>`)
+ * into `/admin/export/*` bounds. The backend reads `from`/`to` as UTC wall-clock
+ * time (it drops any offset, B2.2b) and treats `to` as exclusive, so send local
+ * midnight of `fromDate` and local midnight of the day *after* `toDate`, both as
+ * offset-less UTC ISO strings.
+ */
+export function exportRange(fromDate: string, toDate: string): ExportRange {
+  const localMidnight = (ymd: string, addDays = 0) => {
+    const [year = 1970, month = 1, day = 1] = ymd.split("-").map(Number);
+    return new Date(year, month - 1, day + addDays);
+  };
+  const naiveUtc = (date: Date) => date.toISOString().slice(0, 19);
+  return { from: naiveUtc(localMidnight(fromDate)), to: naiveUtc(localMidnight(toDate, 1)) };
+}
+
+function exportQuery(range: ExportRange, status?: string): string {
+  const qs = new URLSearchParams();
+  if (range.from) qs.set("from", range.from);
+  if (range.to) qs.set("to", range.to);
+  if (status) qs.set("status", status);
+  return qs.toString() ? `?${qs}` : "";
+}
+
 /** Roles `PUT /admin/users/{id}/roles` may set (B5.4). The legacy `admin` and
  * `customer` rows are outside its reach and are never sent. */
 export type StaffRole = "super_admin" | "order_manager" | "support";
@@ -731,6 +810,13 @@ export const api = {
   ) => request<{ ok: boolean }>(`/coupons/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
   adminDeleteCoupon: (id: string) => request<void>(`/coupons/${id}`, { method: "DELETE" }),
   adminGenerateCouponCode: () => request<{ code: string }>("/coupons/generate", { method: "POST" }),
+
+  // --- admin exports & sales report (AB-FE-02 / B2.2) — `orders` capability ---
+  adminExportOrders: (format: ExportFormat, range: ExportRange = {}, status?: string) =>
+    requestFile(`/admin/export/orders.${format}${exportQuery(range, status)}`),
+  adminExportProducts: (format: ExportFormat) => requestFile(`/admin/export/products.${format}`),
+  adminSalesReport: (range: ExportRange = {}) =>
+    request<SalesReport>(`/admin/export/report${exportQuery(range)}`),
 
   // --- storage (MinIO) ---
   signStorage: (paths: string[]) =>

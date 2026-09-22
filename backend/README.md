@@ -139,6 +139,12 @@ returning bare arrays.** `/admin/audit-logs` uses `?limit=&offset=` instead
 | GET | `/admin/export/products.{csv\|xlsx}` | full catalog with stock/thresholds |
 | GET | `/admin/export/report?from=&to=` | daily/monthly revenue (cancelled excluded) + top-10 best-sellers JSON |
 
+Export notes (AB-FE-02): `from`/`to` are read as UTC wall-clock time (a supplied
+offset is currently dropped — B2.2b) and `to` is exclusive, so the admin UI
+sends local midnights as offset-less UTC ISO strings. CORS exposes
+`Content-Disposition` so the browser can read the RFC-6266 filename on a
+cross-origin download. UI: `/admin/orders` and `/admin/products`.
+
 ## Search model
 
 `GET /search` matches `ILIKE %q%` across name, description, material, category

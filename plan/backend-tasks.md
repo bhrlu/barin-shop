@@ -45,6 +45,14 @@ Legend: `[ ]` todo · `[x]` done (audit file required) · audit links in `plan/a
   → audit: [2026-09-22-b22-reports-exports.md](audit/2026-09-22-b22-reports-exports.md)
 - [ ] **B2.2a CSV product import** — bulk upsert from CSV; needs an overwrite/
   skip policy decision (idempotency key: product id vs name+category) before building
+- [ ] **B2.2b Export date/encoding correctness** (`NEW-ABFE02-1`, discovered during
+  AB-FE-02) — (1) `services/exports.py::parse_range` uses `.replace(tzinfo=UTC)`,
+  so `from=2026-09-22T00:00:00+03:30` is read as UTC midnight: honour the offset
+  (`astimezone(UTC)`, naive input stays UTC). (2) The CSV exports have no UTF-8
+  BOM, so Excel may garble Persian text when the file is double-clicked.
+  (3) A bad date returns an English 422 detail. The AB-FE-02 UI already sends
+  naive UTC bounds and validates dates, so it is unaffected. Add pytest
+  coverage for the offset case.
 - [ ] **B2.3 PDF invoices** — reportlab/weasyprint, Persian digits, per-order invoice endpoint
 - [x] **B2.4 Recommendation engine** — related products from co-purchase patterns
   Done (2026-09-22): `co_purchases` pair table (canonical pairs, DDL in startup)

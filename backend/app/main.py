@@ -61,6 +61,9 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # the admin export downloads (AB-FE-02) read the RFC-6266 filename; a
+    # cross-origin fetch only sees response headers that are exposed here
+    expose_headers=["Content-Disposition"],
 )
 
 app.include_router(health.router)

@@ -7,6 +7,7 @@ import { api, toPage, type Order } from "@/lib/api";
 import { formatToman, toFa } from "@/lib/format";
 import { ORDER_STATUS, PAYMENT_STATUS } from "@/lib/orders";
 import { OrderDetailDrawer } from "@/components/admin/OrderDetailDrawer";
+import { OrdersExportPanel } from "@/components/admin/ExportControls";
 import { Pager } from "@/components/Pager";
 
 /** Rows per page for the fulfilment list (F2.5). */
@@ -127,13 +128,17 @@ function AdminOrders() {
   const orders = data?.items ?? [];
   if (!orders.length)
     return (
-      <div className="rounded-3xl border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
-        سفارشی ثبت نشده است.
-      </div>
+      <>
+        <OrdersExportPanel className="mb-6" />
+        <div className="rounded-3xl border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
+          سفارشی ثبت نشده است.
+        </div>
+      </>
     );
 
   return (
     <>
+      <OrdersExportPanel className="mb-6" />
       <ul className="space-y-4">
         {orders.map((order) => {
           const address = order.shipping_address as Record<string, string> | null;

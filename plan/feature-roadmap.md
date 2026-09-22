@@ -80,8 +80,8 @@ Unchecked items are not yet implemented.
 - ✅ Dashboard, product management with image gallery, order management, user list
 - [x] Pagination on all growing lists (shop, orders, users, payments, messages, reviews) — **envelope API + shared Pager done (F2.5)**
 - [x] Daily/monthly sales reports with charts — **KPI endpoint + charts done (B5.2/F2.6)**
-- [x] Best-sellers, top customers, and inventory reports — **best-sellers + daily/monthly report endpoint done (B2.2 `/admin/export/report`); top customers & inventory report UI still open**
-- [x] Excel/CSV export of orders — **done (B2.2: `/admin/export/orders.{csv,xlsx}` + products exports, StaffOrders guard)**
+- [x] Best-sellers, top customers, and inventory reports — **best-sellers + daily/monthly report endpoint done (B2.2 `/admin/export/report`), shown as the «گزارش فروش همین بازه» panel on `/admin/orders` (AB-FE-02); top customers & inventory report UI still open**
+- [x] Excel/CSV export of orders — **done (B2.2: `/admin/export/orders.{csv,xlsx}` + products exports, StaffOrders guard); UI on `/admin/orders` (date range + status) and `/admin/products` (AB-FE-02)**
 - [x] Refund request management (approve/reject) — **done (F2.4/B5.3, with bank-tracking settlement)**
 - [x] Order detail drawer with fulfilment stepper + printable invoice — **done (F4.4: A4 print, app hidden while printing)**
 - [x] Review and discount-code management — **done (admin.reviews + F4.5 coupons manager with toggle/progress/delete)**
