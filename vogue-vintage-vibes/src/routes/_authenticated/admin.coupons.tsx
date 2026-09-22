@@ -249,9 +249,7 @@ function CouponDialog({
         min_subtotal: form.min_subtotal ? Number(form.min_subtotal) : 0,
         max_uses: form.max_uses ? Number(form.max_uses) : null,
         max_uses_per_user: form.max_uses_per_user ? Number(form.max_uses_per_user) : 1,
-        expires_at: form.expires_at
-          ? new Date(`${form.expires_at}T23:59:59`).toISOString()
-          : null,
+        expires_at: form.expires_at ? new Date(`${form.expires_at}T23:59:59`).toISOString() : null,
       };
       if (editing) {
         // PUT-like patch: everything except the code
@@ -279,9 +277,7 @@ function CouponDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>
-            {editing ? `ویرایش ${editing.code}` : "کد تخفیف جدید"}
-          </DialogTitle>
+          <DialogTitle>{editing ? `ویرایش ${editing.code}` : "کد تخفیف جدید"}</DialogTitle>
           <DialogDescription>
             درصد یا مبلغ ثابت را پر کنید — فقط یکی از آن‌ها اعمال می‌شود.
           </DialogDescription>

@@ -47,24 +47,27 @@ function AdminUsers() {
     <>
       <ul className="divide-y divide-border rounded-3xl border border-border">
         {users.map((user) => (
-        <li key={user.id} className="flex flex-wrap items-center justify-between gap-3 p-5 text-sm">
-          <div>
-            <p>{user.full_name ?? "بدون نام"}</p>
-            <p className="mt-1 text-xs text-muted-foreground" dir="ltr">
-              {user.phone ?? "—"} · {toFa(new Date(user.created_at).toLocaleDateString("fa-IR"))}
-            </p>
-          </div>
-          <div className="flex items-center gap-3 text-xs">
-            {user.roles.map((role) => (
-              <span key={role} className="rounded-full bg-sand px-3 py-1">
-                {ROLE_LABELS[role] ?? role}
-              </span>
-            ))}
-            <span>{toFa(user.order_count)} سفارش</span>
-            <span>{formatToman(user.spent)} تومان</span>
-          </div>
-        </li>
-      ))}
+          <li
+            key={user.id}
+            className="flex flex-wrap items-center justify-between gap-3 p-5 text-sm"
+          >
+            <div>
+              <p>{user.full_name ?? "بدون نام"}</p>
+              <p className="mt-1 text-xs text-muted-foreground" dir="ltr">
+                {user.phone ?? "—"} · {toFa(new Date(user.created_at).toLocaleDateString("fa-IR"))}
+              </p>
+            </div>
+            <div className="flex items-center gap-3 text-xs">
+              {user.roles.map((role) => (
+                <span key={role} className="rounded-full bg-sand px-3 py-1">
+                  {ROLE_LABELS[role] ?? role}
+                </span>
+              ))}
+              <span>{toFa(user.order_count)} سفارش</span>
+              <span>{formatToman(user.spent)} تومان</span>
+            </div>
+          </li>
+        ))}
       </ul>
       <Pager
         className="mt-6"

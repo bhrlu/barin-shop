@@ -40,8 +40,7 @@ function AdminReviews() {
 
   const reviews = useQuery({
     queryKey: ["admin-reviews", filter, page],
-    queryFn: () =>
-      toPage(api.adminReviews(filter === "" ? undefined : filter, page, PAGE_SIZE)),
+    queryFn: () => toPage(api.adminReviews(filter === "" ? undefined : filter, page, PAGE_SIZE)),
   });
 
   const refresh = (review?: Review) => {

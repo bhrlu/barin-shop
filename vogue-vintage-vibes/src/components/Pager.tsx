@@ -60,9 +60,7 @@ export function Pager({
           onClick={() => onChange(n)}
           aria-current={n === page ? "page" : undefined}
           className={`${btn} ${
-            n === page
-              ? "bg-terracotta text-white border-terracotta"
-              : "hover:bg-secondary"
+            n === page ? "bg-terracotta text-white border-terracotta" : "hover:bg-secondary"
           }`}
         >
           {faDigits(n)}
@@ -91,9 +89,7 @@ export function Pager({
         <ChevronLeft className="h-4 w-4" />
       </button>
       {total != null && (
-        <span className="text-sm text-muted-foreground mr-2">
-          {faDigits(total)} مورد
-        </span>
+        <span className="text-sm text-muted-foreground mr-2">{faDigits(total)} مورد</span>
       )}
     </nav>
   );

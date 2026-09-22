@@ -34,13 +34,7 @@ const LABELS: Record<string, string> = {
   ...REFUND_STATUS,
 };
 
-export function StatusBadge({
-  status,
-  className,
-}: {
-  status: string;
-  className?: string;
-}) {
+export function StatusBadge({ status, className }: { status: string; className?: string }) {
   const tone = TONES[STATUS_TONE[status] ?? "meta"];
   const label = LABELS[status] ?? status;
   return (

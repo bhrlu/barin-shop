@@ -215,7 +215,9 @@ function CatalogPage({ search }: { search: ShopSearch }) {
   const products = useQuery({
     queryKey: ["products", filters, search.page ?? 1],
     queryFn: async () => {
-      const page = toPage(await api.products({ ...filters, page: search.page ?? 1, page_size: 12 }));
+      const page = toPage(
+        await api.products({ ...filters, page: search.page ?? 1, page_size: 12 }),
+      );
       return { items: await toProducts(page.items), total: page.total, pages: page.pages };
     },
   });
