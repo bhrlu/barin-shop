@@ -1493,3 +1493,21 @@ recommendations 200). Live: `set-18|tshirt-4 votes=2`; recommendations for
 **Verification** — pytest 39 passed; ruff clean; `tests/api_smoke.py` 173 checks / 0 failed on a *first* run against a clean database (with and without mock data — it used to fail there); double-run of `seed_mock` is a no-op with unchanged counts; browser check as admin confirmed the dashboard KPIs/trend/donut, 33 order cards on `/admin/orders`, refund tabs at 3 pending / 2 settled / 5 all, and populated inventory, inbox, reviews and users screens, with no failed API calls and no page errors.
 
 **Decisions** — deterministic RNG over random data so demos are reproducible; a marker account as the idempotency guard rather than per-table counts; cancelled orders never take stock, matching the restore-on-cancel rule fixed earlier in the day.
+
+## Session 32 — 2026-09-22 — Agent guardrail rules (Rules 6–15)
+
+**Done**
+- Read `AGENTS.md`, `plan/RULES.md`, the dev spec, `backend/pyproject.toml`, `vogue-vintage-vibes/package.json`, `infra/docker-compose.yml`, `infra/initdb/`, the backend routers/services/tests, `src/lib/` and the 2026-09-22 full-stack audit before writing anything.
+- Split `plan/RULES.md` into **Part A — process rules (0–5, unchanged)** and **Part B — engineering rules (6–15, new)**, with a scope note exempting markdown-only tasks and a global stop condition ("if you cannot answer from the repo, inspect — do not guess").
+- New Rules: 6 reconnaissance + blast radius · 7 one canonical implementation (with a table of canonical homes: `app/auth.py`, `services/roles.py`, `services/pricing.py`, `services/order_lifecycle.py`, `services/payments.py`, `src/lib/api.ts`, …) · 8 contract-first across the boundary · 9 security before the happy path (multi-actor + direct-URL testing) · 10 statuses are state machines and repeats must be safe · 11 money/inventory invariants with a mandatory test · 12 minimal diff · 13 verify narrow→wide incl. error paths, never weaken validation · 14 clean-environment verification for infra/DB/seed/config · 15 document what actually happened, with named verification levels.
+- Each new rule is traced in the audit to a specific defect the 2026-09-22 full-stack audit found while Rules 0–5 were already in force.
+- `AGENTS.md` gained one concise always-loaded section (one bullet per rule, pointing at `plan/RULES.md`); `plan/README.md`'s short-rule list was extended to match.
+- Audit: [`plan/audit/2026-09-22-agent-guardrail-rules.md`](./audit/2026-09-22-agent-guardrail-rules.md).
+
+**Explicitly not done**
+- No application code, tests, infra files or `design/SANDE_FULL_DEV_SPEC.md` changed; no task checkbox ticked and no feature marked complete (user instruction).
+- No test/lint/Docker/browser run — a markdown-only change, and no verification beyond a documentation review is claimed.
+- The stale Part C backlog rows in the dev spec (refunds UI, coupons manager, order drawer) were left alone; the spec is the user's document.
+- READMEs, `FEATURES.md`, `feature-roadmap.md` and `DESIGN_SYSTEM.md` untouched — no endpoint, script, stack, feature or UI convention changed.
+
+**Decisions** — detail lives only in `plan/RULES.md`, `AGENTS.md` keeps a one-bullet-per-rule summary, so the always-loaded file stays short; the user's twenty proposed guardrails were merged down to ten rules (consumers→Rule 6, idempotency→Rule 10, direct-URL/API→Rule 9, dirty environments→Rule 14, fake tests / weakened validation / error paths→Rule 13, implemented-vs-verified→Rule 15) to avoid redundant rules; Rules 0–5 were kept verbatim and Rule 4's protected status strings and money rules are restated by Rules 10/11, never altered.

@@ -52,7 +52,12 @@ plan/
     ├── 2026-09-21-b61-state-machine-f45-coupons-manager.md
     ├── 2026-09-21-b51a-audit-ip-f41-status-badges.md
     ├── 2026-09-22-f25-pagination-everywhere.md
-    └── 2026-09-22-b22-reports-exports.md
+    ├── 2026-09-22-b22-reports-exports.md
+    ├── 2026-09-22-b24-co-purchase-recommendations.md
+    ├── 2026-09-22-f25-pagination-everywhere.md
+    ├── 2026-09-22-full-stack-audit-and-fixes.md
+    ├── 2026-09-22-mock-dataset-seed.md
+    └── 2026-09-22-agent-guardrail-rules.md
 ```
 
 The two `ADMIN-*.md` files hold the back-office task split (epics [BE-01]… and
@@ -81,5 +86,28 @@ Legend used across the task files: `[ ]` todo · `[~]` in progress · `[x]` done
 - **Rule 5 — Update every affected doc at the end of each task.** Tick the task
   file, update `session-log.md`, the READMEs / `FEATURES.md` /
   `feature-roadmap.md` / `DESIGN_SYSTEM.md` as applicable. Stale docs are a bug.
+
+Rules 0–5 above govern **documents**. Rules 6–15 govern **code** and apply to any
+change touching code, SQL, Docker or seeds (markdown-only tasks are exempt):
+
+- **Rule 6 — Reconnaissance before modification.** Trace module, data flow, API
+  contract, auth dependency, tests, docs and existing pattern; grep every
+  consumer before touching anything shared.
+- **Rule 7 — Use the canonical implementation.** Reuse or fix in place; never add
+  a second auth/role/pricing/API helper.
+- **Rule 8 — Contract first** for every change crossing the frontend/backend
+  boundary; keep response shapes backwards-compatible.
+- **Rule 9 — Security boundary before the happy path.** Backend authorization is
+  authoritative; test every actor including direct URL entry.
+- **Rule 10 — Statuses are state machines** and repeated operations must be safe.
+- **Rule 11 — Money and inventory are invariants**, computed server-side and
+  covered by a test.
+- **Rule 12 — Minimal diff.** No drive-by refactors; unrelated findings become
+  checkboxes.
+- **Rule 13 — Verify the behaviour you changed**, narrow to wide, error paths
+  included; never weaken validation to go green.
+- **Rule 14 — Clean-environment verification** for infra/DB/seed/config changes.
+- **Rule 15 — Document what actually happened**; tick `[x]` only when verified,
+  and state the honest verification level.
 
 Full details in [RULES.md](./RULES.md).

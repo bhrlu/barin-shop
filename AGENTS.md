@@ -45,6 +45,57 @@ markdown file.** Stale docs are a bug. Walk this checklist:
 If you deliberately leave a doc untouched, say so in the audit under
 **What is NOT done / open**.
 
+## Mandatory: think before you edit (Rules 6–15)
+
+Rules 0–5 govern **documents**; Rules 6–15 in [`plan/RULES.md`](./plan/RULES.md)
+govern **code**, and exist because the 2026-09-22 full-stack audit found P0/P1
+defects while Rules 0–5 were already in force. They apply to any change touching
+code, SQL, Docker or seeds — a markdown-only change needs Rules 0–5 only.
+Read the full text in `plan/RULES.md` before a non-trivial code change.
+
+- **R6 — Recon first.** Before the first edit, name the owning module, the data
+  flow (route/component → `src/lib/api.ts` → `app/routers/*` → `app/services/*` →
+  `app/models.py` → Postgres), the API contract, the auth dependency, existing
+  tests, the task/spec/audit docs, and the sibling that already solves this. Then
+  `grep -rn` every consumer before touching anything shared.
+- **R7 — One canonical implementation.** Reuse (or fix in place) the existing
+  helper; never add a second. Auth → `app/auth.py`; roles → `services/roles.py`;
+  totals → `services/pricing.py`; transitions/stock restore →
+  `services/order_lifecycle.py`; payments/refunds → `services/payments.py`; all
+  frontend HTTP → `src/lib/api.ts`. No direct `fetch` to the backend.
+- **R8 — Contract first.** State request/response shape, status codes, error
+  shape, auth + ownership, pagination (`Page<T>` vs array) and normalisation
+  before editing. Don't change a shape because a cleaner one appeals.
+- **R9 — Security before the happy path.** Who calls it, what they may reach,
+  is it really theirs, is the mutation allowed, can a stale JWT or client-sent
+  role/price/id bypass it. Roles come from `user_roles`, not the token claim.
+  Hidden nav and disabled buttons are never authorization; test anonymous,
+  customer, each staff role, admin, wrong-owner, and direct URL entry.
+- **R10 — Statuses are state machines.** Identify allowed/terminal transitions
+  and side effects first, then answer "what if this runs twice?" for payments,
+  refunds, cancellation, stock, roles, callbacks and seeds.
+- **R11 — Money and stock are invariants.** The backend computes authoritative
+  totals; the frontend never does. Any money/stock change adds or updates a test
+  in `backend/tests/`.
+- **R12 — Minimal diff.** No drive-by refactors, renames, reformatting or
+  dependency bumps. Unrelated findings become a new checkbox, not a new edit.
+- **R13 — Verify what you changed:** targeted test → full `pytest -q` → `ruff`
+  / `bun run lint` (+ `bun run build`) → `tests/api_smoke.py` → the real runtime
+  path for UI/Docker changes. Cover error paths, not just the happy path. Never
+  claim a suite you didn't run, never fake a test green, never weaken a
+  validation to make a test pass.
+- **R14 — Clean-environment proof for infra/DB/seed/config changes:**
+  `docker compose down -v && docker compose up -d --build`, `db-init` exits 0
+  with all four seed stages, `/health` responds. A working local DB is not
+  evidence; suspect a dirty environment before blaming the code.
+- **R15 — Document reality.** Tick `[x]` only when implemented **and** tested
+  **and** verified against the acceptance criteria; state the honest verification
+  level (implemented / locally tested / integration tested / browser tested /
+  clean-environment tested / fully verified).
+- **When unsure** which implementation is canonical, which transition is valid,
+  which role should have access, or whether a change is breaking — stop and
+  inspect the repo. Don't guess or invent architecture.
+
 ## Other standing rules
 
 - **`design/SANDE_FULL_DEV_SPEC.md` is checked at both ends** — read before the
