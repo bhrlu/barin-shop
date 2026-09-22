@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-router";
-import { Heart, LogOut, MapPin, Package, User, Wallet } from "lucide-react";
+import { Bell, Heart, LogOut, MapPin, Package, User, Wallet } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 
@@ -25,6 +25,7 @@ const tabs = [
   { to: "/account/addresses", label: "آدرس‌ها", icon: MapPin, exact: false },
   { to: "/account/favorites", label: "علاقه‌مندی‌ها", icon: Heart, exact: false },
   { to: "/account/payments", label: "پرداخت‌ها", icon: Wallet, exact: false },
+  { to: "/account/notifications", label: "اعلان‌ها", icon: Bell, exact: false },
 ] as const;
 
 function AccountLayout() {

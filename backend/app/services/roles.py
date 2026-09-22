@@ -31,6 +31,8 @@ ROLE_CAPABILITIES: dict[str, set[str]] = {
     "users": {"admin", "super_admin"},
     "audit": {"admin", "super_admin"},
     "stats": STAFF_ROLES,
+    # store-wide switches (B2.1 notification channels) — top admins only
+    "settings": {"admin", "super_admin"},
 }
 
 

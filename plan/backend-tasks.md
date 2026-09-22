@@ -36,7 +36,27 @@ Legend: `[ ]` todo · `[x]` done (audit file required) · audit links in `plan/a
   smoke asserts the full flow incl. stock +1 on cancel.
   → audit: [2026-09-21-b61-state-machine-f45-coupons-manager.md](audit/2026-09-21-b61-state-machine-f45-coupons-manager.md)
 
-- [ ] **B2.1 SMS/email notifications** — Kavenegar/National SMS or SMTP on order placed/paid/shipped/cancelled/refund
+- [x] **B2.1 SMS/email notifications** — Kavenegar/National SMS or SMTP on order placed/paid/shipped/cancelled/refund
+  Done (2026-09-22) as **notification infrastructure** (user decision: no real
+  credentials exist). `services/notifications.py` is the one entry point: an
+  in-app `notifications` row per user per event, written on the business session
+  at the lifecycle point (order created / paid / shipped / cancelled, refund
+  approved / settled), deduplicated by `UNIQUE (user_id, event_key)`. Admin SMS /
+  email switches (`notification_settings`, `GET/PATCH /admin/settings/notifications`,
+  new `settings` capability = admin/super_admin) feed a `notification_deliveries`
+  outbox that is sent after the commit and never fails the business transaction.
+  `KavenegarSmsProvider` / `SmtpEmailProvider` read env credentials only; both are
+  unconfigured → nothing is sent. Inbox API `GET /notifications`,
+  `/notifications/unread-count`, `PATCH /notifications/{id}/read`,
+  `POST /notifications/read-all`; header bell + `/account/notifications` +
+  `/admin/settings` UI. 45 new tests. Real delivery **not** verified (no credentials).
+  → audit: [2026-09-22-b21-notification-infrastructure.md](audit/2026-09-22-b21-notification-infrastructure.md)
+- [ ] **B2.1a Activate the real SMS/email providers** (`NEW-B21-1`, discovered
+  during B2.1) — needs real Kavenegar and SMTP credentials (stop and ask if they are
+  absent). Set them in `infra/.env`, confirm `*_configured` on
+  `/admin/settings`, send one real SMS and one real email end to end, check the
+  Kavenegar sender line / template rules and the SMTP TLS mode, and record the
+  result. The adapters were only tested against stub transports.
 - [x] **B2.2 Reports & exports** — daily/monthly sales, best-sellers, Excel (openpyxl/pandas) + CSV product import/export
   Done (2026-09-22): `/admin/export/orders.{csv,xlsx}`, `/admin/export/products.{csv,xlsx}`
   (StaffOrders guard, RFC-4180 CSV, RFC-6266 filenames) + `/admin/export/report`
@@ -61,6 +81,9 @@ Legend: `[ ]` todo · `[x]` done (audit file required) · audit links in `plan/a
   heuristic (identical payload; `/related` untouched). Learned pairs verified live.
   → audit: [2026-09-22-b24-co-purchase-recommendations.md](audit/2026-09-22-b24-co-purchase-recommendations.md)
 - [ ] **B2.5 Webhooks + background jobs** — order events, abandoned-payment reminders, APScheduler
+  (B2.1 hand-off: add the sweeper that re-dispatches `notification_deliveries` left
+  `pending` by a crash and retries `failed` rows with a cap — call
+  `services/notifications.dispatch_deliveries()`, which is already retry-safe.)
 - [ ] **B2.6 Coupon admin UI support** — nothing to build in Python; expose whatever the admin panel needs (done as part of B1.4 API)
   → superseded by B1.9: `/admin/*` endpoints + `/coupons` CRUD now exist; the panel
   still needs wiring (frontend F1.2 / F2.4)
@@ -197,7 +220,9 @@ Closes the backend half of `plan/feature-roadmap.md` §1. Idempotent DDL lives i
 - [ ] **B4.13 Preorder fulfilment flag** — `preorder` products can never be
   ordered while `orders` has no preorder marker. Add the flag + relax
   `availability_issue()` if the store wants to take preorders (depends on the
-  fulfilment/notification story, B2.1).
+  fulfilment/notification story, B2.1). B2.1 is DONE: add the preorder
+  notification type to `TYPES` in `services/notifications.py` and fire it from
+  the preorder lifecycle point with an `order:<id>:…` event key.
 - [ ] **B4.8 Product model dimension** — variants cover size × color only; add a
   model/name dimension if the catalog needs it
 - [ ] **B4.9 Stock reservation with TTL** — hold stock during checkout instead of
@@ -224,6 +249,13 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   → audit: [2026-09-21-b51a-audit-ip-f41-status-badges.md](audit/2026-09-21-b51a-audit-ip-f41-status-badges.md)
 - [ ] **B5.1b Audit tamper-resistance at the DB level** — REVOKE UPDATE/DELETE on
   `audit_logs` for the app role (append-only) in `infra/initdb` or startup DDL.
+- [ ] **B5.1d `record_audit` rolls back the mutation it is auditing** (`NEW-B21-2`,
+  discovered during B2.1) — on an insert failure `services/audit.py::record_audit`
+  calls `session.rollback()` and swallows the error, which also discards the
+  order/refund/role change made earlier on the same session; the router then
+  commits nothing and still answers 200 with the new values. Use a SAVEPOINT
+  (`begin_nested()`) around the audit insert, or let it fail the request —
+  decide which, then add a pytest that forces the audit insert to fail.
 - [ ] **B5.1c `GET /admin/audit-logs` 500s on a malformed `admin_id`**
   (`NEW-F55-1`, discovered during F5.5) — `?admin_id=foo` reaches
   `CAST(:admin_id AS uuid)` and Postgres raises, so the admin caller gets a 500
@@ -321,6 +353,14 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   (`NEW-B69-1`, discovered during B6.9) — `routers/products.py` has four (variant
   and product CRUD) that report any failure as «این ترکیب سایز و رنگ قبلاً ثبت شده
   است»; `routers/storage.py` has two to review. Same fix shape as B6.9.
+- [ ] **B6.13 The documented `pytest -q` silently skips every DB test**
+  (`NEW-B21-3`, discovered during B2.1) — `test_addresses.py` (collected first) and
+  three other modules `os.environ.setdefault("DATABASE_URL", "…u:p@…/db")` at
+  import, `app.config.settings` is cached from that, and every live-DB module then
+  skips as "no database reachable": `pytest -q` reports 77 passed / 60 skipped
+  instead of 137 passed. Use one `conftest.py` default (the compose URL) or make
+  the dummy-URL modules not import `app.config` first; AGENTS.md's verification
+  command must actually run the integration tests.
 - [ ] **B6.10 Pagination for `GET /products` and `GET /admin/orders`** — both
   return the entire table; the spec's `[FE-02]` grid assumes server-side paging.
 - [x] **AB-BE-03 Coupon max discount cap** (`[BE-02]`) — additive nullable

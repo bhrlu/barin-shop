@@ -796,6 +796,100 @@ def main() -> int:
     else:
         check("B5.4 role flow (user created)", False, "could not resolve new user id")
 
+    # --- notifications (B2.1): the flows above must have notified the customer
+    # exactly once per event, however often they repeated a transition ---
+    inbox = call("GET", "/notifications", customer, params={"page": 1, "page_size": 100})
+    inbox_body = inbox.json() if inbox is not None and inbox.status_code == 200 else {}
+    check(
+        "GET /notifications → envelope",
+        {"items", "total", "page", "page_size", "pages"} <= set(inbox_body),
+        f"total={inbox_body.get('total')}",
+    )
+    items = inbox_body.get("items", [])
+
+    def types_for(oid) -> list[str]:
+        return sorted(n["type"] for n in items if (n.get("data") or {}).get("order_id") == oid)
+
+    if order_id:
+        # paid twice (gateway + simulator), cancelled, refunded — one row per event
+        got = types_for(order_id)
+        check(
+            "paid+cancelled+refunded order → one notification per event",
+            got == ["order_cancelled", "order_created", "order_paid", "refund_settled"],
+            f"{got}",
+        )
+    if sm_order_id:
+        got = types_for(sm_order_id)
+        check(
+            "staff-cancelled order → created + cancelled",
+            got == ["order_cancelled", "order_created"],
+            f"{got}",
+        )
+    check(
+        "notifications are newest first",
+        [n["created_at"] for n in items] == sorted((n["created_at"] for n in items), reverse=True),
+        f"n={len(items)}",
+    )
+    if items:
+        first_id = items[0]["id"]
+        read = call("PATCH", f"/notifications/{first_id}/read", customer)
+        check(
+            "PATCH /notifications/{id}/read sets read_at",
+            read is not None and read.status_code == 200 and bool(read.json().get("read_at")),
+            f"{read.status_code if read else 0}",
+        )
+        foreign = call("PATCH", f"/notifications/{first_id}/read", admin)
+        check(
+            "another user's notification → 404",
+            foreign is not None and foreign.status_code == 404,
+            f"{foreign.status_code if foreign else 0}",
+        )
+    call("POST", "/notifications/read-all", customer)
+    unread = call("GET", "/notifications/unread-count", customer)
+    check(
+        "read-all → unread-count 0",
+        unread is not None and unread.status_code == 200 and unread.json() == {"unread": 0},
+        f"{unread.text[:60] if unread is not None else ''}",
+    )
+    anon = call("GET", "/notifications")
+    check("GET /notifications anonymous → 401", anon is not None and anon.status_code == 401, "")
+
+    ns = call("GET", "/admin/settings/notifications", admin)
+    ns_body = ns.json() if ns is not None and ns.status_code == 200 else {}
+    check(
+        "admin reads notification switches + provider state",
+        ns_body.get("internal_enabled") is True
+        and ns_body.get("sms_provider") == "kavenegar"
+        and ns_body.get("email_provider") == "smtp",
+        f"{ns_body}",
+    )
+    for who, tok in (("customer", customer), ("support", support)):
+        denied = call("PATCH", "/admin/settings/notifications", tok, json={"sms_enabled": True})
+        check(
+            f"notification switches as {who} → 403",
+            denied is not None and denied.status_code == 403,
+            f"{denied.status_code if denied else 0}",
+        )
+    if ns_body:
+        original = ns_body["sms_enabled"]
+        flipped = call(
+            "PATCH", "/admin/settings/notifications", admin, json={"sms_enabled": not original}
+        )
+        check(
+            "admin flips the SMS switch",
+            flipped is not None and flipped.status_code == 200
+            and flipped.json().get("sms_enabled") is (not original)
+            and flipped.json().get("internal_enabled") is True,
+            f"{flipped.status_code if flipped else 0}",
+        )
+        call("PATCH", "/admin/settings/notifications", admin, json={"sms_enabled": original})
+    empty = call("PATCH", "/admin/settings/notifications", admin, json={})
+    check(
+        "empty switch update → 400",
+        empty is not None and empty.status_code == 400,
+        f"{empty.status_code if empty else 0}",
+    )
+
     # --- reports & exports (B2.2 / spec BE-08) ---
     csv_res = call("GET", "/admin/export/orders.csv?from=2026-01-01", admin)
     csv_ok = csv_res is not None and csv_res.status_code == 200

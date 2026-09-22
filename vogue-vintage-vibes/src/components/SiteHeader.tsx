@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { Menu, ShoppingBag, User, X } from "lucide-react";
 import { useState } from "react";
 import { HeaderSearch } from "@/components/HeaderSearch";
+import { NotificationBell } from "@/components/NotificationBell";
 import { useCart } from "@/lib/cart";
 import { toFa } from "@/lib/format";
 import { categories } from "@/data/products";
@@ -50,6 +51,7 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-4">
           <HeaderSearch />
+          <NotificationBell />
           <Link
             to="/account"
             aria-label="حساب کاربری"

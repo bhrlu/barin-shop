@@ -36,6 +36,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.services.notifications import notify_order_event
 
 log = logging.getLogger(__name__)
 
@@ -322,6 +323,8 @@ async def verify_and_finalize(
         ),
         {"pid": str(pay["id"]), "ref": reference},
     )
+    # B2.1: deduped per order, so the simulator or a manual staff flip can't repeat it
+    await notify_order_event(session, order_id, "paid")
     return PaymentVerify(
         status="paid", reference=reference, amount=amount, order_id=order_id
     )

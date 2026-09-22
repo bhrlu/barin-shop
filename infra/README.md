@@ -85,4 +85,12 @@ regresses to a private tarball URL, the build fails loudly at `bun install`.
   development: `docker exec sandeh-postgres-1 psql -U sande -d postgres -c
   "DELETE FROM contact_attempts"`. Behind a real reverse proxy, set
   `TRUSTED_PROXIES` to the proxy's address.
+- **Notifications (B2.1).** In-app notifications need no configuration. SMS
+  (`KAVENEGAR_API_KEY`, `KAVENEGAR_SENDER`) and email (`SMTP_HOST`, `SMTP_PORT`,
+  `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_STARTTLS`, `SMTP_SSL`) are
+  passed to the backend container from `infra/.env` and are **empty by default** —
+  the channel then sends nothing, which is a valid state. A message is sent only
+  when the credentials are set **and** an admin switched the channel on at
+  `/admin/settings`. Put real credentials in `infra/.env` only (never in git or
+  the database) and recreate the backend: `docker compose up -d backend`.
 - The stack is for **development**; no TLS, default passwords, published ports.

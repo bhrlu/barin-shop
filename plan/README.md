@@ -66,7 +66,8 @@ plan/
     ├── 2026-09-22-f56-role-management-ui.md
     ├── 2026-09-22-abfe02-admin-export-controls.md
     ├── 2026-09-22-abfe05-admin-products-pagination.md
-    └── 2026-09-22-b311-contact-spam-guard.md
+    ├── 2026-09-22-b311-contact-spam-guard.md
+    └── 2026-09-22-b21-notification-infrastructure.md
 ```
 
 The two `ADMIN-*.md` files hold the back-office task split (epics [BE-01]… and

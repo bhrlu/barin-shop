@@ -24,6 +24,7 @@ from app.services.coupons import (
     record_redemption,
     validate_coupon,
 )
+from app.services.notifications import notify_order_event
 from app.services.pricing import quote
 from app.services.recommendations import refresh_co_purchases
 from app.services.variants import load_variants, variant_stock
@@ -253,6 +254,10 @@ async def create_order(
     #    recommendation engine learns from this order immediately.
     if len(lines) > 1:
         await refresh_co_purchases(session)
+
+    # 9) "order created" notification (B2.1) — same transaction, so a checkout
+    #    that fails above leaves no notification behind
+    await notify_order_event(session, order_id, "created")
 
     return {
         "order_id": str(order_id),

@@ -24,6 +24,7 @@ import { Route as ProductIdRouteImport } from './routes/product.$id'
 import { Route as AuthenticatedAccountIndexRouteImport } from './routes/_authenticated/account.index'
 import { Route as AuthenticatedAccountAddressesRouteImport } from './routes/_authenticated/account.addresses'
 import { Route as AuthenticatedAccountFavoritesRouteImport } from './routes/_authenticated/account.favorites'
+import { Route as AuthenticatedAccountNotificationsRouteImport } from './routes/_authenticated/account.notifications'
 import { Route as AuthenticatedAccountOrdersRouteImport } from './routes/_authenticated/account.orders'
 import { Route as AuthenticatedAccountPaymentsRouteImport } from './routes/_authenticated/account.payments'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
@@ -35,6 +36,7 @@ import { Route as AuthenticatedAdminOrdersRouteImport } from './routes/_authenti
 import { Route as AuthenticatedAdminProductsRouteImport } from './routes/_authenticated/admin.products'
 import { Route as AuthenticatedAdminRefundsRouteImport } from './routes/_authenticated/admin.refunds'
 import { Route as AuthenticatedAdminReviewsRouteImport } from './routes/_authenticated/admin.reviews'
+import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authenticated/admin.settings'
 import { Route as AuthenticatedAdminUsersRouteImport } from './routes/_authenticated/admin.users'
 import { Route as AuthenticatedPaymentOrderIdRouteImport } from './routes/_authenticated/payment.$orderId'
 import { Route as AuthenticatedAccountOrderOrderIdRouteImport } from './routes/_authenticated/account.order.$orderId'
@@ -116,6 +118,12 @@ const AuthenticatedAccountFavoritesRoute =
     path: '/favorites',
     getParentRoute: () => AuthenticatedAccountRoute,
   } as any)
+const AuthenticatedAccountNotificationsRoute =
+  AuthenticatedAccountNotificationsRouteImport.update({
+    id: '/notifications',
+    path: '/notifications',
+    getParentRoute: () => AuthenticatedAccountRoute,
+  } as any)
 const AuthenticatedAccountOrdersRoute =
   AuthenticatedAccountOrdersRouteImport.update({
     id: '/orders',
@@ -180,6 +188,12 @@ const AuthenticatedAdminReviewsRoute =
     path: '/reviews',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminSettingsRoute =
+  AuthenticatedAdminSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminUsersRoute = AuthenticatedAdminUsersRouteImport.update({
   id: '/users',
   path: '/users',
@@ -212,6 +226,7 @@ export interface FileRoutesByFullPath {
   '/product/$id': typeof ProductIdRoute
   '/account/addresses': typeof AuthenticatedAccountAddressesRoute
   '/account/favorites': typeof AuthenticatedAccountFavoritesRoute
+  '/account/notifications': typeof AuthenticatedAccountNotificationsRoute
   '/account/orders': typeof AuthenticatedAccountOrdersRoute
   '/account/payments': typeof AuthenticatedAccountPaymentsRoute
   '/admin/audit': typeof AuthenticatedAdminAuditRoute
@@ -222,6 +237,7 @@ export interface FileRoutesByFullPath {
   '/admin/products': typeof AuthenticatedAdminProductsRoute
   '/admin/refunds': typeof AuthenticatedAdminRefundsRoute
   '/admin/reviews': typeof AuthenticatedAdminReviewsRoute
+  '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/payment/$orderId': typeof AuthenticatedPaymentOrderIdRoute
   '/account/': typeof AuthenticatedAccountIndexRoute
@@ -240,6 +256,7 @@ export interface FileRoutesByTo {
   '/product/$id': typeof ProductIdRoute
   '/account/addresses': typeof AuthenticatedAccountAddressesRoute
   '/account/favorites': typeof AuthenticatedAccountFavoritesRoute
+  '/account/notifications': typeof AuthenticatedAccountNotificationsRoute
   '/account/orders': typeof AuthenticatedAccountOrdersRoute
   '/account/payments': typeof AuthenticatedAccountPaymentsRoute
   '/admin/audit': typeof AuthenticatedAdminAuditRoute
@@ -250,6 +267,7 @@ export interface FileRoutesByTo {
   '/admin/products': typeof AuthenticatedAdminProductsRoute
   '/admin/refunds': typeof AuthenticatedAdminRefundsRoute
   '/admin/reviews': typeof AuthenticatedAdminReviewsRoute
+  '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/payment/$orderId': typeof AuthenticatedPaymentOrderIdRoute
   '/account': typeof AuthenticatedAccountIndexRoute
@@ -272,6 +290,7 @@ export interface FileRoutesById {
   '/product/$id': typeof ProductIdRoute
   '/_authenticated/account/addresses': typeof AuthenticatedAccountAddressesRoute
   '/_authenticated/account/favorites': typeof AuthenticatedAccountFavoritesRoute
+  '/_authenticated/account/notifications': typeof AuthenticatedAccountNotificationsRoute
   '/_authenticated/account/orders': typeof AuthenticatedAccountOrdersRoute
   '/_authenticated/account/payments': typeof AuthenticatedAccountPaymentsRoute
   '/_authenticated/admin/audit': typeof AuthenticatedAdminAuditRoute
@@ -282,6 +301,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/products': typeof AuthenticatedAdminProductsRoute
   '/_authenticated/admin/refunds': typeof AuthenticatedAdminRefundsRoute
   '/_authenticated/admin/reviews': typeof AuthenticatedAdminReviewsRoute
+  '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/_authenticated/admin/users': typeof AuthenticatedAdminUsersRoute
   '/_authenticated/payment/$orderId': typeof AuthenticatedPaymentOrderIdRoute
   '/_authenticated/account/': typeof AuthenticatedAccountIndexRoute
@@ -304,6 +324,7 @@ export interface FileRouteTypes {
     | '/product/$id'
     | '/account/addresses'
     | '/account/favorites'
+    | '/account/notifications'
     | '/account/orders'
     | '/account/payments'
     | '/admin/audit'
@@ -314,6 +335,7 @@ export interface FileRouteTypes {
     | '/admin/products'
     | '/admin/refunds'
     | '/admin/reviews'
+    | '/admin/settings'
     | '/admin/users'
     | '/payment/$orderId'
     | '/account/'
@@ -332,6 +354,7 @@ export interface FileRouteTypes {
     | '/product/$id'
     | '/account/addresses'
     | '/account/favorites'
+    | '/account/notifications'
     | '/account/orders'
     | '/account/payments'
     | '/admin/audit'
@@ -342,6 +365,7 @@ export interface FileRouteTypes {
     | '/admin/products'
     | '/admin/refunds'
     | '/admin/reviews'
+    | '/admin/settings'
     | '/admin/users'
     | '/payment/$orderId'
     | '/account'
@@ -363,6 +387,7 @@ export interface FileRouteTypes {
     | '/product/$id'
     | '/_authenticated/account/addresses'
     | '/_authenticated/account/favorites'
+    | '/_authenticated/account/notifications'
     | '/_authenticated/account/orders'
     | '/_authenticated/account/payments'
     | '/_authenticated/admin/audit'
@@ -373,6 +398,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/products'
     | '/_authenticated/admin/refunds'
     | '/_authenticated/admin/reviews'
+    | '/_authenticated/admin/settings'
     | '/_authenticated/admin/users'
     | '/_authenticated/payment/$orderId'
     | '/_authenticated/account/'
@@ -500,6 +526,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAccountFavoritesRouteImport
       parentRoute: typeof AuthenticatedAccountRoute
     }
+    '/_authenticated/account/notifications': {
+      id: '/_authenticated/account/notifications'
+      path: '/notifications'
+      fullPath: '/account/notifications'
+      preLoaderRoute: typeof AuthenticatedAccountNotificationsRouteImport
+      parentRoute: typeof AuthenticatedAccountRoute
+    }
     '/_authenticated/account/orders': {
       id: '/_authenticated/account/orders'
       path: '/orders'
@@ -577,6 +610,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminReviewsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/settings': {
+      id: '/_authenticated/admin/settings'
+      path: '/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AuthenticatedAdminSettingsRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/users': {
       id: '/_authenticated/admin/users'
       path: '/users'
@@ -604,6 +644,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedAccountRouteChildren {
   AuthenticatedAccountAddressesRoute: typeof AuthenticatedAccountAddressesRoute
   AuthenticatedAccountFavoritesRoute: typeof AuthenticatedAccountFavoritesRoute
+  AuthenticatedAccountNotificationsRoute: typeof AuthenticatedAccountNotificationsRoute
   AuthenticatedAccountOrdersRoute: typeof AuthenticatedAccountOrdersRoute
   AuthenticatedAccountPaymentsRoute: typeof AuthenticatedAccountPaymentsRoute
   AuthenticatedAccountIndexRoute: typeof AuthenticatedAccountIndexRoute
@@ -613,6 +654,8 @@ interface AuthenticatedAccountRouteChildren {
 const AuthenticatedAccountRouteChildren: AuthenticatedAccountRouteChildren = {
   AuthenticatedAccountAddressesRoute: AuthenticatedAccountAddressesRoute,
   AuthenticatedAccountFavoritesRoute: AuthenticatedAccountFavoritesRoute,
+  AuthenticatedAccountNotificationsRoute:
+    AuthenticatedAccountNotificationsRoute,
   AuthenticatedAccountOrdersRoute: AuthenticatedAccountOrdersRoute,
   AuthenticatedAccountPaymentsRoute: AuthenticatedAccountPaymentsRoute,
   AuthenticatedAccountIndexRoute: AuthenticatedAccountIndexRoute,
@@ -631,6 +674,7 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminProductsRoute: typeof AuthenticatedAdminProductsRoute
   AuthenticatedAdminRefundsRoute: typeof AuthenticatedAdminRefundsRoute
   AuthenticatedAdminReviewsRoute: typeof AuthenticatedAdminReviewsRoute
+  AuthenticatedAdminSettingsRoute: typeof AuthenticatedAdminSettingsRoute
   AuthenticatedAdminUsersRoute: typeof AuthenticatedAdminUsersRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
 }
@@ -644,6 +688,7 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminProductsRoute: AuthenticatedAdminProductsRoute,
   AuthenticatedAdminRefundsRoute: AuthenticatedAdminRefundsRoute,
   AuthenticatedAdminReviewsRoute: AuthenticatedAdminReviewsRoute,
+  AuthenticatedAdminSettingsRoute: AuthenticatedAdminSettingsRoute,
   AuthenticatedAdminUsersRoute: AuthenticatedAdminUsersRoute,
   AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
 }

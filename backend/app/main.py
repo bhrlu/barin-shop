@@ -24,6 +24,7 @@ from app.routers import (
     exports,
     favorites,
     health,
+    notifications,
     orders,
     payments,
     products,
@@ -46,7 +47,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="SÂNDÉ Backend",
-    description="Auth · Catalog · Coupons · Payments · Stock · Storage (MinIO) · Contact",
+    description=(
+        "Auth · Catalog · Coupons · Payments · Stock · Storage (MinIO) · Contact · "
+        "Notifications"
+    ),
     version="0.3.0",
     lifespan=lifespan,
 )
@@ -83,6 +87,7 @@ app.include_router(coupons.router)
 app.include_router(checkout.router)
 app.include_router(payments.router)
 app.include_router(exports.router)
+app.include_router(notifications.router)
 
 
 @app.middleware("http")

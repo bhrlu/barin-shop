@@ -2050,3 +2050,97 @@ the chain right to left. `TRUSTED_PROXIES`, `CONTACT_RATE_LIMIT` and
 **Next backlog pointer** — `B2.1` (SMS/email notifications, P1). Check the
 stop conditions first: real Kavenegar/SMTP credentials are probably not
 available.
+
+## 2026-09-22 — B2.1 notification infrastructure
+
+**Task.** `B2.1` from the Master Backlog, under the user's explicit product
+adjustment: no real Kavenegar/SMTP credentials exist, so build the in-app
+notification system for real, the SMS/email layer ready-but-inactive, and admin
+on/off switches that never affect in-app notifications. First turn of the session
+was only "check next task" → reported B2.1 and the missing-credentials stop
+condition; the user then supplied the adjusted brief.
+
+**What was done**
+- `backend/app/services/notifications.py` — the one entry point. In-app
+  `notifications` rows are inserted on the business session at the lifecycle
+  point (checkout; gateway verify, simulator and staff `payment_status=paid`;
+  staff PATCH to `shipped`; `cancel_order_tx`; refund `approved` / `refunded`),
+  deduplicated by `UNIQUE (user_id, event_key)`.
+- SMS/email: `notification_deliveries` outbox rows only for channels the admin
+  switched on, sent by a background task after the commit
+  (SQLAlchemy `after_commit`, SAVEPOINT releases ignored, rollback drops the
+  queue). Providers `KavenegarSmsProvider` / `SmtpEmailProvider` read env
+  config only; both unconfigured → rows are `skipped`, nothing is sent, the order
+  flow is untouched. Failures are stored (`failed` + `last_error`); re-dispatch
+  is retry-safe.
+- Admin switches: `notification_settings` (single row, both off) +
+  `GET/PATCH /admin/settings/notifications` behind a new `settings` capability
+  (admin/super_admin), audited.
+- Inbox API: `GET /notifications` (envelope), `/unread-count`, `PATCH …/read`,
+  `POST /read-all`, all owner-scoped in SQL.
+- UI: header bell (in `SiteHeader`, which `__root` renders on every route),
+  `/account/notifications`, `/admin/settings`; `ui/switch.tsx` RTL thumb bug fixed
+  in place (it slid out of the track; the coupons toggle had it too).
+- Compose/env examples carry the provider variables with empty defaults.
+- Docs: D2 product adjustment + B2.1 DONE + pointer/counts in the Master Backlog,
+  task files, READMEs, FEATURES, roadmap, DESIGN_SYSTEM, RULES (canonical table),
+  AGENTS.md (R7 line).
+
+**Verification**
+- 45 new tests; mutation checks (dedup, switch, re-send, missing hook) turn them red.
+- pytest 137 passed with `DATABASE_URL` exported (92 → 137); ruff clean;
+  `api_smoke.py` 224/0 — on the dev stack and again after `down -v`.
+- Clean environment: `db-init` exit 0 through all four stages, `/health` OK,
+  tables/constraints/indexes/settings row on the fresh DB, 0 notifications after
+  seeding, provider env vars empty in the container.
+- Frontend tsc / lint (0 errors) / build OK.
+- Browser: B2.1 suite 58/58 (three dev-stack runs + clean stack); role/route
+  regression sweep 52/54 on the clean stack, both failures pre-existing (below).
+- Level: *fully verified* for the in-app system, switches and provider layer up to
+  the provider boundary. **No real SMS/email was sent** — B2.1a.
+
+**Mistakes in my own work, found and fixed**
+- I first also put a bell in the admin shell header; `SiteHeader` already
+  renders on admin routes, so admins saw two bells. The browser suite caught it;
+  removed.
+- Browser-harness bugs: fixed sleeps against 5–13 s dev-mode page loads made a
+  regression sweep look like app failures (I first misread it as dev-server
+  degradation); badge digits in nav text broke a label comparison; mocked 500s
+  were counted as real 5xx; twice `pkill -f`/`pgrep -f` matched my own shell and
+  killed the run, and one patch to the harness silently failed its own assertion
+  so the old script ran. All fixed, then re-run.
+
+**Discovered, recorded, not fixed** — B2.1a (real provider activation, P3),
+B5.1d (`record_audit` rollback discards the audited mutation, P2), B6.13 (the
+documented `pytest -q` skips all 60 live-DB tests, P2), F5.13 (guest hydration
+mismatch on a protected-route redirect, P3), **F5.14** (admin coupon create /
+edit / toggle all 422 — `text/plain` body; P1), F5.15 (a failed `/auth/me`
+signs the user out, P2). F5.13–F5.15 were each confirmed pre-existing (A/B with
+the bell removed, or curl).
+
+**What was explicitly NOT done**
+- No real SMS/email delivery; no retry sweeper (B2.5); no password-reset or
+  preorder hooks (no such flows — F2.3, B4.13); no ops alerts, "delivered" or
+  "refund rejected" notifications (outside D2); no notification deletion/archive
+  or retention; no push — the bell polls every 60 s.
+- The spec's Part C #8 still says "Pending" (user's document, untouched);
+  `vogue-vintage-vibes/README.md` untouched (nothing it lists changed).
+
+**Decisions taken**
+1. Outbox + after-commit dispatch instead of sending inside the transaction or
+   adding a job system (B2.5 owns jobs).
+2. A notification insert error fails the request (atomicity) rather than being
+   swallowed; only external sends are isolated.
+3. `GET /notifications` always returns the pagination envelope (new endpoint, no
+   legacy bare-list callers).
+4. Switches default off and may be on while unconfigured — the UI says plainly
+   that nothing is sent until the server has credentials.
+5. The Switch RTL bug was fixed in the shared primitive (R7), not worked around.
+6. Pointer set to **F5.14** before F2.3: both P1, but F5.14 is a broken shipped
+   feature with a two-call-site fix; F2.3 also has an SMTP stop condition.
+
+→ audit: [2026-09-22-b21-notification-infrastructure.md](audit/2026-09-22-b21-notification-infrastructure.md)
+
+**Next backlog pointer** — `F5.14` (admin coupon 422 regression, P1), then
+`F2.3` (forgot password, P1; reset email through `services/notifications.py`,
+SMTP unconfigured → check the stop conditions).

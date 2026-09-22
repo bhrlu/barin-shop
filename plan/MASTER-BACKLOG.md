@@ -167,7 +167,30 @@ No marketing/newsletter/campaign notification system is part of this backlog.
 * business logic must call a canonical notification service rather than Kavenegar
   or SMTP directly from multiple routers.
 
-**Unblocks:** `B2.1`, `F2.3`, `B2.5`, `B4.13`.
+### Product adjustment (user, 2026-09-22 — B2.1 session)
+
+No real Kavenegar or SMTP credentials exist yet. The decision is therefore
+executed as:
+
+* **Internal (in-app) notifications are fully implemented and active** — every
+  transactional event above that has a live flow creates one notification for
+  the customer, shown in the header bell and `/account/notifications`.
+* **SMS infrastructure is implemented but disabled/unconfigured** until real
+  Kavenegar credentials exist (`KAVENEGAR_API_KEY`, `KAVENEGAR_SENDER`).
+* **Email infrastructure is implemented but disabled/unconfigured** until real
+  SMTP configuration exists (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`,
+  `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_STARTTLS`, `SMTP_SSL`).
+* **Admins switch SMS and email on/off independently** (`/admin/settings`,
+  admin/super_admin; both default off). An external message is sent only when
+  the switch is on **and** the provider is configured.
+* **Internal notifications are not affected by those switches** — they have no
+  switch at all.
+* **Missing external credentials never fail a business transaction**, and
+  neither does a provider error: sends happen after the commit from an outbox.
+* **Real external provider activation happens later**, when real
+  credentials/configuration are available — tracked as `B2.1a`.
+
+**Unblocks:** `B2.1`, `F2.3`, `B2.5`, `B4.13`. (`B2.1` is DONE — see its section.)
 
 ---
 
@@ -437,13 +460,14 @@ No new implementation task is needed.
 
 ## Notification chain
 
-The notification tasks are now unblocked:
+`B2.1` is **DONE** (2026-09-22), so its dependents are released:
 
 ```text
-B2.1
-├──→ F2.3
-├──→ B2.5
-└──→ B4.13
+B2.1 (DONE)
+├──→ F2.3    — reset email goes through services/notifications.py (email-only entry point to add)
+├──→ B2.5    — must add the pending/failed delivery sweeper
+├──→ B4.13   — adds the preorder notification type
+└──→ B2.1a   — real provider activation (needs credentials)
 ```
 
 ## Admin products file collision
@@ -483,7 +507,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "B2.1",
+    "agent_start_task": "F5.14",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -614,13 +638,30 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "B2.1",
       "title": "SMS/email notifications",
       "priority": "P1",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "backend",
       "depends_on": [],
-      "blocks": ["F2.3", "B2.5", "B4.13"],
+      "blocks": ["F2.3", "B2.5", "B4.13", "B2.1a"],
       "batch": "F",
       "source": "backend-tasks.md",
-      "scope": "Build a replaceable transactional notification service using Kavenegar for SMS and SMTP for email."
+      "scope": "Canonical notification service: in-app notifications for every live D2 event (order created/paid/shipped/cancelled, refund approved/settled) deduplicated by UNIQUE(user_id, event_key) in the business transaction; admin SMS/email switches; Kavenegar/SMTP providers from env config behind an after-commit outbox; providers unconfigured (no real credentials).",
+      "audit": "plan/audit/2026-09-22-b21-notification-infrastructure.md",
+      "verification_level": "fully verified (in-app notifications, switches and provider layer up to the provider boundary); real SMS/email delivery unverified — no credentials (B2.1a)",
+      "completed": "2026-09-22"
+    },
+    {
+      "id": "B2.1a",
+      "title": "Activate the real SMS/email providers",
+      "priority": "P3",
+      "status": "TODO",
+      "layer": "backend_infra",
+      "depends_on": ["B2.1"],
+      "blocks": [],
+      "batch": "F",
+      "source": "backend-tasks.md",
+      "discovered_as": "NEW-B21-1",
+      "discovered_during": "B2.1",
+      "scope": "Requires real Kavenegar + SMTP credentials (stop and report if absent). Put them in infra/.env, confirm *_configured on /admin/settings, send one real SMS and one real email end to end, verify sender line / TLS mode, record the result. Adapters were only tested against stub transports."
     },
     {
       "id": "F2.3",
@@ -973,6 +1014,76 @@ changes to the file shipped in sequence; the collision is closed.
       "discovered_as": "NEW-ABFE05-3",
       "discovered_during": "AB-FE-05",
       "scope": "CartProvider in __root.tsx runs catalogQuery (all products, include_inactive=true) on every page incl. admin; fetch only the cart's products or defer until the cart is used. Related to F5.8."
+    },
+    {
+      "id": "B5.1d",
+      "title": "record_audit rolls back the mutation it audits",
+      "priority": "P2",
+      "status": "TODO",
+      "layer": "backend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "C",
+      "source": "backend-tasks.md",
+      "discovered_as": "NEW-B21-2",
+      "discovered_during": "B2.1",
+      "scope": "services/audit.py::record_audit swallows an insert failure with session.rollback(), silently discarding the order/refund/role change on the same session while the router still returns 200. Use a SAVEPOINT around the audit insert or fail the request (decide), and add a pytest forcing the audit insert to fail."
+    },
+    {
+      "id": "B6.13",
+      "title": "Documented pytest -q silently skips every live-DB test",
+      "priority": "P2",
+      "status": "TODO",
+      "layer": "backend_tests",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "C",
+      "source": "backend-tasks.md",
+      "discovered_as": "NEW-B21-3",
+      "discovered_during": "B2.1",
+      "scope": "test_addresses.py and three other modules set a dummy DATABASE_URL at import; app.config.settings caches it, so every live-DB module skips (77 passed / 60 skipped instead of 137 passed). One conftest default (compose URL) or no app.config import before it; the AGENTS.md verification command must run the integration tests."
+    },
+    {
+      "id": "F5.13",
+      "title": "Guest direct-load of a protected route logs a hydration mismatch",
+      "priority": "P3",
+      "status": "TODO",
+      "layer": "frontend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "D",
+      "source": "frontend-tasks.md",
+      "discovered_as": "NEW-B21-4",
+      "discovered_during": "B2.1",
+      "scope": "Signed out, opening an ssr:false _authenticated route (e.g. /account/payments) renders it on the server, then the client beforeLoad redirects to /auth and React reports a hydration mismatch page error. Pre-existing (identical without the notification bell). Redirect without a mismatching first render."
+    },
+    {
+      "id": "F5.14",
+      "title": "Admin coupon create / edit / toggle fail with 422 (text/plain body)",
+      "priority": "P1",
+      "status": "TODO",
+      "layer": "frontend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "D",
+      "source": "frontend-tasks.md",
+      "discovered_as": "NEW-B21-5",
+      "discovered_during": "B2.1",
+      "scope": "api.adminCreateCoupon / adminUpdateCoupon send body: JSON.stringify(...) without the JSON content type (request() sets it only for json:), so FastAPI rejects every coupon save and active toggle with 422. Pass json: in both; verify create, edit and toggle in a browser."
+    },
+    {
+      "id": "F5.15",
+      "title": "A failed /auth/me signs the user out",
+      "priority": "P2",
+      "status": "TODO",
+      "layer": "frontend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "D",
+      "source": "frontend-tasks.md",
+      "discovered_as": "NEW-B21-6",
+      "discovered_during": "B2.1",
+      "scope": "AuthProvider.refresh() clears the token on any api.me() error (network error, backend restart, request interrupted by a full-page navigation), not only 401/403. Clear only on 401/403; otherwise keep the token and retry."
     }
   ],
   "excluded": [
@@ -993,13 +1104,13 @@ changes to the file shipped in sequence; the collision is closed.
     }
   ],
   "counts": {
-    "total_executable": 37,
-    "done": 8,
-    "open": 29,
+    "total_executable": 43,
+    "done": 9,
+    "open": 34,
     "P0": 0,
     "P1": 2,
-    "P2": 16,
-    "P3": 11,
+    "P2": 19,
+    "P3": 13,
     "blocked": 0,
     "dropped": 2,
     "obsolete": 1,
@@ -1414,9 +1525,44 @@ Focused API abuse tests + live smoke.
 
 ## B2.1 — SMS/email notifications
 
-* **Layer:** Backend
-* **Status:** TODO
+* **Layer:** Backend (+ DB, config, frontend notification centre and admin settings)
+* **Status:** DONE (2026-09-22) — executed as **notification infrastructure** per
+  the D2 product adjustment (no real credentials)
 * **Dependencies:** resolved D2
+* **Audit:** [`plan/audit/2026-09-22-b21-notification-infrastructure.md`](audit/2026-09-22-b21-notification-infrastructure.md)
+* **Verification level:** fully verified — for the in-app system, the
+  switches and the provider layer up to the provider boundary. **Real SMS/email
+  delivery is not verified** (no credentials; adapters tested against stub
+  transports only) → `B2.1a`.
+  * 45 new tests (`tests/test_notifications.py`); mutation checks turn them red
+    for broken dedup, an ignored switch, re-sent `sent` rows and a missing hook.
+  * pytest 137 passed (live DB), ruff clean, `api_smoke.py` 224/0.
+  * Browser: B2.1 suite 58/58 (three consecutive dev-stack runs and again on the clean stack); role/route regression sweep 52/54 on the clean stack — both failures pre-existing and unrelated (F5.14, F5.15), each confirmed with the bell removed or by curl.
+  * Clean environment: `down -v` → `db-init` exit 0 through all four stages,
+    `/health` OK, tables/constraints/indexes and the settings row on the fresh DB.
+* **Delivered:**
+  * `services/notifications.py` — the one entry point (`notify_order_event`,
+    `notify_refund_event`, `notify`); `notifications` rows written on the
+    business session (commit/rollback together), deduplicated by
+    `UNIQUE (user_id, event_key)`;
+  * hooks at the live lifecycle points: checkout (created), gateway verify +
+    simulator + staff `payment_status=paid` (paid), staff PATCH to `shipped`
+    (with tracking code), `cancel_order_tx` (both cancel paths), refund
+    `approved` / `refunded` (settled);
+  * `notification_deliveries` outbox + after-commit background dispatch; a
+    missing or failing provider never touches the business transaction;
+    re-dispatch is retry-safe;
+  * `KavenegarSmsProvider` / `SmtpEmailProvider` from env config only — both
+    unconfigured, nothing is sent;
+  * `notification_settings` + `GET/PATCH /admin/settings/notifications`
+    (new `settings` capability = admin/super_admin; audited); SMS/email default off;
+  * inbox API `GET /notifications` (envelope), `/notifications/unread-count`,
+    `PATCH /notifications/{id}/read`, `POST /notifications/read-all`;
+  * UI: header bell, `/account/notifications`, `/admin/settings`; the shared
+    `ui/switch.tsx` RTL thumb bug fixed in place.
+* **Not in this task:** password-reset and preorder hooks (no such flows — F2.3,
+  B4.13), the retry sweeper (B2.5), real provider activation (B2.1a), ops alerts
+  and non-D2 events.
 
 ### Provider architecture
 
@@ -1459,7 +1605,14 @@ mock/stub transport.
 
 * **Layer:** Full-stack
 * **Status:** TODO
-* **Dependencies:** B2.1 notification transport
+* **Dependencies:** B2.1 notification transport (DONE)
+* **B2.1 hand-off:** send the reset email through
+  `backend/app/services/notifications.py` — add an **email-only** entry point there
+  (a reset has no in-app notification); never call `SmtpEmailProvider` directly.
+  SMTP is **unconfigured** (B2.1a), so first decide how the reset link is verified
+  without real delivery (stub transport in tests; ask the user about dev/local
+  behaviour — e.g. logging the link — before inventing one). Stop condition §18
+  applies if real delivery is required.
 
 ### Required implementation
 
@@ -1476,6 +1629,39 @@ mock/stub transport.
 ### Verification
 
 Focused auth tests + notification stub + frontend flow.
+
+---
+
+## F5.14 — Admin coupon create / edit / toggle fail with 422
+
+* **Layer:** Frontend
+* **Status:** TODO
+* **Priority:** P1
+* **Batch:** D
+* **Dependencies:** none
+* **Discovered as:** `NEW-B21-5` during `B2.1` (browser regression sweep) —
+  legacy discovery ID only; `F5.14` is the executable ID.
+* **Source:** `frontend-tasks.md` F5.14
+
+### Problem
+
+`api.adminCreateCoupon` and `api.adminUpdateCoupon` in `src/lib/api.ts` pass
+`body: JSON.stringify(…)`; `request()` sets `Content-Type: application/json`
+only when called with `json:`. The browser therefore sends `text/plain` and
+FastAPI 0.141 rejects the body with 422 («Input should be a valid dictionary or
+object…»). Verified with curl: the identical body is 200 as `application/json`,
+422 as `text/plain`. Every coupon create, edit and «فعال» toggle on
+`/admin/coupons` fails today — a shipped feature (F4.5) is broken.
+
+### Required implementation
+
+Use `json:` in both methods (no change to `request()`, the backend or the
+payload shape); keep `F5.9`'s future `max_discount_cap` field in mind.
+
+### Verification
+
+Browser: create, edit and toggle a coupon → 200 and the UI reflects it;
+`bun run lint` / `tsc` / `build`.
 
 ---
 
@@ -1790,7 +1976,11 @@ the UI updates.
 
 * **Layer:** Backend
 * **Status:** TODO
-* **Dependencies:** B2.1 notification infrastructure
+* **Dependencies:** B2.1 notification infrastructure (DONE)
+* **B2.1 hand-off:** add the sweeper for `notification_deliveries` — re-dispatch
+  rows left `pending` by a crash and retry `failed` ones with a cap, by calling
+  `services/notifications.dispatch_deliveries()` (already retry-safe: it only
+  picks `pending`/`failed` rows under a row lock).
 
 ### Required implementation
 
@@ -1836,6 +2026,106 @@ can only be set through the API.
 ### Verification
 
 Typecheck + lint + build + create/edit/clear flow against a running stack.
+
+---
+
+## B5.1d — `record_audit` rolls back the mutation it audits
+
+* **Layer:** Backend
+* **Status:** TODO
+* **Priority:** P2
+* **Batch:** C
+* **Dependencies:** none
+* **Discovered as:** `NEW-B21-2` during `B2.1` — legacy discovery ID only;
+  `B5.1d` is the executable ID.
+* **Source:** `backend-tasks.md` B5.1d
+
+### Problem
+
+`services/audit.py::record_audit` catches an insert failure, calls
+`session.rollback()` and logs. The rollback also discards the order-status /
+refund / role / coupon change made earlier on the same session; the router then
+commits an empty transaction and still answers 200 with the new values — a
+silent lost update. Only reachable when the audit insert itself fails.
+
+### Required implementation
+
+Decide (and document) one behaviour: either isolate the audit insert in a
+SAVEPOINT (`begin_nested()`) so a failed audit row no longer undoes the mutation,
+or let the failure fail the request. Do not swallow-and-rollback.
+
+### Verification
+
+A pytest that forces the audit insert to fail and asserts the chosen outcome on
+the mutation; full pytest + ruff + `api_smoke.py`.
+
+---
+
+## F5.15 — A failed `/auth/me` signs the user out
+
+* **Layer:** Frontend
+* **Status:** TODO
+* **Priority:** P2
+* **Batch:** D
+* **Dependencies:** none
+* **Discovered as:** `NEW-B21-6` during `B2.1` — legacy discovery ID only;
+  `F5.15` is the executable ID.
+* **Source:** `frontend-tasks.md` F5.15
+
+### Problem
+
+`src/lib/auth.tsx::AuthProvider.refresh()` calls `setToken(null)` whenever
+`api.me()` throws — including a network error, a backend restart, or a request
+interrupted by a full-page navigation — not only when the token is invalid.
+Reproduced: a customer loading `/`, `/shop`, `/cart`, `/contact` in quick
+succession loses the stored token and is sent to `/auth`; identical with the B2.1
+notification bell removed (pre-existing).
+
+### Required implementation
+
+Clear the token only for 401/403 (`ApiError.status`); on other failures keep
+it, stay "loading"/signed-out for this render and retry.
+
+### Verification
+
+Browser: interrupted `/auth/me` and a stopped backend keep the token; an
+invalid/expired token still signs out.
+
+---
+
+## B6.13 — Documented `pytest -q` silently skips every live-DB test
+
+* **Layer:** Backend tests
+* **Status:** TODO
+* **Priority:** P2
+* **Batch:** C
+* **Dependencies:** none
+* **Discovered as:** `NEW-B21-3` during `B2.1` — legacy discovery ID only;
+  `B6.13` is the executable ID.
+* **Source:** `backend-tasks.md` B6.13
+
+### Problem
+
+`test_addresses.py` (collected first), `test_availability_and_filters.py`,
+`test_pricing_and_coupons.py` and `test_variants.py` do
+`os.environ.setdefault("DATABASE_URL", "…u:p@localhost:5432/db")` at import.
+`app.config.settings` is cached from that, so every live-DB module then skips as
+"no database reachable". The command in `AGENTS.md` / Rule 13 reports
+**77 passed, 60 skipped**; with `DATABASE_URL` exported it is **137 passed**.
+A green run of the documented command therefore proves nothing about the
+integration tests.
+
+### Required implementation
+
+One default for the test session (e.g. a `conftest.py` setting the compose URL
+before any `app` import), remove the per-module dummy URLs, and keep the
+"skip when no database" behaviour for machines without the stack.
+
+### Verification
+
+`./.venv/bin/python -m pytest -q` with no env vars runs the live-DB tests
+against the compose stack (0 skipped when it is up) and still skips cleanly when
+it is down.
 
 ---
 
@@ -1976,7 +2266,10 @@ Do not reintroduce Lovable/Supabase architecture.
 
 * **Layer:** Backend
 * **Status:** TODO
-* **Dependencies:** B2.1
+* **Dependencies:** B2.1 (DONE)
+* **B2.1 hand-off:** add the preorder type to `TYPES` in
+  `services/notifications.py` and fire it from the preorder lifecycle point with an
+  `order:<id>:…` event key (the dedup mechanism).
 
 ### Required implementation
 
@@ -2227,6 +2520,68 @@ stock-issue flows re-tested.
 
 ---
 
+## B2.1a — Activate the real SMS/email providers
+
+* **Layer:** Backend / infra configuration
+* **Status:** TODO
+* **Priority:** P3
+* **Batch:** F
+* **Dependencies:** `B2.1` (DONE) + **real credentials from the user**
+* **Discovered as:** `NEW-B21-1` during `B2.1` — legacy discovery ID only;
+  `B2.1a` is the executable ID.
+* **Source:** `backend-tasks.md` B2.1a
+
+### Required implementation
+
+* obtain real Kavenegar and SMTP credentials — **stop and report if they are
+  missing** (§18); never invent or commit them;
+* set them in `infra/.env` (or the deployment secret store) and recreate the
+  backend; confirm `sms_configured` / `email_configured` on `/admin/settings`;
+* switch the channels on, send one real SMS and one real email end to end,
+  check the Kavenegar sender line / template rules and the SMTP TLS mode;
+* fix any adapter mismatch found against the live service (the adapters were
+  only tested against stub transports).
+
+### Verification
+
+A real delivery per channel, recorded in the audit with the delivery rows'
+`status = sent`; a failing credential produces `failed` + `last_error` without
+affecting the order.
+
+---
+
+## F5.13 — Guest direct-load of a protected route logs a hydration mismatch
+
+* **Layer:** Frontend
+* **Status:** TODO
+* **Priority:** P3
+* **Batch:** D
+* **Dependencies:** none
+* **Discovered as:** `NEW-B21-4` during `B2.1` — legacy discovery ID only;
+  `F5.13` is the executable ID.
+* **Source:** `frontend-tasks.md` F5.13
+
+### Problem
+
+Signed out, opening an `ssr: false` route under `_authenticated` (e.g.
+`/account/payments`) renders it on the server; the client `beforeLoad` then
+redirects to `/auth?redirect=…` and React reports «Hydration failed … server
+rendered HTML didn't match the client». Nothing breaks visibly (the tree is
+regenerated), but it is a page error on every such visit. Pre-existing — the
+same with the B2.1 notification bell removed.
+
+### Required implementation
+
+Redirect without a mismatching first render (e.g. a server-side redirect for the
+signed-out case, or a client-only shell that matches the server HTML).
+
+### Verification
+
+Headless browser: guest direct-load of `/account`, `/account/orders`,
+`/account/payments` → `/auth?redirect=…` with no page error.
+
+---
+
 # 8. Explicitly not executable
 
 ## B4.8 — Product model dimension
@@ -2294,10 +2649,11 @@ AB-BE-03 (DONE)
 AB-BE-02
 └──→ AB-FE-03
 
-B2.1
+B2.1 (DONE)
 ├──→ F2.3
 ├──→ B2.5
-└──→ B4.13
+├──→ B4.13
+└──→ B2.1a (also needs real credentials)
 
 F3.4b
 └── guest localStorage → login merge
@@ -2362,6 +2718,8 @@ B5.1c
 B5.4a
 B2.2b
 B5.4b
+B5.1d
+B6.13
 ```
 
 `AB-BE-01` begins after `B6.8`.
@@ -2379,6 +2737,9 @@ F3.5b
 F5.10
 F5.11
 F5.12
+F5.13
+F5.14  (P1 — do first)
+F5.15
 ```
 
 These can mostly run in parallel because they touch different concerns.
@@ -2401,11 +2762,12 @@ These are no longer blocked, but some have task dependencies:
 
 ```text
 B3.11  (DONE 2026-09-22)
-B2.1
+B2.1   (DONE 2026-09-22)
 F2.3
 B2.5
 B2.2a
 B4.13
+B2.1a  (needs real credentials)
 F3.4b
 F4.3
 AB-FE-06
@@ -2414,10 +2776,11 @@ AB-FE-06
 Notification chain:
 
 ```text
-B2.1
+B2.1 (DONE)
 ├──→ F2.3
 ├──→ B2.5
-└──→ B4.13
+├──→ B4.13
+└──→ B2.1a
 ```
 
 ---
@@ -2439,13 +2802,13 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**29** (8 completed: B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02, AB-FE-05, B3.11;
-10 added by discovery: NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10, B2.2b,
-B5.4b, F5.11, F5.12)
+**34** (9 completed: B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02, AB-FE-05, B3.11,
+B2.1; 16 added by discovery: NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10, B2.2b,
+B5.4b, F5.11, F5.12, B2.1a, B5.1d, B6.13, F5.13, F5.14, F5.15)
 
 ### Ready for execution
 
-**29**
+**34** (`B2.1a` additionally needs real provider credentials from the user)
 
 ### Blocked
 
@@ -2482,11 +2845,11 @@ D1–D9 are resolved.
 | --------- | --------: |
 | P0        |         0 |
 | P1        |         2 |
-| P2        |        16 |
-| P3        |        11 |
-| **Total** |    **29** |
+| P2        |        19 |
+| P3        |        13 |
+| **Total** |    **34** |
 
-Recomputed from the JSON index on 2026-09-22 (B3.11 session).
+Recomputed from the JSON index on 2026-09-22 (B2.1 session).
 
 Priority is execution guidance, not permission to rewrite requirements.
 
@@ -2600,7 +2963,7 @@ were freshly executed.
 ## START HERE
 
 ```text
-B2.1
+F5.14
 ```
 
 Batch A (`B6.8`, `B6.9`, `AB-BE-03`) is complete — audits
@@ -2613,20 +2976,26 @@ Batch A (`B6.8`, `B6.9`, `AB-BE-03`) is complete — audits
 ([audit](audit/2026-09-22-abfe05-admin-products-pagination.md)). Batch B keeps
 only `F5.9` (P2).
 
-`B3.11` is DONE too ([audit](audit/2026-09-22-b311-contact-spam-guard.md)).
+`B3.11` is DONE ([audit](audit/2026-09-22-b311-contact-spam-guard.md)), and so is
+`B2.1` ([audit](audit/2026-09-22-b21-notification-infrastructure.md)) — executed as notification infrastructure under the D2
+product adjustment: in-app notifications live, SMS/email built but unconfigured.
 
-`B2.1` (SMS/email notifications) is the highest-priority open task: the first of
-the two remaining P1s (then `F2.3`, which depends on it), Batch F, no task
-dependencies, product decision D2 resolved.
+Two P1s are open. **`F5.14` goes first**: it is a regression in a shipped
+feature — every coupon create, edit and «فعال» toggle on `/admin/coupons` is
+rejected with 422 today (found by the B2.1 browser regression sweep) — and the fix
+is two call sites in `src/lib/api.ts`. **`F2.3`** (forgot password, Batch F; its
+dependency `B2.1` is DONE) is next after it.
 
-**Check the stop conditions (§18) first.** Real Kavenegar / SMTP credentials are
-almost certainly not configured in this repo. Building the provider abstraction
-with a dev/log transport is possible, but real delivery cannot be verified without
-the secrets. Report that instead of faking it.
+**For `F2.3`, check the stop conditions (§18) first.** The reset email must go through
+`services/notifications.py` (add an email-only entry point; see the F2.3 hand-off),
+and SMTP is **not configured** (`B2.1a`). Building tokens, endpoints, UI and the
+email path with a stub transport is possible; real delivery is not. Decide — with
+the user if needed — how a reset link is verified locally before inventing one,
+and report real delivery as unverified instead of faking it.
 
-After `B2.1` is completed:
+After `F5.14` is completed:
 
-1. update this pointer;
+1. update this pointer (to `F2.3`, the remaining P1);
 2. update the task status;
 3. link the new audit;
 4. record the actual verification level;
@@ -2728,16 +3097,16 @@ Reconciliation date:
 Current state:
 
 ```text
-29 remaining implementation units
-  (19 of the original 27, plus NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10,
-   B2.2b, B5.4b, F5.11 and F5.12 — the last eight discovered as NEW-ABBE03-1,
-   NEW-F55-1, NEW-F56-1, NEW-F56-2, NEW-ABFE02-1 and NEW-ABFE05-1/2/3 — found
-   during them)
-8 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02,
-  AB-FE-05, B3.11)
+34 remaining implementation units
+  (18 of the original 27, plus NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10,
+   B2.2b, B5.4b, F5.11, F5.12, B2.1a, B5.1d, B6.13, F5.13, F5.14 and F5.15 — the
+   last fourteen discovered as NEW-ABBE03-1, NEW-F55-1, NEW-F56-1, NEW-F56-2,
+   NEW-ABFE02-1, NEW-ABFE05-1/2/3 and NEW-B21-1…6 — found during them)
+9 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02,
+  AB-FE-05, B3.11, B2.1)
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = B2.1
+NEXT = F5.14 (then F2.3)
 ```

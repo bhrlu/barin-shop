@@ -61,7 +61,8 @@ Read the full text in `plan/RULES.md` before a non-trivial code change.
 - **R7 — One canonical implementation.** Reuse (or fix in place) the existing
   helper; never add a second. Auth → `app/auth.py`; roles → `services/roles.py`;
   totals → `services/pricing.py`; transitions/stock restore →
-  `services/order_lifecycle.py`; payments/refunds → `services/payments.py`; all
+  `services/order_lifecycle.py`; payments/refunds → `services/payments.py`;
+  customer notifications (in-app + SMS/email) → `services/notifications.py`; all
   frontend HTTP → `src/lib/api.ts`. No direct `fetch` to the backend.
 - **R8 — Contract first.** State request/response shape, status codes, error
   shape, auth + ownership, pagination (`Page<T>` vs array) and normalisation

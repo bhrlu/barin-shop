@@ -54,6 +54,22 @@ class Settings(BaseSettings):
     contact_rate_limit: int = 5
     contact_rate_window_seconds: int = 600
 
+    # Outbound notification providers (B2.1, decision D2). Environment only —
+    # never the database. Empty = unconfigured: the channel sends nothing, and
+    # internal notifications keep working.
+    # SMS: Kavenegar (https://kavenegar.com)
+    kavenegar_api_key: str = ""
+    kavenegar_sender: str = ""  # dedicated line number; empty = account default
+    # Email: plain SMTP (STARTTLS on 587 by default; SMTP_SSL=true for port 465)
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_starttls: bool = True
+    smtp_ssl: bool = False
+    notification_provider_timeout_seconds: float = 10.0
+
     # Bootstrap admin (used by `python -m app.seed_auth`)
     admin_email: str = "admin@sande.local"
     admin_password: str = "admin1234"

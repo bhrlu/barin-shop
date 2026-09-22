@@ -49,7 +49,7 @@ Unchecked items are not yet implemented.
 - [ ] Multiple carriers with different rates (Post, Tipax, courier)
 - [ ] Shipment tracking number and automatic tracking
 - [ ] Free shipping above a certain amount
-- [ ] Automatic notifications at each step (SMS/email)
+- [ ] Automatic notifications at each step (SMS/email) — **in-app notification at every step done (B2.1)**; the Kavenegar SMS / SMTP email layer is built, tested with stubs and admin-switchable, but sends nothing until real credentials exist (activation + live check: B2.1a)
 
 ## 5. User Account
 - ✅ Sign-up/login with email and password (own JWT). **Google sign-in does not exist** in this repo — the claim was a leftover from the Supabase era (corrected 2026-09-22 audit).
@@ -94,7 +94,7 @@ Unchecked items are not yet implemented.
 - [ ] Blog and SEO content
 - [ ] Sitemap and structured data (Product Schema)
 - [ ] Multi-language and multi-currency
-- [ ] In-app notifications
+- [x] In-app notifications — **done (B2.1): header bell + `/account/notifications`, created at the order/payment/refund lifecycle points, deduplicated per event**
 
 ---
 
@@ -162,4 +162,4 @@ Endpoints noted in `code` already exist and are verified working.
 - [ ] PWA
 - [ ] Blog + SEO content + sitemap + Product Schema
 - [ ] Multi-language / multi-currency
-- [ ] In-app notifications
+- [x] In-app notifications — **done (B2.1): header bell + `/account/notifications`, created at the order/payment/refund lifecycle points, deduplicated per event**

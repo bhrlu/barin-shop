@@ -25,9 +25,11 @@ backend/
 │   ├── seed_coupons.py    # SANDE10 + WELCOME500
 │   ├── seed_mock.py       # optional demo dataset: 8 customers, 31 backdated orders,
 │                          # refund claims in all 4 states, reviews, inbox, variants
-│   ├── services/          # coupons, checkout, payments, pricing, search, roles, variants
+│   ├── services/          # coupons, checkout, payments, pricing, search, roles, variants,
+│                          # notifications (+ notification_providers: Kavenegar / SMTP)
 │   └── routers/           # health, auth, products, reviews, addresses, favorites,
-│                          # orders, admin, storage, search, stock, coupons, checkout, payments
+│                          # orders, admin, storage, search, stock, coupons, checkout, payments,
+│                          # notifications
 └── tests/                 # pytest units + tests/api_smoke.py (live end-to-end)
 ```
 
@@ -103,6 +105,10 @@ Public / customer:
 | GET/POST/PATCH/DELETE | `/addresses` | user | address book (at most one `is_default`; `PATCH` edits and/or moves the default) |
 | POST | `/contact` | – | store a contact-form message (guest-friendly). **Guarded (B3.11):** 5 attempts per IP per 10 min (accepted and rejected both count) → generic 429; a filled honeypot field `website` → generic 400, not stored |
 | GET/POST | `/favorites` · `/favorites/{id}` | user | wishlist |
+| GET | `/notifications?page=&page_size=&unread=` | user | own in-app notifications, newest first — **always** the `{items,total,page,page_size,pages}` envelope (default 20, cap 100); `unread=true` filters (B2.1) |
+| GET | `/notifications/unread-count` | user | `{unread}` for the header bell |
+| PATCH | `/notifications/{id}/read` | user | mark one read (idempotent: keeps the first `read_at`); someone else's id → 404 |
+| POST | `/notifications/read-all` | user | mark all own unread → `{updated}` |
 | POST | `/storage/upload-url` · `/storage/sign` | admin / user | MinIO presign |
 
 Admin:
@@ -130,6 +136,7 @@ returning bare arrays.** `/admin/audit-logs` uses `?limit=&offset=` instead
 | GET | `/admin/kpis?range=today\|7d\|30d\|all` | KPI aggregation: gross/net revenue, paid orders, AOV, pending refunds, low-stock, daily revenue series, status breakdown, deltas |
 | GET | `/admin/audit-logs` | audit trail (B5.1): filters `action`, `entity_type`, `entity_id`, `admin_id`, `limit`/`offset` paging; written automatically on privileged mutations |
 | PUT | `/admin/users/{id}/roles` | set a user's staff roles `super_admin`/`order_manager`/`support` (B5.4, audited) |
+| GET/PATCH | `/admin/settings/notifications` | SMS/email switches (B2.1, `settings` capability = admin/super_admin). `PATCH {sms_enabled?, email_enabled?}` (strict booleans, at least one → else 400; audited). Response adds per channel `*_provider`, `*_configured` (credentials present) and `*_active` (switch **and** configured); `internal_enabled` is always `true` |
 | PATCH | `/refunds/{id}` | resolve a refund request — settling (`refunded`) **requires** `bank_tracking_code` (Paya/Satna); every resolution records `resolved_by` + `resolved_at` |
 | GET/DELETE | `/admin/contact-messages` | contact inbox (`?status=new`), delete a message |
 | PATCH | `/admin/contact-messages/{id}` | mark a message `answered` (or reopen it as `new`) |
@@ -144,6 +151,39 @@ offset is currently dropped — B2.2b) and `to` is exclusive, so the admin UI
 sends local midnights as offset-less UTC ISO strings. CORS exposes
 `Content-Disposition` so the browser can read the RFC-6266 filename on a
 cross-origin download. UI: `/admin/orders` and `/admin/products`.
+
+## Notifications (B2.1)
+
+`app/services/notifications.py` is the **only** place notifications are created.
+Business code calls `notify_order_event(session, order_id, "created"|"paid"|"shipped"|"cancelled")`
+or `notify_refund_event(session, refund_id, "approved"|"settled")` at the
+lifecycle point itself: `services/checkout.create_order`, `services/payments.verify_and_finalize`,
+the simulator `POST /orders/{id}/payment-complete`, a staff `PATCH /orders/{id}`
+to `shipped` or `payment_status=paid`, `services/order_lifecycle.cancel_order_tx`
+(both cancel paths), and `PATCH /refunds/{id}` to `approved` / `refunded`. A
+rejected refund notifies nobody (D2 scope).
+
+- **Same transaction.** The `notifications` row is inserted on the caller's
+  session, so it commits or rolls back with the order/payment/refund.
+- **One dedup mechanism.** `UNIQUE (user_id, event_key)` with keys like
+  `order:<id>:paid` / `refund:<id>:settled`; a repeated transition inserts nothing
+  and therefore sends nothing.
+- **External channels are an outbox.** For a *new* notification, each channel the
+  admin switched on (`notification_settings`) gets a `notification_deliveries`
+  row: `pending` when the provider is configured and a recipient exists (profile
+  phone → order shipping phone for SMS; account email), else `skipped` with
+  `provider_not_configured` / `no_recipient`. Pending rows are sent in the
+  background **after the commit**; a provider failure is stored (`failed` +
+  `last_error`) and never touches the business transaction. Re-dispatching is
+  safe — only `pending`/`failed` rows are picked, under a row lock. There is no
+  job queue/sweeper yet (B2.5): a row left `pending` by a crash stays there.
+- **Providers** (`services/notification_providers.py`): `KavenegarSmsProvider`
+  (`KAVENEGAR_API_KEY`, optional `KAVENEGAR_SENDER`) and `SmtpEmailProvider`
+  (`SMTP_HOST`, `SMTP_PORT`=587, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`,
+  `SMTP_STARTTLS`=true, `SMTP_SSL`=false). Environment only — never the DB. Empty
+  = unconfigured, a valid state. **Neither has been run against the real service
+  yet** (no credentials exist); they are tested with stub transports only.
+- The in-app inbox has no switch; SMS and email default to **off**.
 
 ## Search model
 
@@ -224,7 +264,8 @@ base schema comes from `infra/initdb/`; this service owns only the additive
 columns (including `payments.authority` and `order_items.variant_id`) and the
 `coupons` (incl. `coupons.max_discount_cap`), `product_variants`,
 `product_reviews`, `search_history`,
-`recently_viewed`, `contact_messages`, `contact_attempts` tables.
+`recently_viewed`, `contact_messages`, `contact_attempts`, `notifications`,
+`notification_deliveries` and `notification_settings` (single row) tables.
 
 **Client IP (B5.1a audit + B3.11 throttle).** `app/services/client_ip.py` is the
 single resolver: the socket peer, or the `X-Forwarded-For` chain walked right to
@@ -238,6 +279,9 @@ every visitor shares one throttle bucket. Throttle knobs: `CONTACT_RATE_LIMIT`
 
 ```bash
 ./.venv/bin/python -m pytest -q            # unit tests (no DB needed)
+# the DB integration tests skip unless DATABASE_URL is exported (B6.13):
+DATABASE_URL=postgresql+asyncpg://sande:sande@localhost:5432/postgres \
+  JWT_SECRET=test-secret ./.venv/bin/python -m pytest -q
 ./.venv/bin/python -m ruff check app tests
 ./.venv/bin/python tests/api_smoke.py      # live end-to-end; needs a running API
 ```

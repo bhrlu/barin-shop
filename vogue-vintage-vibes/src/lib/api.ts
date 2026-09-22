@@ -577,6 +577,40 @@ export type RefundRequest = {
   created_at: string;
 };
 
+/** One in-app notification (B2.1) as `GET /notifications` returns it. Created
+ * only by the backend at order/payment/refund lifecycle points; `data` names the
+ * order (and refund) it is about so the UI can link to it. Unread = `read_at`
+ * null. `title`/`message` are ready-to-show Persian (digits already converted). */
+export type AppNotification = {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  data: { order_id?: string; order_number?: string; refund_id?: string };
+  read_at: string | null;
+  created_at: string;
+};
+
+export type NotificationQuery = { page?: number; pageSize?: number; unread?: boolean };
+
+/** `GET|PATCH /admin/settings/notifications` (B2.1, `settings` capability =
+ * admin/super_admin). `*_enabled` is the admin switch; `*_configured` says the
+ * server has provider credentials; a channel sends only when both are true
+ * (`*_active`). The in-app inbox has no switch. */
+export type NotificationSettings = {
+  internal_enabled: boolean;
+  sms_enabled: boolean;
+  sms_provider: string;
+  sms_configured: boolean;
+  sms_active: boolean;
+  email_enabled: boolean;
+  email_provider: string;
+  email_configured: boolean;
+  email_active: boolean;
+  updated_at: string | null;
+  updated_by: string | null;
+};
+
 export type PaymentSession = {
   order_id: string;
   order_number: string;
@@ -742,6 +776,21 @@ export const api = {
   // --- payments ---
   myPayments: () => request<PaymentRecord[]>("/payments/mine"),
 
+  // --- in-app notifications (B2.1) — always the Page<T> envelope, newest first ---
+  notifications: (query: NotificationQuery = {}) => {
+    const qs = new URLSearchParams();
+    if (query.page) qs.set("page", String(query.page));
+    if (query.pageSize) qs.set("page_size", String(query.pageSize));
+    if (query.unread) qs.set("unread", "true");
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return request<Page<AppNotification>>(`/notifications${suffix}`);
+  },
+  notificationsUnreadCount: () => request<{ unread: number }>("/notifications/unread-count"),
+  markNotificationRead: (id: string) =>
+    request<AppNotification>(`/notifications/${id}/read`, { method: "PATCH" }),
+  markAllNotificationsRead: () =>
+    request<{ updated: number }>("/notifications/read-all", { method: "POST" }),
+
   // --- admin ---
   adminStats: () => request<AdminStats>("/admin/stats"),
   adminKpis: (range: KpiRange = "30d") => request<AdminKpis>(`/admin/kpis?range=${range}`),
@@ -773,6 +822,13 @@ export const api = {
     return request<PaymentRecord[] | Page<PaymentRecord>>(`/admin/payments${suffix}`);
   },
   adminRefunds: () => request<RefundRequest[]>("/admin/refunds"),
+  // SMS/email switches (B2.1) — admin/super_admin; the in-app inbox cannot be switched off
+  adminNotificationSettings: () => request<NotificationSettings>("/admin/settings/notifications"),
+  adminUpdateNotificationSettings: (patch: { sms_enabled?: boolean; email_enabled?: boolean }) =>
+    request<NotificationSettings>("/admin/settings/notifications", {
+      method: "PATCH",
+      json: patch,
+    }),
   // audit trail (F5.5) — newest first, audit capability (admin/super_admin)
   adminAuditLogs: (query: AuditLogQuery = {}) => {
     const qs = new URLSearchParams();

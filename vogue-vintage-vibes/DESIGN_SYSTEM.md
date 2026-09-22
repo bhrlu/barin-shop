@@ -180,6 +180,7 @@ Per the comment at the top of `styles.css`:
 | `ProductCard.tsx` | Two-image hover swap, `isNew` badge, price + struck `oldPrice`, rating (`avgRating`/`reviewCount`) and a compare toggle. Root is a wrapper `<div>` with the product `<Link>` inside it, so the toggle is never a button nested in an anchor. Typed against `@/data/products`. |
 | `CompareBar.tsx` | Sticky bar above the footer showing the comparison basket (count, clear, link to `/compare`); hidden while empty. Rendered once from `__root.tsx`. |
 | `CancelOrderButton.tsx` | Mutation calling `api.cancelOrder`. |
+| `NotificationBell.tsx` | B2.1. `NotificationBell` sits in `SiteHeader` (rendered by `__root.tsx` on **every** route, admin included — never add a second bell to a nested shell). Signed-in only: `bg-primary` count badge (Persian digits, `۹۹+` cap, count in the `aria-label`), a Radix popover (`w-[min(22rem,calc(100vw-2rem))]`, `rounded-2xl`, `shadow-lg`) with the latest 6, «خواندن همه», clay skeleton / error + retry / `BellOff` empty state, and a footer link to `/account/notifications`. `NotificationRow` (exported, reused by that page): terracotta unread dot + semibold title + `bg-terracotta/5` tint while unread, `sr-only` «(خوانده‌نشده)», Jalali date-time; a row about an order is a `Link` to `/account/order/$orderId`, and opening it marks it read. Data via `@/lib/notifications`. |
 | `admin/ProductImageManager.tsx` | Upload (`api.uploadImage`) + URL entry + reorder + primary-image badge. |
 | `admin/ExportControls.tsx` | AB-FE-02: `OrdersExportPanel` (local date range + status → CSV/Excel, Jalali range preview, collapsible sales report) and `ProductsExportButtons`. Downloads go through `api.adminExport*` → `requestFile()` (bearer token, RFC-6266 filename, ZWNJ → space for Chromium); one download at a time, Persian inline errors. |
 | `admin/VariantEditor.tsx` | Per-product size × colour stock CRUD (`/products/{id}/variants`, `/variants/{id}`): datalist-backed size/colour inputs, per-row save (never on-blur) and delete; invalidates the admin list, the storefront variant query, the catalog and the inventory queries. |
@@ -188,7 +189,11 @@ Per the comment at the top of `styles.css`:
 | `product/ProductRail.tsx` | RTL embla carousel rail (`ui/carousel`, `direction: "rtl"`) with header arrow buttons tracking `canScrollPrev/Next`; used for related, recommended and recently-viewed products. |
 | `product/RecentlyViewedRail.tsx` | `ProductRail` fed by `recentlyViewedQuery`; hidden for guests and while the list is empty (home + shop). |
 
-Supporting `src/lib` modules that carry UI rules: `format.ts` (`toFa`,
+Supporting `src/lib` modules that carry UI rules: `notifications.ts` (B2.1 —
+`notificationKeys` scoped **by user id** so a sign-out/sign-in never shows the
+previous account's inbox; `useUnreadNotifications` polls every 60 s;
+`useNotificationList`; `useNotificationActions` = mark one / all read, each
+invalidating `["notifications", userId]`), `format.ts` (`toFa`,
 `formatToman`, `formatFaDate`, `formatFaDateTime`), `variants.ts` (the backend's combo rule), `compare.tsx`
 (localStorage basket), `cart.tsx` (localStorage cart), **`stock-issues.ts`** (the one
 copy of the Persian copy per rejected-line reason — cart line note vs checkout toast).
@@ -222,6 +227,7 @@ Mapping:
 | [FE-05] `admin.orders.tsx` + `OrderDetailSheet.tsx` | `Sheet side="left"` detail, 4-step stepper, postal tracking input, **print stylesheet invoice**, copy-address | **exists** (`admin.orders.tsx` + `components/admin/OrderDetailDrawer.tsx`, F4.4): per-row «مشاهده و پردازش» opens the left Sheet with the 4-step stepper (terracotta circles + advance button), receiver box with copy + method, itemised breakdown with signed thumbnails + totals, tracking input, cancel action, and «چاپ فاکتور رسمی» → portalled A4 invoice via the global print block; the list keeps selects + tracking (F2.8) |
 | [FE-06] `admin.refunds.tsx` + `RefundActionDialog.tsx` | Tabs (pending/settled/all), claim cards with Sheba + copy, approve/reject dialog with bank tracking code | **exists** (`admin.refunds.tsx`, F2.4 + B5.3): the three tabs, terracotta-edge quote cards with claimant info, approve/reject/settle dialog where settlement requires the Paya/Satna bank code (backend-enforced); settled cards show the code + date. No Sheba column exists |
 | [FE-07] `admin.coupons.tsx` | Ticket-styled coupon cards, usage progress bar, Jalali date pickers | **missing** — coupon CRUD exists in the API |
+| (no spec module) `admin.settings.tsx` | — | **exists** (B2.1): «تنظیمات» tab for admin/super_admin only (`ROLE_TAB_KEYS` + backend `settings` capability). Cards: in-app notifications (locked-on switch + «همیشه فعال»), SMS (کاوه‌نگار) and email (SMTP) switches, each with a provider pill («سرویس تنظیم شده/نشده», §2.3 positive/waiting tones), a plain-language line on what will actually happen, and the env-var names when unconfigured (credentials are never entered in the UI). 403 → Persian permission notice; other errors → retry |
 | [FE-08] `admin.users.tsx` | Avatar + tier badge, drawer tabs (orders/addresses/favorites), LTV, role change with confirmation | flat list with roles, order count, spend; **role change exists** (F5.6): per-row «نقش‌ها» dialog, step 1 role checkboxes (`super_admin`/`order_manager`/`support`, legacy roles read-only), step 2 +/− diff + typed-email confirmation; disabled on your own row. Avatar/tier/tabs/LTV remain AB-FE-06 |
 
 New admin work should follow the spec's *look* (B0 tokens, §2.6 spacing, §2.3 status
@@ -457,6 +463,10 @@ if (!data?.length) {
 2. **RTL not declared to shadcn.** `components.json` has `"rtl": false`, yet the
    app is RTL. Primitives can generate LTR-only styles (e.g. `command`, `sheet`
    animations). Worth setting `rtl: true` if you add Radix-heavy components.
+   `ui/switch.tsx` was one of them — its checked thumb slid *out* of the track
+   under `dir="rtl"`; fixed in place with `rtl:data-[state=checked]:-translate-x-4`
+   (B2.1, benefits the coupons toggle too). Check any other primitive that
+   translates on the x-axis the same way before using it.
 3. **Status colour semantics are unimplemented** — every chip is terracotta/sand
    (§2.3); the mapping is specified and ready to build (F4.1).
 4. **Static seed vs API catalog.** `src/data/products.ts` still holds the static

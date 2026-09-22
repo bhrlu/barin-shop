@@ -43,9 +43,10 @@ ACTIONS = {
     "moderate_review",
     "delete_review",
     "update_user_roles",
+    "update_notification_settings",
 }
 
-_ENTITY_TYPES = {"order", "product", "variant", "coupon", "review", "user"}
+_ENTITY_TYPES = {"order", "product", "variant", "coupon", "review", "user", "settings"}
 
 
 async def record_audit(

@@ -11,6 +11,8 @@ mirroring checkout's decrement order), inside the caller's transaction.
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.notifications import notify_order_event
+
 # Shipped orders are physically gone — the store can no longer restock them,
 # so the cancel guard keeps refusing them (same behavior as before B6.1).
 CANCELLABLE_STATUSES = {"pending", "processing"}
@@ -117,3 +119,5 @@ async def cancel_order_tx(session: AsyncSession, order_id: str, old_status: str)
         {"oid": order_id},
     )
     await restore_stock(session, order_id)
+    # B2.1: both cancel paths (customer POST /cancel, staff PATCH) end here
+    await notify_order_event(session, order_id, "cancelled")

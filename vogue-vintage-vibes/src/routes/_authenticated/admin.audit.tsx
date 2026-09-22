@@ -42,6 +42,7 @@ const ACTION_LABELS: Record<string, string> = {
   moderate_review: "بررسی نظر",
   delete_review: "حذف نظر",
   update_user_roles: "تغییر نقش کاربر",
+  update_notification_settings: "تغییر تنظیمات اطلاع‌رسانی",
 };
 
 /** Mirrors `_ENTITY_TYPES` in backend/app/services/audit.py. */
@@ -52,6 +53,7 @@ const ENTITY_LABELS: Record<string, string> = {
   coupon: "کد تخفیف",
   review: "نظر",
   user: "کاربر",
+  settings: "تنظیمات",
 };
 
 const STAFF_ROLES = new Set(["admin", "super_admin", "order_manager", "support"]);

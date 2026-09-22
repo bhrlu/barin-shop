@@ -115,7 +115,10 @@ new session can pick up exactly where this one stopped. Legend: `[ ]` todo ·
 - [ ] **F2.3 Forgot password** — **backend work needed** (this line used to say
   "Supabase reset email flow"; there is no Supabase any more and `auth.py` has no
   reset endpoint). Add a reset-token endpoint + email to `backend-tasks.md` first,
-  then the UI.
+  then the UI. B2.1 (DONE) provides the email transport: add an email-only entry
+  point to `backend/app/services/notifications.py` (never call
+  `SmtpEmailProvider` directly). SMTP is unconfigured, so decide how the reset
+  link is verified without real delivery before building.
 - [x] **F2.5 Pagination for shop & admin lists** — envelope pagination
   (`{items,total,page,page_size,pages}`, bare list without `?page=`) on
   `/products`, `/orders`, `/admin/{orders,users,payments,contact-messages,reviews}`
@@ -409,6 +412,36 @@ conflict (DESIGN_SYSTEM.md §5).
   runs `catalogQuery` (all products, `include_inactive=true`) on every page, admin
   pages included, to price and stock-check the cart. Fetch only the cart's products
   (or defer until the cart is used). Related to F5.8 but broader.
+
+- [x] **B2.1 (frontend part) Notification centre + admin notification settings**
+  — delivered with backend task B2.1: header bell (`NotificationBell` in
+  `SiteHeader`, unread badge, latest-6 popover, mark-all-read, links to the order),
+  `/account/notifications` (all/unread filter, per-item read, pager) and
+  `/admin/settings` (admin/super_admin; locked-on in-app switch + SMS/email
+  switches with provider state). Also fixed the shared `ui/switch.tsx` thumb,
+  which slid out of its track under RTL. Browser tested.
+  → audit: [2026-09-22-b21-notification-infrastructure.md](audit/2026-09-22-b21-notification-infrastructure.md)
+- [ ] **F5.14 Admin coupon create / edit / toggle all fail with 422** (`NEW-B21-5`,
+  discovered during B2.1) — `api.adminCreateCoupon` and `api.adminUpdateCoupon`
+  pass a raw `body: JSON.stringify(…)`, but `request()` sets
+  `Content-Type: application/json` only on the `json:` path, so the browser sends
+  `text/plain` and FastAPI 0.141 answers 422 («Input should be a valid
+  dictionary…»). Verified: the same body is 200 as `application/json`, 422 as
+  `text/plain`. Every save and every «فعال» switch on `/admin/coupons` is
+  silently rejected. Fix: pass `json:` in both methods; add a browser check.
+- [ ] **F5.15 A failed `/auth/me` signs the user out** (`NEW-B21-6`, discovered
+  during B2.1) — `AuthProvider.refresh()` calls `setToken(null)` on *any* error,
+  not only a 401: a network error, a backend restart or a full-page navigation
+  that interrupts the request drops a valid session (reproduced: token gone after
+  quick successive page loads, identical without the B2.1 bell). Clear the token
+  only on 401/403; keep it and retry otherwise.
+- [ ] **F5.13 Guest direct-load of a protected route logs a hydration mismatch**
+  (`NEW-B21-4`, discovered during B2.1) — opening e.g. `/account/payments` signed
+  out renders the `ssr: false` route on the server, then `_authenticated`'s
+  client `beforeLoad` redirects to `/auth?redirect=…` and React reports «Hydration
+  failed … server rendered HTML didn't match the client» (page error; the tree is
+  regenerated, nothing breaks visibly). Pre-existing: identical with the
+  notification bell removed. Redirect without a mismatching first render.
 
 ## Rules reminder
 

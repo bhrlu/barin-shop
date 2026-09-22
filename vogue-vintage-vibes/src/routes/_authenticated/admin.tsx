@@ -9,6 +9,7 @@ import {
   Package,
   RotateCcw,
   ScrollText,
+  Settings,
   ShoppingBag,
   SlidersHorizontal,
   Star,
@@ -45,7 +46,8 @@ type TabKey =
   | "messages"
   | "reviews"
   | "users"
-  | "audit";
+  | "audit"
+  | "settings";
 
 type AdminTab = {
   key: TabKey;
@@ -88,6 +90,7 @@ const ALL_TABS: AdminTab[] = [
   { key: "reviews", to: "/admin/reviews", label: "نظرات", exact: false, icon: Star },
   { key: "users", to: "/admin/users", label: "کاربران", exact: false, icon: Users },
   { key: "audit", to: "/admin/audit", label: "گزارش فعالیت‌ها", exact: false, icon: ScrollText },
+  { key: "settings", to: "/admin/settings", label: "تنظیمات", exact: false, icon: Settings },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
@@ -112,6 +115,7 @@ const ROLE_TAB_KEYS: Record<string, TabKey[]> = {
     "reviews",
     "users",
     "audit",
+    "settings",
   ],
   admin: [
     "dashboard",
@@ -124,6 +128,7 @@ const ROLE_TAB_KEYS: Record<string, TabKey[]> = {
     "reviews",
     "users",
     "audit",
+    "settings",
   ],
   order_manager: ["dashboard", "products", "inventory", "orders", "refunds", "coupons", "messages"],
   support: ["dashboard", "messages", "reviews"],

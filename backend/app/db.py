@@ -301,6 +301,75 @@ CONTACT_DDL = [
 ]
 
 
+# --- Notifications (idempotent) ----------------------------------------------
+# B2.1 / decision D2. `notifications` is the in-app inbox: one row per user per
+# business event, written by `app/services/notifications.py` on the same session
+# as the event, so it commits or rolls back with it. UNIQUE (user_id, event_key)
+# is the single dedup mechanism — a repeated transition (`order:<id>:paid`, …)
+# inserts nothing. Unread = `read_at IS NULL`.
+#
+# `notification_deliveries` is the outbox for the external channels (SMS/email):
+# a row is written only when the admin switched the channel on, and is sent
+# after the commit. UNIQUE (notification_id, channel) means one message per
+# channel per event. `notification_settings` is a single row (id = true) holding
+# the admin switches; provider credentials never live in the database.
+NOTIFICATION_DDL = [
+    """
+    CREATE TABLE IF NOT EXISTS public.notifications (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      data JSONB NOT NULL DEFAULT '{}'::jsonb,
+      event_key TEXT NOT NULL,
+      read_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (user_id, event_key)
+    )
+    """,
+    (
+        "CREATE INDEX IF NOT EXISTS notifications_user_created_idx "
+        "ON public.notifications(user_id, created_at DESC)"
+    ),
+    (
+        "CREATE INDEX IF NOT EXISTS notifications_user_unread_idx "
+        "ON public.notifications(user_id) WHERE read_at IS NULL"
+    ),
+    """
+    CREATE TABLE IF NOT EXISTS public.notification_deliveries (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      notification_id UUID NOT NULL REFERENCES public.notifications(id) ON DELETE CASCADE,
+      channel TEXT NOT NULL CHECK (channel IN ('sms', 'email')),
+      recipient TEXT,
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'sent', 'failed', 'skipped')),
+      provider TEXT,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (notification_id, channel)
+    )
+    """,
+    (
+        "CREATE INDEX IF NOT EXISTS notification_deliveries_open_idx "
+        "ON public.notification_deliveries(created_at) "
+        "WHERE status IN ('pending', 'failed')"
+    ),
+    """
+    CREATE TABLE IF NOT EXISTS public.notification_settings (
+      id BOOLEAN PRIMARY KEY DEFAULT true CHECK (id),
+      sms_enabled BOOLEAN NOT NULL DEFAULT false,
+      email_enabled BOOLEAN NOT NULL DEFAULT false,
+      updated_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+    """,
+    "INSERT INTO public.notification_settings (id) VALUES (true) ON CONFLICT (id) DO NOTHING",
+]
+
+
 async def startup_ddl() -> None:
     # enum extension first, on its own autocommit connection (ADD VALUE and
     # older Postgres transactions do not mix)
@@ -321,6 +390,7 @@ async def startup_ddl() -> None:
             AUDIT_DDL,
             PAYMENT_DDL,
             CONTACT_DDL,
+            NOTIFICATION_DDL,
             [co_purchase_ddl()],
         ):
             for stmt in statements:

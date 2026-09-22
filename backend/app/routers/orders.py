@@ -21,6 +21,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.auth import CurrentUser, DbSession, StaffOrders, StaffRefunds
 from app.services.audit import record_audit
+from app.services.notifications import notify_order_event, notify_refund_event
 from app.services.order_lifecycle import (
     CancelError,
     IllegalTransition,
@@ -248,6 +249,13 @@ async def patch_order(
                 new_values={"tracking_code": changed["tracking_code"][1]},
             )
 
+        # B2.1: tell the customer at the transition itself (a cancel notifies
+        # from cancel_order_tx); repeats are deduped by the notification service
+        if "status" in changed and order["status"] == "shipped":
+            await notify_order_event(session, str(order_id), "shipped")
+        if "payment_status" in changed and order["payment_status"] == "paid":
+            await notify_order_event(session, str(order_id), "paid")
+
     await session.commit()
     return order
 
@@ -415,6 +423,12 @@ async def resolve_refund(
             },
         )
 
+    # B2.1: approval and settlement reach the claimant; a rejection does not (D2)
+    if body.status == "approved":
+        await notify_refund_event(session, str(row["id"]), "approved")
+    elif body.status == "refunded":
+        await notify_refund_event(session, str(row["id"]), "settled")
+
     await record_audit(
         session,
         admin_id=user.id,
@@ -498,5 +512,7 @@ async def payment_complete(
             "ref": reference,
         },
     )
+    if paid:
+        await notify_order_event(session, str(order_id), "paid")
     await session.commit()
     return PaymentCompleteOut(ok=paid, order_number=order["order_number"], reference=reference)
