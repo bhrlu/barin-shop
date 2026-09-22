@@ -417,9 +417,9 @@ No new implementation task is needed.
 
 ## First task
 
-`B6.8` must be completed before:
+`B6.8` is **DONE** (2026-09-22), so its dependent is released:
 
-* `AB-BE-01`
+* `AB-BE-01` — unblocked
 
 `B4.9` is no longer part of execution because it is DROPPED.
 
@@ -474,7 +474,7 @@ Execute them sequentially unless file ownership is explicitly separated.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "B6.8",
+    "agent_start_task": "B6.9",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -485,13 +485,16 @@ Execute them sequentially unless file ownership is explicitly separated.
       "id": "B6.8",
       "title": "Per-variant stock restoration on cancellation",
       "priority": "P0",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "backend_db_tests",
       "depends_on": [],
       "blocks": ["AB-BE-01"],
       "batch": "A",
       "source": "backend-tasks.md",
-      "scope": "Add order_items.variant_id, persist it during checkout, restore variant and aggregate stock atomically, preserve legacy NULL behavior, and prove cancellation is idempotent."
+      "scope": "Add order_items.variant_id, persist it during checkout, restore variant and aggregate stock atomically, preserve legacy NULL behavior, and prove cancellation is idempotent.",
+      "audit": "plan/audit/2026-09-22-b68-variant-stock-restore.md",
+      "verification_level": "fully verified",
+      "completed": "2026-09-22"
     },
     {
       "id": "B6.9",
@@ -804,6 +807,18 @@ Execute them sequentially unless file ownership is explicitly separated.
       "batch": "F",
       "source": "backend-tasks.md",
       "scope": "Allow preorder checkout, persist preorder marker, avoid physical stock decrement, expose preorder state to admin, and integrate applicable notifications."
+    },
+    {
+      "id": "NEW-B68-1",
+      "title": "Drop the redundant information_schema probe in restore_stock()",
+      "priority": "P3",
+      "status": "TODO",
+      "layer": "backend",
+      "depends_on": ["B6.8"],
+      "blocks": [],
+      "batch": "F",
+      "source": "discovered-during-B6.8",
+      "scope": "order_items.variant_id is now always created by startup_ddl(), so the per-cancellation column-existence query in order_lifecycle.restore_stock() can be removed once every deployed stack has run the new DDL."
     }
   ],
   "excluded": [
@@ -824,11 +839,13 @@ Execute them sequentially unless file ownership is explicitly separated.
     }
   ],
   "counts": {
-    "total_executable": 27,
-    "P0": 1,
+    "total_executable": 28,
+    "done": 1,
+    "open": 27,
+    "P0": 0,
     "P1": 9,
     "P2": 11,
-    "P3": 6,
+    "P3": 7,
     "blocked": 0,
     "dropped": 2,
     "obsolete": 1,
@@ -846,9 +863,21 @@ Execute them sequentially unless file ownership is explicitly separated.
 ### B6.8 — Per-variant stock restoration on cancellation
 
 * **Layer:** Backend + DB + tests
-* **Status:** TODO
+* **Status:** DONE (2026-09-22)
 * **Dependencies:** none
-* **Blocks:** AB-BE-01
+* **Blocks:** AB-BE-01 — now unblocked
+* **Audit:** [`plan/audit/2026-09-22-b68-variant-stock-restore.md`](audit/2026-09-22-b68-variant-stock-restore.md)
+* **Verification level:** fully verified (focused + full pytest, ruff,
+  `api_smoke.py`, live HTTP checkout/cancel on both cancel entry points,
+  clean-environment `docker compose down -v` DDL proof)
+* **Delivered:** `order_items.variant_id` added through `CATALOG_DDL` in
+  `app/db.py` (all five seed modules already call `startup_ddl()`), written by
+  `services/checkout.py`, consumed by the existing
+  `order_lifecycle.restore_stock()`; legacy `NULL` rows still restore the
+  aggregate only and a repeated cancellation moves no stock.
+  `backend/tests/test_order_lifecycle_stock.py` covers the four acceptance tests.
+* **Not delivered:** historical `order_items` rows are not backfilled with a
+  guessed `variant_id`; `[BE-01]`'s `inventory_logs` ledger remains AB-BE-01.
 * **Why:** Variant orders decrement `product_variants.stock`, but cancellation currently
   restores only aggregate product stock. This silently corrupts inventory.
 
@@ -1773,12 +1802,11 @@ B4.9
 Run first:
 
 ```text
-B6.8
 B6.9
 AB-BE-03
 ```
 
-`B6.8` must finish before `AB-BE-01`.
+`B6.8` (the former head of this batch) is DONE, so `AB-BE-01` is unblocked.
 
 ---
 
@@ -2024,7 +2052,9 @@ must not be described as freshly rerun.
 
 In particular:
 
-`B6.8` still requires fresh runtime verification after implementation.
+`B6.8` has since been implemented and verified in its own session
+(see `plan/audit/2026-09-22-b68-variant-stock-restore.md`); the figures there
+were freshly executed.
 
 ---
 
@@ -2033,10 +2063,13 @@ In particular:
 ## START HERE
 
 ```text
-B6.8
+B6.9
 ```
 
-After `B6.8` is completed:
+Previously completed: `B6.8` (2026-09-22,
+[audit](audit/2026-09-22-b68-variant-stock-restore.md)).
+
+After `B6.9` is completed:
 
 1. update this pointer;
 2. update the task status;
@@ -2141,9 +2174,11 @@ Current state:
 
 ```text
 27 remaining implementation units
+  (26 of the original 27, plus NEW-B68-1 discovered during B6.8)
+1 completed implementation unit (B6.8)
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = B6.8
+NEXT = B6.9
 ```

@@ -181,8 +181,9 @@ async def create_order(
         await session.execute(
             text(
                 "INSERT INTO public.order_items "
-                "(order_id, product_id, name, price, size, color, image, quantity) "
-                "VALUES (:oid, :pid, :name, :price, :size, :color, :image, :qty)"
+                "(order_id, product_id, name, price, size, color, image, quantity, variant_id) "
+                "VALUES (:oid, :pid, :name, :price, :size, :color, :image, :qty, "
+                "        CAST(:vid AS uuid))"
             ),
             {
                 "oid": str(order_id),
@@ -193,6 +194,10 @@ async def create_order(
                 "color": line["color"],
                 "image": line["image"],
                 "qty": line["quantity"],
+                # B6.8: remembered so cancellation gives the stock back to the
+                # exact variant it was taken from (NULL when the product has no
+                # matrix row for this size×color).
+                "vid": str(line["variant_id"]) if line.get("variant_id") else None,
             },
         )
 

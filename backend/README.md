@@ -159,6 +159,13 @@ otherwise the product's aggregate stock applies. Checkout locks rows `FOR UPDATE
 and decrements with a guarded `UPDATE … WHERE stock >= qty` so nothing can
 oversell. Shared by `POST /stock/check` and checkout via `app/services/variants.py`.
 
+Each order line records the variant it drew from in `order_items.variant_id`, so
+cancelling an order (`POST /orders/{id}/cancel` or an admin `PATCH` to
+`cancelled`) restores the variant row **and** the product aggregate in the same
+transaction (`app/services/order_lifecycle.py`). Lines with no variant row keep
+`variant_id = NULL` and restore the aggregate only; a repeated cancellation
+moves no stock.
+
 ### Availability gate
 
 `products.availability` (`in_stock` / `coming_soon` / `preorder`) is a **hard
@@ -208,8 +215,9 @@ a variant row is not counted as offered.
 The coupon **and** catalog tables/columns are created idempotently on startup
 (`app/db.py`), so a fresh database and an already-seeded one both converge. The
 base schema comes from `infra/initdb/`; this service owns only the additive
-columns (including `payments.authority`) and the `coupons`, `product_variants`,
-`product_reviews`, `search_history`, `recently_viewed`, `contact_messages` tables.
+columns (including `payments.authority` and `order_items.variant_id`) and the
+`coupons`, `product_variants`, `product_reviews`, `search_history`,
+`recently_viewed`, `contact_messages` tables.
 
 ## Tests
 

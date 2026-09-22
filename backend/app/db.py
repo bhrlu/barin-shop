@@ -106,6 +106,14 @@ CATALOG_DDL = [
         "CREATE INDEX IF NOT EXISTS product_variants_product_idx "
         "ON public.product_variants(product_id)"
     ),
+    # which variant an order line took its stock from (B6.8). NULL on legacy
+    # rows and on products without a variant matrix — cancellation then only
+    # restores the product aggregate. ON DELETE SET NULL so removing a variant
+    # never deletes order history.
+    (
+        "ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS variant_id UUID "
+        "REFERENCES public.product_variants(id) ON DELETE SET NULL"
+    ),
     # reviews + ratings (+ seller reply)
     """
     CREATE TABLE IF NOT EXISTS public.product_reviews (

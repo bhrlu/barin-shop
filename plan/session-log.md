@@ -1572,3 +1572,59 @@ a Rule-4 violation or a regression. (4) No task was created for `[FE-06]`'s IBAN
 panel: it stores new PII and needs decision D6 first.
 
 → audit: [2026-09-22-full-backlog-audit.md](audit/2026-09-22-full-backlog-audit.md)
+
+---
+
+## 2026-09-22 — B6.8 per-variant stock restoration on cancellation
+
+**Task** — `B6.8` (P0, Master Backlog batch A), executed alone from
+`plan/MASTER-BACKLOG.md`.
+
+**What was done** — `order_items` now carries a `variant_id` column, added
+idempotently in `CATALOG_DDL` (`backend/app/db.py`) right after the
+`product_variants` table it references, with `ON DELETE SET NULL` so removing a
+variant never destroys order history. `services/checkout.py` writes the
+already-resolved variant id onto each order line; the restore path in
+`services/order_lifecycle.py` was left untouched because it was *already*
+variant-aware — the column it read simply never existed, so its
+`information_schema` guard always fell back to aggregate-only. Cancellation now
+returns stock to the variant row and the product aggregate inside one
+transaction, on both entry points (`POST /orders/{id}/cancel` and an admin
+`PATCH /orders/{id}` to `cancelled`). New DB-backed test module
+`backend/tests/test_order_lifecycle_stock.py` covers the four acceptance tests
+plus the persisted-id case; it skips when no database is reachable so the
+pure-unit suite still runs anywhere.
+
+**Tests run** — `pytest -q tests/test_order_lifecycle_stock.py` (5 passed),
+full `pytest -q` (44 passed), `ruff check app tests` (clean),
+`tests/api_smoke.py` against the running stack (196 checks, 0 failed),
+`docker compose down -v && up -d --build` with `db-init` exiting 0 through all
+four seed stages and `/health` responding, and a live HTTP checkout → cancel →
+repeat-cancel flow on a freshly created variant (stocks 25/6 → 23/4 → 25/6 →
+25/6), including the no-variant line and the admin PATCH path (repeat → 409).
+A mutation check (binding `variant_id` back to `None`) failed three of the five
+new tests, proving they cover the defect.
+
+**Verification level** — *fully verified*.
+
+**What was explicitly NOT done** — historical `order_items` rows are not
+backfilled with a guessed `variant_id` (the matrix may have changed since, so a
+`(product_id, size, color)` re-match would be a guess); the `[BE-01]`
+`inventory_logs` ledger stays with `AB-BE-01`; the redundant
+`information_schema` probe in `restore_stock()` was left in place under Rule 12
+and recorded as `NEW-B68-1` / `B6.8a` instead. `FEATURES.md`,
+`DESIGN_SYSTEM.md`, `feature-roadmap.md`, `plan/README.md` and `infra/README.md`
+were left untouched: no endpoint, UI, feature status, design token or infra step
+changed. `backend/README.md` was updated (stock model + catalog DDL list).
+
+**Decisions taken** — (1) the DDL went into `CATALOG_DDL` rather than a new
+block, because that list already owns `product_variants` and every seed module
+calls `startup_ddl()`, satisfying the backlog's "seed jobs can independently
+apply the DDL" requirement with no new code. (2) The new tests talk to a real
+Postgres instead of mocking, because the invariant lives in SQL; they skip
+rather than fail without one. (3) `order_lifecycle.py` was deliberately not
+touched, keeping the diff to the two places that were actually wrong.
+
+→ audit: [2026-09-22-b68-variant-stock-restore.md](audit/2026-09-22-b68-variant-stock-restore.md)
+
+**Next backlog pointer** — `B6.9` (narrow refund exception handling).

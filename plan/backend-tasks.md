@@ -266,9 +266,16 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   rows from an earlier run and always failed on a clean one. The block was moved
   after the mutations (assertion unchanged, not weakened).
   → audit for B6.11–B6.12: [2026-09-22-mock-dataset-seed.md](audit/2026-09-22-mock-dataset-seed.md)
-- [ ] **B6.8 Per-variant stock restoration on cancellation** — `order_items` does
-  not record `variant_id`, so cancelling restores `products.stock` only and the
-  `product_variants` row stays decremented. Needs a column + backfill.
+- [x] **B6.8 Per-variant stock restoration on cancellation** — `order_items` now
+  records `variant_id` (idempotent `CATALOG_DDL` column, written by checkout), so
+  cancelling restores the variant row and the product aggregate in one
+  transaction; legacy `NULL` rows still restore the aggregate only and a repeated
+  cancellation is a no-op. Historical rows are not backfilled.
+  → audit: [2026-09-22-b68-variant-stock-restore.md](audit/2026-09-22-b68-variant-stock-restore.md)
+- [ ] **B6.8a Drop the redundant `information_schema` probe in `restore_stock()`**
+  (`NEW-B68-1`, discovered during B6.8) — the column is now always created by
+  `startup_ddl()`, so the per-cancellation existence check can go once every
+  deployed stack has run the new DDL.
 - [ ] **B6.9 Stop swallowing errors in `POST /orders/{id}/refunds`** — the INSERT
   is wrapped in a bare `except Exception` that reports every failure as "a refund
   was already requested", masking real database errors.
