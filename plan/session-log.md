@@ -1511,3 +1511,64 @@ recommendations 200). Live: `set-18|tshirt-4 votes=2`; recommendations for
 - READMEs, `FEATURES.md`, `feature-roadmap.md` and `DESIGN_SYSTEM.md` untouched — no endpoint, script, stack, feature or UI convention changed.
 
 **Decisions** — detail lives only in `plan/RULES.md`, `AGENTS.md` keeps a one-bullet-per-rule summary, so the always-loaded file stays short; the user's twenty proposed guardrails were merged down to ten rules (consumers→Rule 6, idempotency→Rule 10, direct-URL/API→Rule 9, dirty environments→Rule 14, fake tests / weakened validation / error paths→Rule 13, implemented-vs-verified→Rule 15) to avoid redundant rules; Rules 0–5 were kept verbatim and Rule 4's protected status strings and money rules are restated by Rules 10/11, never altered.
+
+---
+
+## Session — 2026-09-22 — Full backlog and architecture audit (all four task/spec documents)
+
+**Task** — ad-hoc user request: establish the real remaining implementation backlog by
+cross-checking the live codebase against `plan/backend-tasks.md`,
+`plan/frontend-tasks.md`, `plan/ADMIN-BACKEND_TASKS.md` and
+`plan/ADMIN-FRONTEND_TASKS.md`, then record one authoritative prioritized backlog for a
+downstream agent to execute from. Audit only — explicitly **no** implementation.
+
+**Spec check (Rule 0)** — `design/SANDE_FULL_DEV_SPEC.md` read first. Its `[BE-01]`…
+`[BE-09]` and `[FE-01]`…`[FE-08]` blocks were used as the requirement set that the two
+ADMIN documents restate, and every requirement was mapped to a live implementation or to
+a new proposed task. The spec's stack header and the ADMIN files' Supabase / RLS / RPC /
+`createServerFn` wording were **not** followed (Rule 0.2 — the live FastAPI + own-JWT +
+MinIO repo wins) and are recorded as `STALE`/`SUPERSEDED` instead. No Rule-4 status
+string or cart money rule was touched or proposed for change.
+
+**What was done** — 135 tracked checkboxes classified against the source
+(DONE/PARTIAL/TODO/BLOCKED/OBSOLETE/DUPLICATE/UNCLEAR) with a file-path or endpoint
+citation each; the two ADMIN specs converted into an executable backlog with 13 of their
+17 blocks mapped onto existing tasks and only 9 genuinely new tasks proposed
+(`AB-BE-01..03`, `AB-FE-01..06`); nine product/architecture decisions (D1–D9) separated
+out; 14 documentation-drift items recorded; a dependency graph and a five-phase
+implementation order derived. Result: 118 done, 4 partial, 11 todo, 7 blocked, 1
+obsolete, 2 duplicate → **24 actionable items**.
+
+**Headline finding (P0)** — `backend/app/services/order_lifecycle.py::restore_stock`
+documents and contains a per-variant stock restore branch that can never execute:
+`order_items` has no `variant_id` column (`infra/initdb/02-public-schema.sql:107-118`,
+no additive DDL in `app/db.py`) and `services/checkout.py:180-198` never writes one,
+while `checkout.py:226-232` *does* decrement `product_variants.stock`. Every cancellation
+of a variant order therefore destroys that combination's inventory, silently and
+permanently. Tracked as the existing open checkbox **B6.8**, whose severity the task text
+understates. Established from the schema and the INSERT statement; **not** reproduced at
+runtime in this session.
+
+**What was explicitly NOT done** — no production code, no task file, no checkbox, no
+rule file and no spec was modified, per the user's instruction. In particular `B6.10`
+(found already implemented by F2.5) and `B2.6` (obsolete by its own text) were left
+unticked and unstruck, and the duplicate `B6.1` ID collision with `B6.3` was left in
+place; all three are recorded under Documentation Drift for a deliberate follow-up.
+Nothing was executed — no `pytest`, `ruff`, `api_smoke.py`, `bun run lint/build` or
+Docker run — so every status is *inspected*, not *verified* (Rule 15), except where a
+prior audit file is cited by name. READMEs, `FEATURES.md`, `DESIGN_SYSTEM.md`,
+`feature-roadmap.md` and `plan/README.md` were left untouched: no endpoint, setup step,
+script, stack, feature or design token changed.
+
+**Decisions taken** — (1) the two ADMIN files are treated as *specifications*, not
+tracked task lists, since they carry no checkboxes or audit links and counting their
+headings would inflate the backlog; the mapping table in §9.1 of the audit is the bridge.
+(2) `AB-FE-02` (export UI) was split out rather than left inside `F4.3`, because
+`B2.2`'s note parks a finished, guarded backend export feature behind the undecided
+`@tanstack/react-table` install (D8) — which is why it has shipped nowhere. (3) The
+`[FE-05]` stepper-label deviation and the `[BE-09]` "< 5 units" mismatch were recorded as
+*correct* deviations rather than defects, so a future agent does not "fix" them back into
+a Rule-4 violation or a regression. (4) No task was created for `[FE-06]`'s IBAN/Sheba
+panel: it stores new PII and needs decision D6 first.
+
+→ audit: [2026-09-22-full-backlog-audit.md](audit/2026-09-22-full-backlog-audit.md)
