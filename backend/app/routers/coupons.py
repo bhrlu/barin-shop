@@ -212,6 +212,36 @@ async def update_coupon(
     return {"ok": True}
 
 
+@router.delete("/{coupon_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_coupon(
+    coupon_id: UUID, admin: StaffCoupons, session: DbSession
+) -> None:
+    """Remove a coupon outright (F4.5). Redemptions referencing it keep their
+    rows; the discount column on past orders is a plain integer, so history
+    stays intact."""
+    row = (
+        await session.execute(
+            text("SELECT code FROM public.coupons WHERE id = :cid"),
+            {"cid": str(coupon_id)},
+        )
+    ).first()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "کد تخفیف پیدا نشد")
+
+    await session.execute(
+        text("DELETE FROM public.coupons WHERE id = :cid"), {"cid": str(coupon_id)}
+    )
+    await record_audit(
+        session,
+        admin_id=admin.id,
+        action="delete_coupon",
+        entity_type="coupon",
+        entity_id=str(coupon_id),
+        old_values={"code": row[0]},
+    )
+    await session.commit()
+
+
 @router.post("/generate", status_code=status.HTTP_201_CREATED)
 async def generate(admin: StaffCoupons, session: DbSession, prefix: str = "SANDE") -> dict:
     """Convenience: mint a fresh unused code (admin picks its rules separately)."""

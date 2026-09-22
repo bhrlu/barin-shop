@@ -44,7 +44,9 @@ from app.schemas import (
 from app.security import decode_access_token
 from app.services.audit import record_audit
 from app.services.catalog_filters import split_multi
-from app.services.roles import resolve_role
+from app.services.pagination import apply_limit_offset, clamp_page_size, count_rows, envelope
+from app.services.recommendations import CO_VOTES_SQL
+from app.services.roles import resolve_roles
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["products"])
@@ -92,10 +94,10 @@ async def _optional_admin(
         sub = payload.get("sub")
         if not sub:
             return None
-        role = await resolve_role(session, UUID(sub))
+        roles = await resolve_roles(session, UUID(sub))
     except (JWTError, ValueError):
         return None
-    return AuthUser(UUID(sub), payload.get("email"), role)
+    return AuthUser(UUID(sub), payload.get("email"), roles)
 
 
 def _row_to_out(row) -> ProductOut:
@@ -126,7 +128,7 @@ async def _fetch_product(session, product_id: str) -> ProductOut | None:
     return _row_to_out(row) if row else None
 
 
-@router.get("/products", response_model=list[ProductOut])
+@router.get("/products")
 async def list_products(
     session: DbSession,
     category: str | None = None,
@@ -146,9 +148,14 @@ async def list_products(
     max_price: int | None = Query(default=None, ge=0),
     sort: SortKey = "new",
     include_inactive: bool = False,
+    page: int = Query(default=0, ge=0),
+    page_size: int = Query(default=0, ge=0, le=100),
     user: Annotated[AuthUser | None, Depends(_optional_admin)] = None,
-) -> list[ProductOut]:
-    """Public list. Admins may pass include_inactive=true with a valid token."""
+) -> list[ProductOut] | dict:
+    """Public list. Admins may pass include_inactive=true with a valid token.
+
+    Bare list by default; pass `page` (and optional `page_size`) to get the
+    `{items, total, page, page_size, pages}` envelope (F2.5)."""
     sql = _SELECT
     conditions: list[str] = []
     params: dict[str, Any] = {}
@@ -208,8 +215,18 @@ async def list_products(
         sql += " WHERE " + " AND ".join(conditions)
     sql += " ORDER BY " + _SORTS.get(sort, _SORTS["new"])
 
+    # F2.5: envelope only when the caller asks for a page
+    page, page_size = clamp_page_size(page, page_size, default_size=12)
+    if page > 0:
+        base = sql[: sql.rindex(" ORDER BY ")]
+        total = await count_rows(session, base, params)
+        sql = apply_limit_offset(sql, page, page_size)
+
     rows = (await session.execute(text(sql), params)).mappings().all()
-    return [_row_to_out(row) for row in rows]
+    items = [_row_to_out(row) for row in rows]
+    if page > 0:
+        return envelope(items, total, page, page_size)
+    return items
 
 
 @router.get("/products/compare", response_model=list[ProductOut])
@@ -265,16 +282,25 @@ async def related_products(
 async def recommended_products(
     product_id: str, session: DbSession, limit: int = Query(default=4, ge=1, le=20)
 ) -> list[ProductOut]:
-    """Same category first, then the rest of the catalog; never the product itself."""
+    """Co-purchase blend (B2.4): learned "bought together" votes (weight 3) on
+    top of the category/popularity heuristic; pure heuristic when no pair data
+    exists yet. Never the product itself."""
     rows = (
         await session.execute(
             text(
-                _SELECT
-                + " WHERE p.active AND p.id <> :pid "
-                "ORDER BY (p.category = "
-                "(SELECT category FROM public.products WHERE id = :pid)) DESC, "
-                "  review_count DESC NULLS LAST, p.is_new DESC, p.created_at DESC "
-                "LIMIT :limit"
+                "SELECT "
+                + _PRODUCT_COLS
+                + ", ("
+                + CO_VOTES_SQL
+                + " ) * 3 "
+                "  + CASE WHEN p.category = (SELECT category FROM public.products WHERE id = :pid) "
+                "         THEN 100 ELSE 0 END "
+                "  + (SELECT COUNT(*) FROM public.product_reviews r "
+                "     WHERE r.product_id = p.id AND r.status = 'published') * 2 "
+                "  + CASE WHEN p.is_new THEN 10 ELSE 0 END + 5 AS score "
+                "FROM public.products p "
+                "WHERE p.active AND p.id <> :pid "
+                "ORDER BY score DESC, p.created_at DESC LIMIT :limit"
             ),
             {"pid": product_id, "limit": limit},
         )

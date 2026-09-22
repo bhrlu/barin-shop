@@ -119,7 +119,8 @@ export const catalogQuery = queryOptions({
   queryKey: ["catalog"],
   queryFn: async () => {
     // include_inactive is ignored for anonymous callers; admins receive inactive rows too.
-    return toProducts(await api.products({ include_inactive: true }));
+    // No `page` param → the API returns a bare array (F2.5 keeps it backward-compatible).
+    return toProducts((await api.products({ include_inactive: true })) as ApiProduct[]);
   },
 });
 

@@ -31,8 +31,8 @@ Unchecked items are not yet implemented.
 ## 2. Cart & Checkout
 - ✅ Persistent cart
 - ✅ Saved addresses with a single default — add / edit in place / delete, offered and pre-filled in checkout (F2.7 + F2.7b, B3.10)
+- [x] Real discount codes (percent/fixed, usage limits, expiry, minimum purchase) — **backend done (B1.4) + admin manager UI (F4.5)**
 - [ ] Guest cart (no sign-up required)
-- [ ] Real discount codes (percent/fixed, usage limits, expiry, minimum purchase)
 - [ ] Shipping cost by province/weight and tax calculation
 - [ ] Stock reservation when placing an order
 - [ ] Save cart for later ("next shopping list")
@@ -78,12 +78,13 @@ Unchecked items are not yet implemented.
 
 ## 8. Admin Panel
 - ✅ Dashboard, product management with image gallery, order management, user list
+- [x] Pagination on all growing lists (shop, orders, users, payments, messages, reviews) — **envelope API + shared Pager done (F2.5)**
 - [x] Daily/monthly sales reports with charts — **KPI endpoint + charts done (B5.2/F2.6)**
-- [ ] Best-sellers, top customers, and inventory reports
-- [ ] Excel/CSV export of orders
+- [x] Best-sellers, top customers, and inventory reports — **best-sellers + daily/monthly report endpoint done (B2.2 `/admin/export/report`); top customers & inventory report UI still open**
+- [x] Excel/CSV export of orders — **done (B2.2: `/admin/export/orders.{csv,xlsx}` + products exports, StaffOrders guard)**
 - [x] Refund request management (approve/reject) — **done (F2.4/B5.3, with bank-tracking settlement)**
 - [x] Order detail drawer with fulfilment stepper + printable invoice — **done (F4.4: A4 print, app hidden while printing)**
-- [x] Review and discount-code management — **reviews UI done (admin.reviews); coupon CRUD in API, manager UI is F4.5**
+- [x] Review and discount-code management — **done (admin.reviews + F4.5 coupons manager with toggle/progress/delete)**
 - [x] Multiple roles (manager, warehouse, support) — **granular staff roles + per-route enforcement done (B5.4); role-gated admin shell (F4.2)**
 
 ## 9. Infrastructure & Experience

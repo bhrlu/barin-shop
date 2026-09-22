@@ -25,6 +25,7 @@ from app.services.coupons import (
     validate_coupon,
 )
 from app.services.pricing import quote
+from app.services.recommendations import refresh_co_purchases
 from app.services.variants import load_variants, variant_stock
 
 log = logging.getLogger(__name__)
@@ -242,6 +243,11 @@ async def create_order(
                         }
                     ],
                 )
+
+    # 8) Co-purchase pairs refreshed in the same transaction (B2.4) so the
+    #    recommendation engine learns from this order immediately.
+    if len(lines) > 1:
+        await refresh_co_purchases(session)
 
     return {
         "order_id": str(order_id),

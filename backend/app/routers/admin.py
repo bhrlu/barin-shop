@@ -10,6 +10,7 @@ from sqlalchemy import text
 
 from app.auth import DbSession, StaffAudit, StaffOrders, StaffRefunds, StaffStats, StaffUsers
 from app.services.audit import record_audit
+from app.services.pagination import clamp_page_size, count_rows, envelope
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -63,26 +64,34 @@ async def stats(user: StaffStats, session: DbSession) -> dict:
 
 
 @router.get("/users")
-async def users(user: StaffUsers, session: DbSession) -> list[dict]:
-    rows = (
-        await session.execute(
-            text(
-                "SELECT p.id, p.full_name, p.phone, p.avatar_url, p.created_at, u.email, "
-                "COALESCE(r.roles, '{}') AS roles, "
-                "COALESCE(o.order_count, 0) AS order_count, "
-                "COALESCE(o.spent, 0) AS spent "
-                "FROM public.profiles p "
-                "JOIN public.users u ON u.id = p.id "
-                "LEFT JOIN (SELECT user_id, array_agg(role::text) AS roles "
-                "           FROM public.user_roles GROUP BY user_id) r ON r.user_id = p.id "
-                "LEFT JOIN (SELECT user_id, COUNT(*) AS order_count, "
-                "                  SUM(total) FILTER (WHERE status <> 'cancelled') AS spent "
-                "           FROM public.orders GROUP BY user_id) o ON o.user_id = p.id "
-                "ORDER BY p.created_at DESC"
-            )
-        )
-    ).mappings().all()
-    return [
+async def users(
+    user: StaffUsers,
+    session: DbSession,
+    page: int = Query(default=0, ge=0),
+    page_size: int = Query(default=0, ge=0, le=100),
+) -> list[dict] | dict:
+    """Customers with role/order aggregates; envelope when `page` is given."""
+    base_sql = (
+        "SELECT p.id, p.full_name, p.phone, p.avatar_url, p.created_at, u.email, "
+        "COALESCE(r.roles, '{}') AS roles, "
+        "COALESCE(o.order_count, 0) AS order_count, "
+        "COALESCE(o.spent, 0) AS spent "
+        "FROM public.profiles p "
+        "JOIN public.users u ON u.id = p.id "
+        "LEFT JOIN (SELECT user_id, array_agg(role::text) AS roles "
+        "           FROM public.user_roles GROUP BY user_id) r ON r.user_id = p.id "
+        "LEFT JOIN (SELECT user_id, COUNT(*) AS order_count, "
+        "                  SUM(total) FILTER (WHERE status <> 'cancelled') AS spent "
+        "           FROM public.orders GROUP BY user_id) o ON o.user_id = p.id"
+    )
+    page, page_size = clamp_page_size(page, page_size, default_size=20)
+    sql = base_sql + " ORDER BY p.created_at DESC"
+    total = 0
+    if page > 0:
+        total = await count_rows(session, base_sql, {})
+        sql += f" LIMIT {page_size} OFFSET {(page - 1) * page_size}"
+    rows = (await session.execute(text(sql), {})).mappings().all()
+    items = [
         {
             **dict(r),
             "roles": list(r["roles"]),
@@ -91,6 +100,9 @@ async def users(user: StaffUsers, session: DbSession) -> list[dict]:
         }
         for r in rows
     ]
+    if page > 0:
+        return envelope(items, total, page, page_size)
+    return items
 
 
 @router.get("/refunds")
@@ -264,9 +276,10 @@ async def audit_logs(
     entity_id: str | None = Query(default=None),
     admin_id: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
 ) -> list[dict]:
     """Audit trail, newest first (B5.1). Filters: action, entity_type,
-    entity_id, admin_id."""
+    entity_id, admin_id. Keyset-free deep paging via limit/offset."""
     sql = (
         "SELECT a.id, a.admin_id, u.email AS admin_email, "
         "COALESCE(p.full_name, u.email) AS admin_name, "
@@ -292,7 +305,8 @@ async def audit_logs(
         params["admin_id"] = admin_id
     if conditions:
         sql += " WHERE " + " AND ".join(conditions)
-    sql += " ORDER BY a.created_at DESC LIMIT :limit"
+    params["offset"] = offset
+    sql += " ORDER BY a.created_at DESC LIMIT :limit OFFSET :offset"
 
     rows = (await session.execute(text(sql), params)).mappings().all()
     return [
@@ -314,16 +328,30 @@ async def audit_logs(
 
 
 @router.get("/orders")
-async def all_orders(user: StaffOrders, session: DbSession) -> list[dict]:
-    """All orders with items — same shape as GET /orders but unscoped."""
+async def all_orders(
+    user: StaffOrders,
+    session: DbSession,
+    page: int = Query(default=0, ge=0),
+    page_size: int = Query(default=0, ge=0, le=100),
+) -> list[dict] | dict:
+    """All orders with items — same shape as GET /orders but unscoped.
+    Envelope when `page` is given."""
     from app.routers.orders import _ORDER_SELECT, _order_row
 
-    rows = (
-        await session.execute(
-            text(_ORDER_SELECT + " GROUP BY o.id ORDER BY o.created_at DESC")
-        )
-    ).mappings().all()
-    return [_order_row(r) for r in rows]
+    base_sql = _ORDER_SELECT + " GROUP BY o.id"
+    page, page_size = clamp_page_size(page, page_size, default_size=20)
+    sql = base_sql + " ORDER BY o.created_at DESC"
+    total = 0
+    if page > 0:
+        # count over the join without the item aggregation ordering; the
+        # GROUP BY keeps one row per order so COUNT(*) is the order count
+        total = await count_rows(session, base_sql, {})
+        sql += f" LIMIT {page_size} OFFSET {(page - 1) * page_size}"
+    rows = (await session.execute(text(sql), {})).mappings().all()
+    items = [_order_row(r) for r in rows]
+    if page > 0:
+        return envelope(items, total, page, page_size)
+    return items
 
 
 @router.get("/inventory")
@@ -421,18 +449,28 @@ async def low_stock(
 
 
 @router.get("/payments")
-async def all_payments(user: StaffOrders, session: DbSession) -> list[dict]:
-    rows = (
-        await session.execute(
-            text(
-                "SELECT pm.id, pm.order_id, pm.user_id, pm.amount, pm.method, pm.status, "
-                "pm.reference, pm.created_at, o.order_number "
-                "FROM public.payments pm JOIN public.orders o ON o.id = pm.order_id "
-                "ORDER BY pm.created_at DESC"
-            )
-        )
-    ).mappings().all()
-    return [dict(r) for r in rows]
+async def all_payments(
+    user: StaffOrders,
+    session: DbSession,
+    page: int = Query(default=0, ge=0),
+    page_size: int = Query(default=0, ge=0, le=100),
+) -> list[dict] | dict:
+    base_sql = (
+        "SELECT pm.id, pm.order_id, pm.user_id, pm.amount, pm.method, pm.status, "
+        "pm.reference, pm.created_at, o.order_number "
+        "FROM public.payments pm JOIN public.orders o ON o.id = pm.order_id"
+    )
+    page, page_size = clamp_page_size(page, page_size, default_size=20)
+    sql = base_sql + " ORDER BY pm.created_at DESC"
+    total = 0
+    if page > 0:
+        total = await count_rows(session, base_sql, {})
+        sql += f" LIMIT {page_size} OFFSET {(page - 1) * page_size}"
+    rows = (await session.execute(text(sql), {})).mappings().all()
+    items = [dict(r) for r in rows]
+    if page > 0:
+        return envelope(items, total, page, page_size)
+    return items
 
 
 _ALLOWED_ROLES = ("super_admin", "order_manager", "support")

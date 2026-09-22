@@ -29,10 +29,29 @@ Legend: `[ ]` todo · `[x]` done (audit file required) · audit links in `plan/a
 
 ## Milestone B2 — Remaining Part-7 features (not started)
 
+- [x] **B6.1 Order state machine (spec BE-05)** — `app/services/order_lifecycle.py`:
+  transition map enforced in `PATCH /orders/{id}` (409 on illegal moves) and both
+  cancel paths; cancellation restores stock (variants first, then the product
+  aggregate) in the same transaction; cancelled/delivered are terminal. Live
+  smoke asserts the full flow incl. stock +1 on cancel.
+  → audit: [2026-09-21-b61-state-machine-f45-coupons-manager.md](audit/2026-09-21-b61-state-machine-f45-coupons-manager.md)
+
 - [ ] **B2.1 SMS/email notifications** — Kavenegar/National SMS or SMTP on order placed/paid/shipped/cancelled/refund
-- [ ] **B2.2 Reports & exports** — daily/monthly sales, best-sellers, Excel (openpyxl/pandas) + CSV product import/export
+- [x] **B2.2 Reports & exports** — daily/monthly sales, best-sellers, Excel (openpyxl/pandas) + CSV product import/export
+  Done (2026-09-22): `/admin/export/orders.{csv,xlsx}`, `/admin/export/products.{csv,xlsx}`
+  (StaffOrders guard, RFC-4180 CSV, RFC-6266 filenames) + `/admin/export/report`
+  (daily/monthly revenue excluding cancelled, top-10 best-sellers). openpyxl added;
+  backend image rebuilt. CSV product *import* split out — see new checkbox below.
+  → audit: [2026-09-22-b22-reports-exports.md](audit/2026-09-22-b22-reports-exports.md)
+- [ ] **B2.2a CSV product import** — bulk upsert from CSV; needs an overwrite/
+  skip policy decision (idempotency key: product id vs name+category) before building
 - [ ] **B2.3 PDF invoices** — reportlab/weasyprint, Persian digits, per-order invoice endpoint
-- [ ] **B2.4 Recommendation engine** — related products from co-purchase patterns
+- [x] **B2.4 Recommendation engine** — related products from co-purchase patterns
+  Done (2026-09-22): `co_purchases` pair table (canonical pairs, DDL in startup)
+  refreshed in the checkout transaction for multi-item carts + at startup;
+  `/products/{id}/recommendations` blends votes ×3 with the category/popularity
+  heuristic (identical payload; `/related` untouched). Learned pairs verified live.
+  → audit: [2026-09-22-b24-co-purchase-recommendations.md](audit/2026-09-22-b24-co-purchase-recommendations.md)
 - [ ] **B2.5 Webhooks + background jobs** — order events, abandoned-payment reminders, APScheduler
 - [ ] **B2.6 Coupon admin UI support** — nothing to build in Python; expose whatever the admin panel needs (done as part of B1.4 API)
   → superseded by B1.9: `/admin/*` endpoints + `/coupons` CRUD now exist; the panel
@@ -179,8 +198,11 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   moderation. Admin-only `GET /admin/audit-logs` with action/entity/admin filters.
   Spec BE-04. IP capture and DB-level tamper-resistance split off (below).
   → audit: [2026-09-21-backend-b51-audit-log.md](audit/2026-09-21-backend-b51-audit-log.md)
-- [ ] **B5.1a Audit IP capture** — thread the request object through the routers
-  so `record_audit` can populate `ip_address` (column exists, always NULL today).
+- [x] **B5.1a Audit IP capture** — `client_ip_ctx` contextvar set by the
+  `capture_client_ip` middleware (XFF-aware, socket fallback); `record_audit`
+  falls back to it, so all audit sites record the caller IP with no signature
+  churn. Verified live + smoke assertion.
+  → audit: [2026-09-21-b51a-audit-ip-f41-status-badges.md](audit/2026-09-21-b51a-audit-ip-f41-status-badges.md)
 - [ ] **B5.1b Audit tamper-resistance at the DB level** — REVOKE UPDATE/DELETE on
   `audit_logs` for the app role (append-only) in `infra/initdb` or startup DDL.
 - [x] **B5.2 KPI aggregation endpoint** — `GET /admin/kpis?range=today|7d|30d|all`

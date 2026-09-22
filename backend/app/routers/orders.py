@@ -14,12 +14,19 @@ import logging
 import random
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.auth import CurrentUser, DbSession, StaffOrders, StaffRefunds
 from app.services.audit import record_audit
+from app.services.order_lifecycle import (
+    CancelError,
+    IllegalTransition,
+    assert_transition,
+    cancel_order_tx,
+)
+from app.services.pagination import clamp_page_size, count_rows, envelope
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["orders"])
@@ -108,17 +115,26 @@ async def _fetch_order(session, order_id: str, user_id=None, admin: bool = False
 
 
 @router.get("/orders")
-async def my_orders(user: CurrentUser, session: DbSession) -> list[dict]:
-    rows = (
-        await session.execute(
-            text(
-                _ORDER_SELECT
-                + " WHERE o.user_id = CAST(:uid AS uuid) GROUP BY o.id ORDER BY o.created_at DESC"
-            ),
-            {"uid": str(user.id)},
-        )
-    ).mappings().all()
-    return [_order_row(r) for r in rows]
+async def my_orders(
+    user: CurrentUser,
+    session: DbSession,
+    page: int = Query(default=0, ge=0),
+    page_size: int = Query(default=0, ge=0, le=100),
+) -> list[dict] | dict:
+    """The signed-in customer's orders; envelope when `page` is given."""
+    base_sql = _ORDER_SELECT + " WHERE o.user_id = CAST(:uid AS uuid) GROUP BY o.id"
+    params: dict = {"uid": str(user.id)}
+    page, page_size = clamp_page_size(page, page_size, default_size=10)
+    sql = base_sql + " ORDER BY o.created_at DESC"
+    total = 0
+    if page > 0:
+        total = await count_rows(session, base_sql, params)
+        sql += f" LIMIT {page_size} OFFSET {(page - 1) * page_size}"
+    rows = (await session.execute(text(sql), params)).mappings().all()
+    items = [_order_row(r) for r in rows]
+    if page > 0:
+        return envelope(items, total, page, page_size)
+    return items
 
 
 @router.get("/orders/{order_id}")
@@ -137,10 +153,38 @@ async def patch_order(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "وضعیت نامعتبر است")
     if body.payment_status and body.payment_status not in _ALLOWED_PAYMENT_STATUS:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "وضعیت پرداخت نامعتبر است")
+    if not (body.status or body.payment_status or body.tracking_code is not None):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "چیزی برای به‌روزرسانی نیست")
+
+    # capture the previous values: the state machine needs the old status, and
+    # the audit entries show old → new (B5.1)
+    before = await _fetch_order(session, str(order_id), admin=True)
+    if before is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "سفارش پیدا نشد")
+
+    # state machine (spec [BE-05]): reject illegal moves before touching the row
+    if body.status:
+        try:
+            assert_transition(before["status"], body.status)
+        except IllegalTransition as exc:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                f"تغییر وضعیت از «{exc.old}» به «{exc.new}» مجاز نیست",
+            ) from exc
 
     sets = []
     params: dict = {"oid": str(order_id)}
-    if body.status:
+    did_cancel = False
+    if body.status == "cancelled":
+        # The admin status select offers «لغو شده», so PATCH must behave exactly
+        # like POST /cancel: cancel_order_tx flips the status AND restores the
+        # stock in the same transaction (spec [BE-05]).
+        try:
+            await cancel_order_tx(session, str(order_id), before["status"])
+        except CancelError as exc:  # defensive: the transition map already gated it
+            raise HTTPException(status.HTTP_409_CONFLICT, exc.message) from exc
+        did_cancel = True
+    elif body.status:
         sets.append("status = :status")
         params["status"] = body.status
     if body.payment_status:
@@ -150,21 +194,16 @@ async def patch_order(
         # empty string clears the code, mirroring PATCH /addresses semantics
         sets.append("tracking_code = :tracking")
         params["tracking"] = body.tracking_code.strip() or None
-    if not sets:
+
+    if sets:
+        # perform the update first, then re-select
+        await session.execute(
+            text(f"UPDATE public.orders SET {', '.join(sets)} WHERE id = CAST(:oid AS uuid)"),
+            params,
+        )
+    elif not did_cancel:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "چیزی برای به‌روزرسانی نیست")
-
-    # capture the previous values so the audit entry shows old → new
-    before = await _fetch_order(session, str(order_id), admin=True)
-
-    # perform the update first, then re-select
-    await session.execute(
-        text(f"UPDATE public.orders SET {', '.join(sets)} WHERE id = CAST(:oid AS uuid)"),
-        params,
-    )
     order = await _fetch_order(session, str(order_id), admin=True)
-    if order is None:
-        await session.rollback()
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "سفارش پیدا نشد")
 
     # audit: one entry per changed facet (B5.1)
     if before is not None:
@@ -215,13 +254,14 @@ async def cancel_order(order_id: UUID, user: CurrentUser, session: DbSession) ->
         raise HTTPException(status.HTTP_404_NOT_FOUND, "سفارش پیدا نشد")
     if order["status"] == "cancelled":
         return CancelOut(ok=True, order_number=order["order_number"], refund_eligible=False)
-    if order["status"] in ("shipped", "delivered"):
-        raise HTTPException(status.HTTP_409_CONFLICT, "سفارش ارسال شده و امکان لغو ندارد")
+    try:
+        # flip + stock restore in ONE transaction (spec [BE-05]) — checkout's
+        # decrement is transactional, so the give-back must be too
+        await cancel_order_tx(session, str(order_id), order["status"])
+    except CancelError as exc:
+        await session.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, exc.message) from exc
 
-    await session.execute(
-        text("UPDATE public.orders SET status = 'cancelled' WHERE id = CAST(:oid AS uuid)"),
-        {"oid": str(order_id)},
-    )
     await record_audit(
         session,
         admin_id=user.id,

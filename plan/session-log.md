@@ -1367,3 +1367,93 @@ Audit: `plan/audit/2026-09-21-backend-b51-audit-log.md`.
 **Not done / open** — payment-status toggle inside the drawer (list select still the tool); tax/company-registration fields on the invoice (no data model); A5 variant; print type scale.
 
 **Decisions** — stepper labels mapped to the live lifecycle instead of the spec's «تأیید پرداخت» wording (Rule 4: status strings untouchable); pending can advance while unpaid (status/payment independent, as elsewhere); invoice portalled to body rather than hidden-by-CSS-in-place (reliable across Radix overlays).
+
+## Session 27 — 2026-09-21 — B6.1 order state machine + F4.5 coupons manager
+
+**Done**
+- B6.1 (spec BE-05): `app/services/order_lifecycle.py` — `ALLOWED_STATUS_TRANSITIONS` (pending→processing→shipped→delivered, cancel from pending/processing, terminal delivered/cancelled), `assert_transition` (409 with Persian message on illegal PATCH), `cancel_order_tx` used by BOTH cancel endpoints (POST /cancel and PATCH status=cancelled — the admin dropdown offers «لغو شده»), `restore_stock` mirroring checkout's decrement order (variants via information_schema column check, then product aggregate; products.id is TEXT so raw equality). Smoke: illegal skips 409, legal advance 200, cancel restores stock (+1), cancelled cannot revive.
+- F4.5 (spec FE-07): `/admin/coupons` manager — filter chips, ticket cards with notches + copy code + Switch active toggle + usage progress (red at 100%), create/edit dialog (percent XOR amount like the backend), delete, code generator. `api.ts` AdminCoupon type + 5 client methods. New backend `DELETE /coupons/{id}` (audited `delete_coupon`) — the CRUD had no delete; generate is POST (client initially GET, caught live).
+
+**Verification** — pytest 39 passed; ruff clean; live smoke 151 checks 0 failed (state-machine block asserts the full transition flow); tsc clean; vite build passes; coupon CRUD verified live (list/create/patch/delete/generate/401).
+
+**Bugs found & fixed during verification** — order_items.variant_id may not exist on older stacks (information_schema guard); products.id is TEXT not UUID (CAST broke restore); smoke's checkout section only accepted 201 while the API returns 200 (order ids fell through, second-order section silently skipped); smoke now uses a second fresh order so payment-complete's processing advance doesn't skew the machine tests.
+
+**Not done / open** — B4.9 stock reservation TTL; DB-level status trigger (API-only enforcement, noted for B5.1b); Persian Jalali date-picker component (native input used; needs a dependency decision); bulk code generation.
+
+**Decisions** — same-status PATCH writes stay legal (idempotent); cancel semantics unified across both endpoints so the UI dropdown and the API can't diverge; seed stock top-up command documented in the audit for repeat smoke runs.
+
+## Session 28 — 2026-09-21 — B5.1a audit IP capture + F4.1 status badges
+
+**Done**
+- B5.1a: `audit.client_ip_ctx` contextvar + `capture_client_ip` middleware in main.py (XFF first hop trusted — backend always sits behind the compose proxy/loopback — else socket peer); `record_audit` falls back to the context when no explicit ip is passed, so all 17 audit sites now record IPs with zero signature changes. Live-verified with `X-Forwarded-For: 198.51.100.7` landing in audit_logs; smoke asserts entries carry IPs.
+- F4.1: new `components/StatusBadge.tsx` per DESIGN_SYSTEM §7.2 — tones positive/progress/waiting/negative/meta from the §2.3 token recipes (no raw palette classes), label always names the status, `title` keeps the Latin value, unknown → meta. Converted: account.orders (was terracotta/sand pair), admin.refunds (3-way ternary chip), admin.index latest orders, OrderDetailDrawer header chips. Extended tone map with succeeded/failed/new (payments + contact inbox).
+
+**Verification** — pytest 39 passed; ruff clean; live smoke **152 checks, 0 failed** (incl. the new IP assertion); tsc clean; vite build passes.
+
+**Not done / open** — B5.1b DB tamper-resistance (needs an app-role decision: single-role user would REVOKE itself out); no trusted-proxy allowlist for XFF (fine for this stack, revisit if ever exposed directly).
+
+**Decisions** — middleware + contextvar over threading `Request` through every router (zero churn at 17 call sites, works for service-layer writes too); unknown statuses render as brand tone rather than erroring (forward compatibility with future statuses).
+
+## Session 29 — 2026-09-22 — F2.5 pagination everywhere
+
+**Done:** envelope pagination (`{items,total,page,page_size,pages}`; bare list
+without `?page=` for compatibility) via new `services/pagination.py` on
+`/products`, `/orders`, `/admin/orders|users|payments|contact-messages|reviews`;
+`offset` on `/admin/audit-logs`. New shared `Pager` component (Persian digits,
+terracotta active, RTL, hidden at ≤1 page) wired into shop (`?page=` URL param,
+12/page), admin orders/users/messages/reviews (20/page) and account orders
+(10/page). api.ts gained `Page<T>`, `toPage()` and page params on the affected
+clients.
+
+**Bug found by the smoke's own traffic:** `_optional_admin` in
+`routers/products.py` fed `resolve_role()` (string) into `AuthUser.roles`
+(set) — every authenticated `/products` call 500'd since B5.4. Fixed to
+`resolve_roles()`.
+
+**Verification:** pytest 39 passed · ruff clean · smoke **170 checks, 0 failed**
+(new F2.5 section) · tsc clean · vite build passes (needs Node ≥22 locally:
+`PATH="$HOME/.nvm/versions/node/v22.23.2/bin:$PATH"` — Vite 8's `styleText`
+requirement; Node 20.9 is the default here).
+
+**Not done:** no admin payments screen (client method paged anyway); audit-log
+UI stays limit/offset; infinite-scroll not wanted. Details:
+`plan/audit/2026-09-22-f25-pagination-everywhere.md`.
+
+## Session 29b — 2026-09-22 — B2.2 reports & exports (BE-08)
+
+**Done:** new `/admin/export/orders.{csv,xlsx}`, `/admin/export/products.{csv,xlsx}`
+and `/admin/export/report` (daily/monthly revenue excluding cancelled + top-10
+best-sellers), all under the `StaffOrders` capability guard. CSV via stdlib
+(RFC-4180), XLSX via openpyxl (added to pyproject, image rebuilt), Persian
+filenames in `filename*`. Order rows carry customer + address + item
+breakdown + subtotal/discount/shipping/total.
+
+**Caught during verification:** `:status::text` casts break asyncpg's bind
+parser (syntax error at ":") → `CAST(:status AS text)`; container needed a
+rebuild since deps are baked while code is volume-mounted.
+
+**Not done:** CSV product import (needs overwrite-policy decision → new B2.2a
+checkbox), export buttons in the UI (deferred to the F4.3 data-grid toolbar),
+PDF invoices (B2.3 open). Details:
+`plan/audit/2026-09-22-b22-reports-exports.md`.
+
+**Verification:** pytest 39 passed · ruff clean · smoke **186 checks, 0 failed**.
+
+## Session 29c — 2026-09-22 — B2.4 co-purchase recommendations
+
+**Done:** `co_purchases(product_a, product_b, votes)` pair table (canonical
+`a < b` pairs, DDL + first refresh in startup) recomputed inside the checkout
+transaction whenever a cart has ≥2 lines. `/products/{id}/recommendations`
+now blends learned votes (×3) with the existing category/popularity heuristic
+(same payload shape, `/related` untouched, self always excluded).
+
+**Bugs en route:** referenced `p.review_count` (an alias in `_PRODUCT_COLS`,
+not a column) and appended a second FROM to `_SELECT` — both 500s caught by
+the smoke, fixed by composing the query from `_PRODUCT_COLS` + a score
+expression.
+
+**Verification:** pytest 39 passed · ruff clean · smoke **189 checks, 0 failed**
+(first cart made 2-line so the engine is exercised; post-checkout
+recommendations 200). Live: `set-18|tshirt-4 votes=2`; recommendations for
+`set-18` rank co-purchased `set-17` first. Details:
+`plan/audit/2026-09-22-b24-co-purchase-recommendations.md`.

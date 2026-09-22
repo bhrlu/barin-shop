@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api, ApiError, type RefundRequest } from "@/lib/api";
 import { formatFaDate, formatToman, toFa } from "@/lib/format";
-import { REFUND_STATUS } from "@/lib/orders";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -240,17 +240,10 @@ function AdminRefunds() {
                     <p className="text-sm">
                       سفارش{" "}
                       <span className="font-mono tracking-wider">#{toFa(request.order_number)}</span>
-                      <span
-                        className={`ms-2 inline-block rounded-full px-2 py-0.5 text-[11px] ${
-                          request.status === "refunded"
-                            ? "bg-sand text-sage-deep"
-                            : settled
-                              ? "bg-muted text-muted-foreground"
-                              : "bg-terracotta/10 text-terracotta"
-                        }`}
-                      >
-                        {REFUND_STATUS[request.status] ?? request.status}
-                      </span>
+                      <StatusBadge
+                        status={request.status}
+                        className="ms-2 !px-2 !py-0.5 !text-[11px]"
+                      />
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {request.user_name || "مشتری"}

@@ -21,6 +21,7 @@ from app.routers import (
     checkout,
     contact,
     coupons,
+    exports,
     favorites,
     health,
     orders,
@@ -31,6 +32,7 @@ from app.routers import (
     stock,
     storage,
 )
+from app.services import audit
 
 logging.basicConfig(level=logging.INFO)
 
@@ -76,6 +78,22 @@ app.include_router(contact.router)
 app.include_router(coupons.router)
 app.include_router(checkout.router)
 app.include_router(payments.router)
+app.include_router(exports.router)
+
+
+@app.middleware("http")
+async def capture_client_ip(request: Request, call_next):
+    """Record the caller's IP for the audit trail (B5.1a).
+
+    Runs first (registered last): trusts X-Forwarded-For when present — the
+    backend always sits behind the compose proxy / loopback — and falls back to
+    the socket peer. The value lands in audit_logs.ip_address via
+    `audit.client_ip_ctx` whenever a privileged mutation writes an entry.
+    """
+    xff = request.headers.get("x-forwarded-for")
+    ip = xff.split(",")[0].strip() if xff else (request.client.host if request.client else None)
+    audit.client_ip_ctx.set(ip)
+    return await call_next(request)
 
 
 @app.middleware("http")

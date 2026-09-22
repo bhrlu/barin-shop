@@ -85,7 +85,7 @@ Public / customer:
 | POST | `/checkout` | user | create order (stock-locked, coupon applied) |
 | GET | `/orders` · `/orders/{id}` | user | my orders / one order |
 | POST | `/orders/{id}/cancel` · `/refunds` | user | cancel / refund request |
-| PATCH | `/orders/{id}` | admin | status + payment status + shipment tracking code (`tracking_code`; empty string clears) |
+| PATCH | `/orders/{id}` | admin | status + payment status + shipment tracking code (`tracking_code`; empty string clears). Status changes pass the **state machine (B6.1)**: pending→processing→shipped→delivered, cancel from pending/processing, terminal delivered/cancelled — illegal moves get 409; cancellation restores stock |
 | GET | `/orders/{id}/payment-session` | user | simulated gateway session |
 | POST | `/orders/{id}/payment-complete` | user | simulated gateway callback |
 | GET | `/payments/mine` | user | payment history |
@@ -105,13 +105,30 @@ Admin:
 | GET/PATCH | `/admin/reviews` · `/reviews/{id}` | moderation + seller reply |
 | GET | `/admin/inventory` · `/admin/inventory/low-stock` | stock health / alerts |
 | GET | `/admin/stats` · `/users` · `/orders` · `/payments` · `/refunds` | dashboards (refunds carry the claimant's name/email) |
+
+**Co-purchase recommendations (B2.4):** every multi-item order votes on each
+product pair it contains (`public.co_purchases`, refreshed in the checkout
+transaction and at startup). `GET /products/{id}/recommendations` blends
+votes ×3 with the category/popularity heuristic; the payload shape is
+unchanged. `GET /products/{id}/related` stays purely same-category.
+
+**Pagination (F2.5):** `/products`, `/orders`, `/admin/orders`, `/admin/users`,
+`/admin/payments`, `/admin/contact-messages` and `/admin/reviews` accept
+`?page=&page_size=` (cap 100, default 20) and return
+`{items, total, page, page_size, pages}`. **Without `?page=` they keep
+returning bare arrays.** `/admin/audit-logs` uses `?limit=&offset=` instead
+(append-only log).
 | GET | `/admin/kpis?range=today\|7d\|30d\|all` | KPI aggregation: gross/net revenue, paid orders, AOV, pending refunds, low-stock, daily revenue series, status breakdown, deltas |
-| GET | `/admin/audit-logs` | audit trail (B5.1): filters `action`, `entity_type`, `entity_id`, `admin_id`; written automatically on privileged mutations |
+| GET | `/admin/audit-logs` | audit trail (B5.1): filters `action`, `entity_type`, `entity_id`, `admin_id`, `limit`/`offset` paging; written automatically on privileged mutations |
 | PUT | `/admin/users/{id}/roles` | set a user's staff roles `super_admin`/`order_manager`/`support` (B5.4, audited) |
 | PATCH | `/refunds/{id}` | resolve a refund request — settling (`refunded`) **requires** `bank_tracking_code` (Paya/Satna); every resolution records `resolved_by` + `resolved_at` |
 | GET/DELETE | `/admin/contact-messages` | contact inbox (`?status=new`), delete a message |
 | PATCH | `/admin/contact-messages/{id}` | mark a message `answered` (or reopen it as `new`) |
 | POST/GET/PATCH | `/coupons` · `/coupons/{id}` · `/coupons/generate` | coupon CRUD |
+| DELETE | `/coupons/{id}` | remove a coupon (audited; past order discounts unaffected) |
+| GET | `/admin/export/orders.{csv\|xlsx}?from=&to=&status=` | order ledger export (B2.2/BE-08): customer, address, item breakdown, subtotal/discount/shipping/total; `from` defaults 30 days back, invalid range → 422 |
+| GET | `/admin/export/products.{csv\|xlsx}` | full catalog with stock/thresholds |
+| GET | `/admin/export/report?from=&to=` | daily/monthly revenue (cancelled excluded) + top-10 best-sellers JSON |
 
 ## Search model
 

@@ -26,6 +26,7 @@ from app.schemas import (
     ReviewReplyIn,
 )
 from app.services.audit import record_audit
+from app.services.pagination import clamp_page_size, count_rows, envelope
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["reviews"])
@@ -173,21 +174,34 @@ async def delete_review(
     await session.commit()
 
 
-@router.get("/admin/reviews", response_model=list[ReviewOut])
+@router.get("/admin/reviews")
 async def admin_list_reviews(
     session: DbSession,
     user: StaffReviews,
     status_filter: str | None = Query(default=None, alias="status"),
     limit: int = Query(default=100, ge=1, le=200),
-) -> list[ReviewOut]:
-    sql = _SELECT
-    params: dict = {"limit": limit}
+    page: int = Query(default=0, ge=0),
+    page_size: int = Query(default=0, ge=0, le=100),
+) -> list[ReviewOut] | dict:
+    base_sql = _SELECT
+    params: dict = {}
     if status_filter:
-        sql += " WHERE r.status = :status"
+        base_sql += " WHERE r.status = :status"
         params["status"] = status_filter
-    sql += " ORDER BY r.created_at DESC LIMIT :limit"
+    page, page_size = clamp_page_size(page, page_size, default_size=20)
+    sql = base_sql + " ORDER BY r.created_at DESC"
+    total = 0
+    if page > 0:
+        total = await count_rows(session, base_sql, params)
+        sql += f" LIMIT {page_size} OFFSET {(page - 1) * page_size}"
+    else:
+        sql += " LIMIT :limit"
+        params["limit"] = limit
     rows = (await session.execute(text(sql), params)).mappings().all()
-    return [_to_out(r) for r in rows]
+    items = [_to_out(r) for r in rows]
+    if page > 0:
+        return envelope(items, total, page, page_size)
+    return items
 
 
 @router.patch("/reviews/{review_id}", response_model=ReviewOut)

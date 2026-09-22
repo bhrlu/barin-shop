@@ -18,6 +18,7 @@ from sqlalchemy import text
 
 from app.auth import DbSession, StaffContactInbox
 from app.schemas import ContactMessageIn, ContactMessageOut, ContactMessageStatusIn
+from app.services.pagination import clamp_page_size, count_rows, envelope
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["contact"])
@@ -49,25 +50,39 @@ async def create_message(body: ContactMessageIn, session: DbSession) -> ContactM
     return _row_to_out(row)
 
 
-@router.get("/admin/contact-messages", response_model=list[ContactMessageOut])
+@router.get("/admin/contact-messages")
 async def list_messages(
     user: StaffContactInbox,
     session: DbSession,
     status_filter: str | None = Query(default=None, alias="status"),
     limit: int = Query(default=100, ge=1, le=200),
-) -> list[ContactMessageOut]:
-    """Newest first; `?status=new` narrows to unanswered ones."""
-    sql = (
+    page: int = Query(default=0, ge=0),
+    page_size: int = Query(default=0, ge=0, le=100),
+) -> list[ContactMessageOut] | dict:
+    """Newest first; `?status=new` narrows to unanswered ones.
+    Envelope when `page` is given."""
+    base_sql = (
         "SELECT id, user_id, name, contact, message, status, created_at "
         "FROM public.contact_messages"
     )
-    params: dict = {"limit": limit}
+    params: dict = {}
     if status_filter:
-        sql += " WHERE status = :status"
+        base_sql += " WHERE status = :status"
         params["status"] = status_filter
-    sql += " ORDER BY created_at DESC LIMIT :limit"
+    page, page_size = clamp_page_size(page, page_size, default_size=20)
+    sql = base_sql + " ORDER BY created_at DESC"
+    total = 0
+    if page > 0:
+        total = await count_rows(session, base_sql, params)
+        sql += f" LIMIT {page_size} OFFSET {(page - 1) * page_size}"
+    else:
+        sql += " LIMIT :limit"
+        params["limit"] = limit
     rows = (await session.execute(text(sql), params)).mappings().all()
-    return [_row_to_out(r) for r in rows]
+    items = [_row_to_out(r) for r in rows]
+    if page > 0:
+        return envelope(items, total, page, page_size)
+    return items
 
 
 @router.delete(

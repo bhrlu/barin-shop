@@ -4,15 +4,26 @@ One row per privileged mutation: who did what to which entity, with the old/new
 values where the router has them. Uses the request's own session so the entry
 commits atomically with the mutation it describes — an admin action without its
 audit trail, or vice versa, must not happen.
+
+The client IP (B5.1a) is captured per request by the middleware in
+`app.main`, which sets `client_ip_ctx` on every inbound call; `record_audit`
+reads it when the caller does not pass an explicit `ip_address`. Proxies in
+front of the app are trusted for `X-Forwarded-For` — the stack is not exposed
+to untrusted networks directly (compose binds the backend behind a reverse
+proxy or loopback).
 """
 
 import json
 import logging
+from contextvars import ContextVar
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 log = logging.getLogger(__name__)
+
+# set per request by the middleware in app.main (B5.1a)
+client_ip_ctx: ContextVar[str | None] = ContextVar("client_ip", default=None)
 
 # documented action vocabulary; new privileged mutations should reuse or extend it
 ACTIONS = {
@@ -29,6 +40,7 @@ ACTIONS = {
     "delete_variant",
     "create_coupon",
     "update_coupon",
+    "delete_coupon",
     "moderate_review",
     "delete_review",
     "update_user_roles",
@@ -59,6 +71,8 @@ async def record_audit(
         log.warning("audit: unknown action %r", action)
     if entity_type not in _ENTITY_TYPES:
         log.warning("audit: unknown entity_type %r", entity_type)
+    if ip_address is None:
+        ip_address = client_ip_ctx.get()
 
     try:
         await session.execute(

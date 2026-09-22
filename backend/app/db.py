@@ -15,6 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.config import settings
 
+
+def co_purchase_ddl() -> str:
+    from app.services.recommendations import co_purchase_ddl as _ddl
+
+    return _ddl()
+
 engine = create_async_engine(
     settings.database_url,
     echo=False,
@@ -282,9 +288,20 @@ async def startup_ddl() -> None:
             AUDIT_DDL,
             PAYMENT_DDL,
             CONTACT_DDL,
+            [co_purchase_ddl()],
         ):
             for stmt in statements:
                 await conn.execute(text(stmt))
+
+    # first co-purchase refresh so /recommendations has data on fresh stacks
+    from app.services.recommendations import refresh_co_purchases
+
+    async with SessionLocal() as session:
+        try:
+            await refresh_co_purchases(session)
+            await session.commit()
+        except Exception:
+            pass  # fresh DB without seed data; refreshed again after each checkout
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:

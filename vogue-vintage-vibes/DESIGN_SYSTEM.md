@@ -371,10 +371,13 @@ import { formatToman, toFa } from "@/lib/format";
 <span>{toFa(count)}</span>
 ```
 
-### 7.2 Status badge (spec B4.2, using §2.3)
+### 7.2 Status badge (spec B4.2, using §2.3) — **exists** (`src/components/StatusBadge.tsx`, F4.1)
 
 One component for order / payment / refund state, driven by the §2.3 table. No raw
 Tailwind palette classes; `title` keeps the Latin status available for support.
+The shipped component also maps `succeeded`/`failed` (payments) and `new`
+(contact inbox); unknown statuses degrade to the brand tone with the raw string
+as label.
 
 ```tsx
 import { ORDER_STATUS, PAYMENT_STATUS } from "@/lib/orders";
@@ -397,7 +400,8 @@ const STATUS_TONE: Record<string, keyof typeof TONES> = {
 
 export function StatusBadge({ status }: { status: string }) {
   const tone = TONES[STATUS_TONE[status] ?? "meta"];
-  const label = ORDER_STATUS[status] ?? PAYMENT_STATUS[status] ?? status;
+  const label =
+    ORDER_STATUS[status] ?? PAYMENT_STATUS[status] ?? REFUND_STATUS[status] ?? status;
   return (
     <span
       title={status}

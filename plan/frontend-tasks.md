@@ -116,7 +116,13 @@ new session can pick up exactly where this one stopped. Legend: `[ ]` todo ·
   "Supabase reset email flow"; there is no Supabase any more and `auth.py` has no
   reset endpoint). Add a reset-token endpoint + email to `backend-tasks.md` first,
   then the UI.
-- [ ] **F2.5 Pagination for shop & admin lists**
+- [x] **F2.5 Pagination for shop & admin lists** — envelope pagination
+  (`{items,total,page,page_size,pages}`, bare list without `?page=`) on
+  `/products`, `/orders`, `/admin/{orders,users,payments,contact-messages,reviews}`
+  + `offset` on audit-logs; shared `Pager` component on shop (URL `?page=`),
+  admin orders/users/messages/reviews and account orders. Also fixed a live
+  500: `/products` with a token crashed on string-vs-set roles.
+  → audit: [2026-09-22-f25-pagination-everywhere.md](audit/2026-09-22-f25-pagination-everywhere.md)
 - [x] **F2.6 Charts for admin dashboard** — `/admin` now has a range selector
   (امروز/۷/۳۰/همه), four KPI cards with delta badges, a recharts revenue area
   chart, an order-status donut with legend, an amber urgent-actions callout, and
@@ -291,10 +297,14 @@ maps what exists today; these are the pieces with no task yet. Read the spec fir
 (Rule 0) and follow its design rules — but the repo's data layer and routing win on
 conflict (DESIGN_SYSTEM.md §5).
 
-- [ ] **F4.1 Token-driven status badges** — one `StatusBadge` using the status
+- [x] **F4.1 Token-driven status badges** — one `StatusBadge` using the status
   semantics table (DESIGN_SYSTEM.md §2.3 + §7.2) for order/payment/refund state,
   replacing the uniform terracotta/sand chips; label always names the status, colour
-  is secondary. Spec B0.2/B4.2.
+  is secondary. Spec B0.2/B4.2. Done (F4.1): `components/StatusBadge.tsx` built
+  from the §7.2 snippet (+ `succeeded`/`failed`/`new` tones); converted account
+  orders, admin refunds/orders/dashboard and the order drawer; unknown statuses
+  degrade to brand tone with the raw label.
+  → audit: [2026-09-21-b51a-audit-ip-f41-status-badges.md](audit/2026-09-21-b51a-audit-ip-f41-status-badges.md)
 - [x] **F4.2 Admin shell** — sidebar layout (`[FE-01]`): right `w-64` sidebar with
   lucide icons, active terracotta edge, mobile sheet, topbar with breadcrumbs +
   quick search + role badge, replacing the tab bar in `admin.tsx`. Spec B3/[FE-01].
@@ -307,6 +317,8 @@ conflict (DESIGN_SYSTEM.md §5).
 - [ ] **F4.3 Reusable admin data grid** (`[FE-02]`) — search, filter chips, sort,
   pagination, bulk actions, copy-to-clipboard for tracking codes/phones. Needs a
   **decision to install `@tanstack/react-table`**; overlaps F2.5 (pagination).
+  When built, its toolbar should host the export buttons for the new
+  `/admin/export/*.{csv,xlsx}` endpoints (B2.2).
 - [x] **F4.4 Order detail drawer + invoice printing** (`[FE-05]`) — `Sheet` with the
   fulfilment stepper, customer address box with copy, itemised breakdown, postal
   tracking input (F2.8) and a `@media print` A4/A5 invoice (no print stylesheet
@@ -318,10 +330,14 @@ conflict (DESIGN_SYSTEM.md §5).
   prints only it (A4, no chrome). Spec's «تأیید پرداخت» step label adapted to the
   live statuses (Rule 4) — see audit.
   → audit: [2026-09-21-frontend-f44-order-drawer-invoice-printing.md](audit/2026-09-21-frontend-f44-order-drawer-invoice-printing.md)
-- [ ] **F4.5 Coupons manager** (`[FE-07]`) — ticket-style cards, usage progress,
+- [x] **F4.5 Coupons manager** (`[FE-07]`) — ticket-style cards, usage progress,
   active toggle, Jalali date pickers on top of the existing `/coupons` CRUD.
-  Customer-side refunds page stays **F2.4**; charts stay **F2.6**; KPI deltas need
-  the backend aggregation endpoint (**B2.8**).
+  Done (F4.5): `/admin/coupons` with filter chips, ticket cards (copy code,
+  Switch toggle, usage bar red at 100%), create/edit dialog (percent XOR amount,
+  mirrors backend), delete + code generator; new backend `DELETE /coupons/{id}`
+  (audited). Date picker is the native input (no Persian calendar dependency) —
+  see audit. Customer-side refunds page stays **F2.4**; charts stay **F2.6**.
+  → audit: [2026-09-21-b61-state-machine-f45-coupons-manager.md](audit/2026-09-21-b61-state-machine-f45-coupons-manager.md)
 
 ## Rules reminder
 

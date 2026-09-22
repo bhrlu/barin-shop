@@ -48,7 +48,11 @@ plan/
     ├── 2026-09-21-backend-b51-audit-log.md
     ├── 2026-09-21-backend-b54-granular-staff-roles.md
     ├── 2026-09-21-frontend-f42-admin-shell-role-gating.md
-    └── 2026-09-21-frontend-f44-order-drawer-invoice-printing.md
+    ├── 2026-09-21-frontend-f44-order-drawer-invoice-printing.md
+    ├── 2026-09-21-b61-state-machine-f45-coupons-manager.md
+    ├── 2026-09-21-b51a-audit-ip-f41-status-badges.md
+    ├── 2026-09-22-f25-pagination-everywhere.md
+    └── 2026-09-22-b22-reports-exports.md
 ```
 
 The two `ADMIN-*.md` files hold the back-office task split (epics [BE-01]… and

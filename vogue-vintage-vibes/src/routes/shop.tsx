@@ -6,7 +6,9 @@ import { api } from "@/lib/api";
 import { ProductCard } from "@/components/ProductCard";
 import { RecentlyViewedRail } from "@/components/product/RecentlyViewedRail";
 import { categories, type CategoryId } from "@/data/products";
+import { toPage } from "@/lib/api";
 import { searchQuery, toProducts, useCatalog } from "@/lib/catalog";
+import { Pager } from "@/components/Pager";
 import { formatToman, toFa } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Slider } from "@/components/ui/slider";
@@ -48,6 +50,7 @@ type ShopSearch = {
   availability?: Availability;
   onSale?: boolean;
   q?: string;
+  page?: number;
 };
 
 const str = (value: unknown): string | undefined =>
@@ -93,6 +96,9 @@ export const Route = createFileRoute("/shop")({
         : {}),
       ...(search["onSale"] === true || search["onSale"] === "true" ? { onSale: true } : {}),
       ...(str(search["q"]) ? { q: str(search["q"]) as string } : {}),
+      ...(search["page"] != null && Number(search["page"]) > 0
+        ? { page: Number(search["page"]) }
+        : {}),
     };
   },
   head: () => ({
@@ -205,12 +211,15 @@ function CatalogPage({ search }: { search: ShopSearch }) {
     sort: search.sort ?? ("new" as ProductSort),
   };
 
-  // Filtering, sorting and stock limits all happen in the backend.
+  // Filtering, sorting, stock limits and pagination all happen in the backend.
   const products = useQuery({
-    queryKey: ["products", filters],
-    queryFn: async () => toProducts(await api.products(filters)),
+    queryKey: ["products", filters, search.page ?? 1],
+    queryFn: async () => {
+      const page = toPage(await api.products({ ...filters, page: search.page ?? 1, page_size: 12 }));
+      return { items: await toProducts(page.items), total: page.total, pages: page.pages };
+    },
   });
-  const visible = products.data ?? [];
+  const visible = products.data?.items ?? [];
 
   const tags = Array.from(new Set(all.flatMap((product) => product.tags ?? []))).sort((a, b) =>
     a.localeCompare(b, "fa"),
@@ -234,7 +243,9 @@ function CatalogPage({ search }: { search: ShopSearch }) {
     <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
       <h1 className="text-4xl">فروشگاه</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        {products.isLoading ? "در حال بارگذاری…" : `${toFa(visible.length)} محصول در دسترس`}
+        {products.isLoading
+          ? "در حال بارگذاری…"
+          : `${toFa(products.data?.total ?? visible.length)} محصول در دسترس`}
       </p>
 
       <div className="mt-8 flex flex-wrap items-center gap-2 border-b border-border pb-6">
@@ -466,11 +477,25 @@ function CatalogPage({ search }: { search: ShopSearch }) {
               </Button>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-x-5 gap-y-10 lg:grid-cols-3">
-              {visible.map((product) => (
-                <ProductCard key={product.id} product={product} />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-2 gap-x-5 gap-y-10 lg:grid-cols-3">
+                {visible.map((product) => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
+              </div>
+              <Pager
+                className="mt-12"
+                page={search.page ?? 1}
+                pages={products.data?.pages ?? 1}
+                total={products.data?.total}
+                onChange={(next) =>
+                  navigate({
+                    to: "/shop",
+                    search: clean({ ...search, page: next > 1 ? next : undefined }),
+                  })
+                }
+              />
+            </>
           )}
         </div>
       </div>

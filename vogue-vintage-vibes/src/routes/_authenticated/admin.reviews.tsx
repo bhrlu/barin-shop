@@ -2,15 +2,19 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { api, ApiError, type Review } from "@/lib/api";
+import { api, ApiError, toPage, type Review } from "@/lib/api";
 import { useCatalog } from "@/lib/catalog";
 import { formatFaDate, toFa } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Pager } from "@/components/Pager";
 
 export const Route = createFileRoute("/_authenticated/admin/reviews")({
   component: AdminReviews,
 });
+
+/** Rows per page for the moderation list (F2.5). */
+const PAGE_SIZE = 20;
 
 const FILTERS = [
   { value: "", label: "همه" },
@@ -32,9 +36,12 @@ function AdminReviews() {
   const [replying, setReplying] = useState<string | null>(null);
   const [reply, setReply] = useState("");
 
+  const [page, setPage] = useState(1);
+
   const reviews = useQuery({
-    queryKey: ["admin-reviews", filter],
-    queryFn: () => api.adminReviews(filter === "" ? undefined : filter),
+    queryKey: ["admin-reviews", filter, page],
+    queryFn: () =>
+      toPage(api.adminReviews(filter === "" ? undefined : filter, page, PAGE_SIZE)),
   });
 
   const refresh = (review?: Review) => {
@@ -69,7 +76,7 @@ function AdminReviews() {
       toast.error(error instanceof ApiError ? error.message : "ثبت پاسخ انجام نشد"),
   });
 
-  const list = reviews.data ?? [];
+  const list = reviews.data?.items ?? [];
 
   return (
     <div className="space-y-6">
@@ -238,6 +245,16 @@ function AdminReviews() {
             );
           })}
         </ul>
+      )}
+
+      {list.length > 0 && (
+        <Pager
+          className="mt-6"
+          page={reviews.data?.page ?? page}
+          pages={reviews.data?.pages ?? 1}
+          total={reviews.data?.total}
+          onChange={setPage}
+        />
       )}
     </div>
   );

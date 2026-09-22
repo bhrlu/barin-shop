@@ -27,6 +27,7 @@ import { Route as AuthenticatedAccountFavoritesRouteImport } from './routes/_aut
 import { Route as AuthenticatedAccountOrdersRouteImport } from './routes/_authenticated/account.orders'
 import { Route as AuthenticatedAccountPaymentsRouteImport } from './routes/_authenticated/account.payments'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
+import { Route as AuthenticatedAdminCouponsRouteImport } from './routes/_authenticated/admin.coupons'
 import { Route as AuthenticatedAdminInventoryRouteImport } from './routes/_authenticated/admin.inventory'
 import { Route as AuthenticatedAdminMessagesRouteImport } from './routes/_authenticated/admin.messages'
 import { Route as AuthenticatedAdminOrdersRouteImport } from './routes/_authenticated/admin.orders'
@@ -131,6 +132,12 @@ const AuthenticatedAdminIndexRoute = AuthenticatedAdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedAdminRoute,
 } as any)
+const AuthenticatedAdminCouponsRoute =
+  AuthenticatedAdminCouponsRouteImport.update({
+    id: '/coupons',
+    path: '/coupons',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminInventoryRoute =
   AuthenticatedAdminInventoryRouteImport.update({
     id: '/inventory',
@@ -201,6 +208,7 @@ export interface FileRoutesByFullPath {
   '/account/favorites': typeof AuthenticatedAccountFavoritesRoute
   '/account/orders': typeof AuthenticatedAccountOrdersRoute
   '/account/payments': typeof AuthenticatedAccountPaymentsRoute
+  '/admin/coupons': typeof AuthenticatedAdminCouponsRoute
   '/admin/inventory': typeof AuthenticatedAdminInventoryRoute
   '/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/admin/orders': typeof AuthenticatedAdminOrdersRoute
@@ -227,6 +235,7 @@ export interface FileRoutesByTo {
   '/account/favorites': typeof AuthenticatedAccountFavoritesRoute
   '/account/orders': typeof AuthenticatedAccountOrdersRoute
   '/account/payments': typeof AuthenticatedAccountPaymentsRoute
+  '/admin/coupons': typeof AuthenticatedAdminCouponsRoute
   '/admin/inventory': typeof AuthenticatedAdminInventoryRoute
   '/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/admin/orders': typeof AuthenticatedAdminOrdersRoute
@@ -257,6 +266,7 @@ export interface FileRoutesById {
   '/_authenticated/account/favorites': typeof AuthenticatedAccountFavoritesRoute
   '/_authenticated/account/orders': typeof AuthenticatedAccountOrdersRoute
   '/_authenticated/account/payments': typeof AuthenticatedAccountPaymentsRoute
+  '/_authenticated/admin/coupons': typeof AuthenticatedAdminCouponsRoute
   '/_authenticated/admin/inventory': typeof AuthenticatedAdminInventoryRoute
   '/_authenticated/admin/messages': typeof AuthenticatedAdminMessagesRoute
   '/_authenticated/admin/orders': typeof AuthenticatedAdminOrdersRoute
@@ -287,6 +297,7 @@ export interface FileRouteTypes {
     | '/account/favorites'
     | '/account/orders'
     | '/account/payments'
+    | '/admin/coupons'
     | '/admin/inventory'
     | '/admin/messages'
     | '/admin/orders'
@@ -313,6 +324,7 @@ export interface FileRouteTypes {
     | '/account/favorites'
     | '/account/orders'
     | '/account/payments'
+    | '/admin/coupons'
     | '/admin/inventory'
     | '/admin/messages'
     | '/admin/orders'
@@ -342,6 +354,7 @@ export interface FileRouteTypes {
     | '/_authenticated/account/favorites'
     | '/_authenticated/account/orders'
     | '/_authenticated/account/payments'
+    | '/_authenticated/admin/coupons'
     | '/_authenticated/admin/inventory'
     | '/_authenticated/admin/messages'
     | '/_authenticated/admin/orders'
@@ -496,6 +509,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminIndexRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/coupons': {
+      id: '/_authenticated/admin/coupons'
+      path: '/coupons'
+      fullPath: '/admin/coupons'
+      preLoaderRoute: typeof AuthenticatedAdminCouponsRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/inventory': {
       id: '/_authenticated/admin/inventory'
       path: '/inventory'
@@ -584,6 +604,7 @@ const AuthenticatedAccountRouteWithChildren =
   AuthenticatedAccountRoute._addFileChildren(AuthenticatedAccountRouteChildren)
 
 interface AuthenticatedAdminRouteChildren {
+  AuthenticatedAdminCouponsRoute: typeof AuthenticatedAdminCouponsRoute
   AuthenticatedAdminInventoryRoute: typeof AuthenticatedAdminInventoryRoute
   AuthenticatedAdminMessagesRoute: typeof AuthenticatedAdminMessagesRoute
   AuthenticatedAdminOrdersRoute: typeof AuthenticatedAdminOrdersRoute
@@ -595,6 +616,7 @@ interface AuthenticatedAdminRouteChildren {
 }
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
+  AuthenticatedAdminCouponsRoute: AuthenticatedAdminCouponsRoute,
   AuthenticatedAdminInventoryRoute: AuthenticatedAdminInventoryRoute,
   AuthenticatedAdminMessagesRoute: AuthenticatedAdminMessagesRoute,
   AuthenticatedAdminOrdersRoute: AuthenticatedAdminOrdersRoute,

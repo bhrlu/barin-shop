@@ -3,7 +3,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, MailCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { api, ApiError, type ContactMessageStatus } from "@/lib/api";
+import { api, ApiError, toPage, type ContactMessageStatus } from "@/lib/api";
+import { Pager } from "@/components/Pager";
 import { formatFaDate, toFa } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/admin/messages")({
@@ -33,14 +34,32 @@ type Filter = (typeof FILTERS)[number]["value"];
  * happens over email/phone — the sender's `contact` field is copy-to-clipboard
  * so support can reach them without leaving the page.
  */
+/** Rows per page for the inbox (F2.5). */
+const PAGE_SIZE = 20;
+
+/**
+ * Admin contact inbox (F2.1b): reads `GET /admin/contact-messages` and marks
+ * messages answered via `PATCH /admin/contact-messages/{id}`. Answering itself
+ * happens over email/phone — the sender's `contact` field is copy-to-clipboard
+ * so support can reach them without leaving the page.
+ */
 function AdminMessages() {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<Filter>("");
+  const [page, setPage] = useState(1);
 
   const messages = useQuery({
-    queryKey: ["admin-contact-messages", filter],
-    queryFn: () => api.adminContactMessages(filter === "" ? undefined : (filter as ContactMessageStatus)),
+    queryKey: ["admin-contact-messages", filter, page],
+    queryFn: () =>
+      toPage(
+        api.adminContactMessages(
+          filter === "" ? undefined : (filter as ContactMessageStatus),
+          page,
+          PAGE_SIZE,
+        ),
+      ),
   });
+
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["admin-contact-messages"] });
@@ -76,7 +95,7 @@ function AdminMessages() {
     }
   };
 
-  const list = messages.data ?? [];
+  const list = messages.data?.items ?? [];
 
   return (
     <div className="space-y-6">
@@ -178,6 +197,16 @@ function AdminMessages() {
             );
           })}
         </ul>
+      )}
+
+      {list.length > 0 && (
+        <Pager
+          className="mt-6"
+          page={messages.data?.page ?? page}
+          pages={messages.data?.pages ?? 1}
+          total={messages.data?.total}
+          onChange={setPage}
+        />
       )}
     </div>
   );

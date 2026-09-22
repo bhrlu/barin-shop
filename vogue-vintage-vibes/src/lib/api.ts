@@ -149,7 +149,33 @@ export type ProductListParams = {
   max_price?: number;
   sort?: ProductSort;
   include_inactive?: boolean;
+  /** F2.5: when `page` is set the API returns the `{items,total,…}` envelope. */
+  page?: number;
+  page_size?: number;
 };
+
+/** Paginated list envelope (F2.5). Endpoints keep bare arrays when no `page`
+ * param is sent, so old callers stay valid. */
+export type Page<T> = {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+};
+
+/** Normalize a bare array (legacy response) into the Page envelope. Accepts
+ * promises so callers can wrap a request directly. */
+export function toPage<T>(data: T[] | Page<T>): Page<T>;
+export function toPage<T>(data: Promise<T[] | Page<T>>): Promise<Page<T>>;
+export function toPage<T>(
+  data: T[] | Page<T> | Promise<T[] | Page<T>>,
+): Page<T> | Promise<Page<T>> {
+  if (data instanceof Promise) return data.then((resolved) => toPage(resolved));
+  if (Array.isArray(data))
+    return { items: data, total: data.length, page: 1, page_size: data.length, pages: 1 };
+  return data;
+}
 
 // --- catalog: variants / reviews / discovery -----------------------------------
 
@@ -311,6 +337,19 @@ export type Order = {
   items: OrderItem[];
 };
 
+export type AdminCoupon = {
+  id: string;
+  code: string;
+  percent_off: number | null;
+  amount_off: number | null;
+  min_subtotal: number;
+  max_uses: number | null;
+  max_uses_per_user: number;
+  used_count: number;
+  expires_at: string | null;
+  active: boolean;
+};
+
 export type PaymentRecord = {
   id: string;
   order_id: string;
@@ -469,8 +508,10 @@ export const api = {
     if (params.max_price != null) qs.set("max_price", String(params.max_price));
     if (params.sort) qs.set("sort", params.sort);
     if (params.include_inactive) qs.set("include_inactive", "true");
+    if (params.page) qs.set("page", String(params.page));
+    if (params.page_size) qs.set("page_size", String(params.page_size));
     const suffix = qs.toString() ? `?${qs}` : "";
-    return request<Product[]>(`/products${suffix}`);
+    return request<Product[] | Page<Product>>(`/products${suffix}`);
   },
   product: (id: string) => request<Product>(`/products/${encodeURIComponent(id)}`),
   relatedProducts: (id: string, limit = 4) =>
@@ -523,11 +564,15 @@ export const api = {
   // public: a guest can ask about a size or an order without an account
   contact: (body: { name: string; contact: string; message: string }) =>
     request<ContactMessage>("/contact", { method: "POST", json: body }),
-  // admin inbox (F2.1b)
-  adminContactMessages: (status?: ContactMessageStatus) =>
-    request<ContactMessage[]>(
-      status ? `/admin/contact-messages?status=${status}` : "/admin/contact-messages",
-    ),
+  // admin inbox (F2.1b) — F2.5: optional page/page_size envelope
+  adminContactMessages: (status?: ContactMessageStatus, page?: number, pageSize?: number) => {
+    const qs = new URLSearchParams();
+    if (status) qs.set("status", status);
+    if (page) qs.set("page", String(page));
+    if (pageSize) qs.set("page_size", String(pageSize));
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return request<ContactMessage[] | Page<ContactMessage>>(`/admin/contact-messages${suffix}`);
+  },
   markContactMessage: (id: string, status: ContactMessageStatus) =>
     request<ContactMessage>(`/admin/contact-messages/${id}`, { method: "PATCH", json: { status } }),
   deleteContactMessage: (id: string) =>
@@ -541,7 +586,13 @@ export const api = {
     }),
 
   // --- orders ---
-  orders: () => request<Order[]>("/orders"),
+  orders: (page?: number, pageSize?: number) => {
+    const qs = new URLSearchParams();
+    if (page) qs.set("page", String(page));
+    if (pageSize) qs.set("page_size", String(pageSize));
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return request<Order[] | Page<Order>>(`/orders${suffix}`);
+  },
   order: (id: string) => request<Order>(`/orders/${id}`),
   cancelOrder: (id: string) =>
     request<{ ok: boolean; order_number: string; refund_eligible: boolean }>(
@@ -583,10 +634,55 @@ export const api = {
   adminStats: () => request<AdminStats>("/admin/stats"),
   adminKpis: (range: KpiRange = "30d") =>
     request<AdminKpis>(`/admin/kpis?range=${range}`),
-  adminUsers: () => request<AdminUser[]>("/admin/users"),
-  adminOrders: () => request<Order[]>("/admin/orders"),
-  adminPayments: () => request<PaymentRecord[]>("/admin/payments"),
+  adminUsers: (page?: number, pageSize?: number) => {
+    const qs = new URLSearchParams();
+    if (page) qs.set("page", String(page));
+    if (pageSize) qs.set("page_size", String(pageSize));
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return request<AdminUser[] | Page<AdminUser>>(`/admin/users${suffix}`);
+  },
+  adminOrders: (page?: number, pageSize?: number) => {
+    const qs = new URLSearchParams();
+    if (page) qs.set("page", String(page));
+    if (pageSize) qs.set("page_size", String(pageSize));
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return request<Order[] | Page<Order>>(`/admin/orders${suffix}`);
+  },
+  adminPayments: (page?: number, pageSize?: number) => {
+    const qs = new URLSearchParams();
+    if (page) qs.set("page", String(page));
+    if (pageSize) qs.set("page_size", String(pageSize));
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return request<PaymentRecord[] | Page<PaymentRecord>>(`/admin/payments${suffix}`);
+  },
   adminRefunds: () => request<RefundRequest[]>("/admin/refunds"),
+
+  // --- admin coupon CRUD (F4.5 / spec FE-07) ---
+  adminCoupons: () => request<{ coupons: AdminCoupon[] }>("/coupons"),
+  adminCreateCoupon: (input: {
+    code: string;
+    percent_off: number | null;
+    amount_off: number | null;
+    min_subtotal: number;
+    max_uses: number | null;
+    max_uses_per_user: number;
+    expires_at: string | null;
+  }) => request<CouponValidation>("/coupons", { method: "POST", body: JSON.stringify(input) }),
+  adminUpdateCoupon: (
+    id: string,
+    patch: Partial<{
+      active: boolean;
+      percent_off: number | null;
+      amount_off: number | null;
+      min_subtotal: number;
+      max_uses: number | null;
+      max_uses_per_user: number;
+      expires_at: string | null;
+    }>,
+  ) => request<{ ok: boolean }>(`/coupons/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  adminDeleteCoupon: (id: string) => request<void>(`/coupons/${id}`, { method: "DELETE" }),
+  adminGenerateCouponCode: () =>
+    request<{ code: string }>("/coupons/generate", { method: "POST" }),
 
   // --- storage (MinIO) ---
   signStorage: (paths: string[]) =>
@@ -625,8 +721,14 @@ export const api = {
         ? `/admin/inventory/low-stock?threshold=${threshold}`
         : "/admin/inventory/low-stock",
     ),
-  adminReviews: (status?: "published" | "hidden") =>
-    request<Review[]>(status ? `/admin/reviews?status=${status}` : "/admin/reviews"),
+  adminReviews: (status?: "published" | "hidden", page?: number, pageSize?: number) => {
+    const qs = new URLSearchParams();
+    if (status) qs.set("status", status);
+    if (page) qs.set("page", String(page));
+    if (pageSize) qs.set("page_size", String(pageSize));
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return request<Review[] | Page<Review>>(`/admin/reviews${suffix}`);
+  },
   moderateReview: (id: string, status: "published" | "hidden") =>
     request<Review>(`/reviews/${id}`, { method: "PATCH", json: { status } }),
   replyToReview: (id: string, seller_reply: string) =>

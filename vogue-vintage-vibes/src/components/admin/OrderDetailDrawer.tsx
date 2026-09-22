@@ -7,6 +7,7 @@ import { api, type Order } from "@/lib/api";
 import { formatFaDate, formatToman, toFa } from "@/lib/format";
 import { resolveImageUrls } from "@/lib/catalog";
 import { ORDER_STATUS, PAYMENT_STATUS } from "@/lib/orders";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -269,12 +270,8 @@ export function OrderDetailDrawer({
           </SheetTitle>
           <SheetDescription className="sr-only">جزئیات و پردازش سفارش</SheetDescription>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-            <span className="rounded-full bg-secondary px-2.5 py-1">
-              {ORDER_STATUS[status] ?? status}
-            </span>
-            <span className="rounded-full bg-secondary px-2.5 py-1">
-              {PAYMENT_STATUS[order.payment_status] ?? order.payment_status}
-            </span>
+            <StatusBadge status={status} />
+            <StatusBadge status={order.payment_status} />
             <span className="font-mono text-xs">
               {formatToman(Number(order.total))} تومان
             </span>

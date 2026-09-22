@@ -1,19 +1,32 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { useState } from "react";
+import { api, toPage } from "@/lib/api";
 import { formatToman, toFa } from "@/lib/format";
+import { Pager } from "@/components/Pager";
 
 export const Route = createFileRoute("/_authenticated/admin/users")({
   component: AdminUsers,
 });
 
-function AdminUsers() {
-  const { data } = useQuery({
-    queryKey: ["admin-users"],
-    queryFn: () => api.adminUsers(),
-  });
+const PAGE_SIZE = 20;
 
-  if (!data?.length)
+function AdminUsers() {
+  const [page, setPage] = useState(1);
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-users", page],
+    queryFn: () => toPage(api.adminUsers(page, PAGE_SIZE)),
+  });
+  const users = data?.items ?? [];
+
+  if (isLoading)
+    return (
+      <div className="rounded-3xl border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
+        در حال بارگذاری…
+      </div>
+    );
+
+  if (!users.length)
     return (
       <div className="rounded-3xl border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
         کاربری ثبت نشده است.
@@ -21,8 +34,9 @@ function AdminUsers() {
     );
 
   return (
-    <ul className="divide-y divide-border rounded-3xl border border-border">
-      {data.map((user) => (
+    <>
+      <ul className="divide-y divide-border rounded-3xl border border-border">
+        {users.map((user) => (
         <li key={user.id} className="flex flex-wrap items-center justify-between gap-3 p-5 text-sm">
           <div>
             <p>{user.full_name ?? "بدون نام"}</p>
@@ -41,6 +55,14 @@ function AdminUsers() {
           </div>
         </li>
       ))}
-    </ul>
+      </ul>
+      <Pager
+        className="mt-6"
+        page={data?.page ?? page}
+        pages={data?.pages ?? 1}
+        total={data?.total}
+        onChange={setPage}
+      />
+    </>
   );
 }

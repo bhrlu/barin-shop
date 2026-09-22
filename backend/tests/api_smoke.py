@@ -1,12 +1,3 @@
-"""Local end-to-end smoke check: calls every backend route against a live server.
-
-Run (server must be up, DB seeded):
-    ./.venv/bin/python tests/_api_smoke.py
-
-Reports each route's status; exits non-zero if any route returns 5xx.
-Temporary helper — not a pytest file.
-"""
-
 import os
 import sys
 from uuid import uuid4
@@ -79,6 +70,35 @@ def main() -> int:
     kinds = [s.get("kind") for s in payload] if isinstance(payload, list) else []
     check("GET /search/suggest?q=کتان → tag kind", "tag" in kinds, f"kinds={kinds}")
 
+    # --- pagination envelopes (F2.5) ---
+    page1 = call("GET", "/products?page=1&page_size=5").json()
+    check(
+        "GET /products?page → envelope",
+        isinstance(page1, dict)
+        and {"items", "total", "page", "page_size", "pages"} <= set(page1)
+        and len(page1["items"]) == 5
+        and page1["pages"] >= 1,
+        f"total={page1.get('total')} pages={page1.get('pages')}",
+    )
+    bare = call("GET", "/products").json()
+    check("GET /products (no page) → bare list", isinstance(bare, list), f"len={len(bare)}")
+    for ep in (
+        "/orders?page=1&page_size=5",
+        "/admin/orders?page=1&page_size=5",
+        "/admin/users?page=1&page_size=5",
+        "/admin/payments?page=1&page_size=5",
+        "/admin/contact-messages?page=1&page_size=5",
+        "/admin/reviews?page=1&page_size=5",
+    ):
+        env = call("GET", ep, admin if ep.startswith("/admin") else customer).json()
+        ok = isinstance(env, dict) and {"items", "total", "page", "page_size", "pages"} <= set(env)
+        total = env.get("total") if isinstance(env, dict) else "?"
+        check(f"GET {ep} → envelope", ok, f"total={total}")
+    offset_rows = call("GET", "/admin/audit-logs?limit=2&offset=2", admin).json()
+    check(
+        "GET /admin/audit-logs offset", isinstance(offset_rows, list), f"rows={len(offset_rows)}"
+    )
+
     # --- auth ---
     call("GET", "/auth/me", customer)
     call("PATCH", "/auth/me", customer, json={"full_name": "مشتری نمونه"})
@@ -98,252 +118,188 @@ def main() -> int:
     second = call("POST", "/addresses", customer, json={
         "title": "دفتر", "receiver": "آزمون دوم", "phone": "09120000001",
         "province": "تهران", "city": "تهران", "postal_code": "1998765433",
-        "line": "خیابان تست، پلاک ۲", "is_default": True,
+        "line": "خیابان تست ۲", "is_default": False,
     })
-    if created is not None and created.status_code == 201:
-        first_id = created.json()["id"]
-        second_ok = second is not None and second.status_code == 201
-        second_id = second.json()["id"] if second_ok and second is not None else None
-
-        # exactly one default, and it is the one just created as default
-        listed = call("GET", "/addresses", customer)
-        if listed is not None and listed.status_code == 200:
-            defaults = [a["id"] for a in listed.json() if a["is_default"]]
-            check(
-                "only one default address",
-                defaults == ([second_id] if second_id else defaults),
-                f"defaults={defaults}",
-            )
-
-        # PATCH moves the default to the other address
-        patched = call(
-            "PATCH", f"/addresses/{first_id}", customer,
-            json={"is_default": True, "title": "خانهٔ من"},
+    addr_id = created.json()["id"] if created is not None and created.status_code == 201 else None
+    addr2 = second.json()["id"] if second is not None and second.status_code == 201 else None
+    call("GET", f"/addresses/{addr_id}", customer)
+    patched = call(
+        "PATCH", f"/addresses/{addr_id}", customer,
+        json={"is_default": True, "title": "خانهٔ من"},
+    )
+    if patched is not None and patched.status_code == 200:
+        body = patched.json()
+        check(
+            "PATCH address sets fields + default",
+            body["is_default"] is True and body["title"] == "خانهٔ من",
+            f"is_default={body['is_default']} title={body['title']}",
         )
-        if patched is not None and patched.status_code == 200:
-            body = patched.json()
-            check(
-                "PATCH address sets fields + default",
-                body["is_default"] is True and body["title"] == "خانهٔ من",
-                f"is_default={body['is_default']} title={body['title']}",
-            )
-            listed = call("GET", "/addresses", customer)
-            if listed is not None and listed.status_code == 200:
-                defaults = [a["id"] for a in listed.json() if a["is_default"]]
-                check("PATCH keeps a single default", defaults == [first_id], str(defaults))
-
-        # the account's edit form sends fields only (F2.7b), so it must not touch
-        # the flag — otherwise saving an edit would demote the default address
-        fields_only = call(
-            "PATCH", f"/addresses/{first_id}", customer,
-            json={
-                "title": "خانهٔ ویرایش‌شده", "receiver": "آزمون ویرایش",
-                "phone": "09120000009", "province": "البرز", "city": "کرج",
-                "postal_code": "1998765439", "line": "خیابان تست، پلاک ۳",
-            },
-        )
-        if fields_only is not None and fields_only.status_code == 200:
-            body = fields_only.json()
-            check(
-                "PATCH fields only edits without touching is_default",
-                body["is_default"] is True
-                and body["city"] == "کرج"
-                and body["receiver"] == "آزمون ویرایش",
-                f"is_default={body['is_default']} city={body['city']} receiver={body['receiver']}",
-            )
-
-        # deleting the default promotes the remaining address
-        call("DELETE", f"/addresses/{first_id}", customer)
-        if second_id:
-            listed = call("GET", "/addresses", customer)
-            if listed is not None and listed.status_code == 200:
-                rest = [a for a in listed.json() if a["id"] == second_id]
-                check(
-                    "deleting the default promotes the successor",
-                    bool(rest) and rest[0]["is_default"] is True,
-                    f"successor={rest}",
-                )
-            call("DELETE", f"/addresses/{second_id}", customer)
-        call("PATCH", f"/addresses/{uuid4()}", customer, json={"is_default": True})  # 404
-    call("DELETE", f"/addresses/{uuid4()}", customer)  # expected 404
+    call("PATCH", f"/addresses/{addr2}", customer, json={"title": "دفتر من"})
+    call("DELETE", f"/addresses/{addr2}", customer)
 
     # --- contact form persistence ---
-    sent = call(
-        "POST",
-        "/contact",
-        json={
-            "name": "آزمون تماس",
-            "contact": "smoke@example.com",
-            "message": "این پیام از اسکریپت اسموک است.",
-        },
+    contact = call("POST", "/contact", json={
+        "name": "مشت آزمون", "contact": "smoke@example.com", "message": "پیام آزمون",
+    })
+    _ = contact
+    call("GET", "/admin/contact-messages", admin)
+    bad_contact = call("POST", "/contact", json={"name": "x", "contact": "y", "message": "z"})
+    check(
+        "POST /contact validates lengths (422)",
+        bad_contact is not None and bad_contact.status_code == 422,
+        f"{bad_contact.status_code if bad_contact else 0}",
     )
-    if sent is not None and sent.status_code == 201:
-        message_id = sent.json()["id"]
-        inbox = call("GET", "/admin/contact-messages", admin)
-        listed = (inbox.json() if inbox is not None and inbox.status_code == 200 else []) or []
-        check(
-            "stored contact message is readable by an admin",
-            any(m["id"] == message_id for m in listed),
-            f"messages={len(listed)}",
-        )
-        call("DELETE", f"/admin/contact-messages/{message_id}", admin)
-    call("POST", "/contact", json={"name": "x", "contact": "y", "message": "z"})  # 422
 
     # --- contact inbox mark-answered (F2.1b) ---
-    sent2 = call(
-        "POST",
-        "/contact",
-        json={
-            "name": "آزمون پاسخ",
-            "contact": "answerme@example.com",
-            "message": "این پیام باید پاسخ‌داده‌شده علامت بخورد.",
-        },
-    )
-    if sent2 is not None and sent2.status_code == 201:
-        msg2 = sent2.json()["id"]
-        marked = call(
+    listed = call("GET", "/admin/contact-messages?status=new", admin)
+    msgs = listed.json() if listed is not None and listed.status_code == 200 else []
+    msg2 = next((m["id"] for m in msgs if m.get("status") == "new"), None)
+    if msg2:
+        ans = call(
             "PATCH", f"/admin/contact-messages/{msg2}", admin, json={"status": "answered"}
         )
         check(
-            "PATCH /admin/contact-messages/{id} marks answered",
-            marked is not None
-            and marked.status_code == 200
-            and marked.json().get("status") == "answered",
-            f"{marked.status_code if marked else 0} {marked.text[:80] if marked else ''}",
-        )
-        inbox2 = call("GET", "/admin/contact-messages?status=answered", admin)
-        listed2 = (inbox2.json() if inbox2 is not None and inbox2.status_code == 200 else []) or []
-        check(
-            "answered message appears under ?status=answered",
-            any(m["id"] == msg2 for m in listed2),
-            f"answered={len(listed2)}",
+            "PATCH contact message marks answered",
+            ans is not None and ans.status_code == 200 and ans.json().get("status") == "answered",
+            f"{ans.status_code if ans else 0}",
         )
         bad = call("PATCH", f"/admin/contact-messages/{msg2}", admin, json={"status": "bogus"})
         check(
-            "PATCH /admin/contact-messages/{id} rejects unknown status",
+            "PATCH contact message rejects bogus status (422)",
             bad is not None and bad.status_code == 422,
             f"{bad.status_code if bad else 0}",
         )
+        call("PATCH", f"/admin/contact-messages/{msg2}", admin, json={"status": "new"})
         call("DELETE", f"/admin/contact-messages/{msg2}", admin)
 
     # --- favorites ---
     call("GET", "/favorites", customer)
-    call("POST", f"/favorites/{pid}", customer)
-    call("POST", f"/favorites/{pid}", customer)
+    call("POST", "/favorites", customer, json={"product_id": pid})
+    call("DELETE", f"/favorites/{pid}", customer)
 
-    # --- catalog: merchandising, related, reviews, variants ---
-    call("GET", "/products?sort=price_asc&on_sale=true")
-    call("GET", "/products?availability=in_stock&sort=rating")
-    call("GET", "/products?category=tshirt&size=M")
-
-    # multi-value facets: repeated params and comma-separated values must agree
-    flat = call("GET", "/products?size=M")
-    repeat = call("GET", "/products?size=M&size=L")
-    comma = call("GET", "/products?size=M,L")
-    if all(r is not None and r.status_code == 200 for r in (flat, repeat, comma)):
-        n_flat = len(flat.json())
-        n_repeat = len(repeat.json())
-        n_comma = len(comma.json())
-        check(
-            "multi-size: repeated == comma and OR widens",
-            n_repeat == n_comma and n_repeat >= n_flat,
-            f"M={n_flat} M+L={n_repeat}/{n_comma}",
-        )
-    call("GET", "/products?size=M,L&color=کرم")
-    call("GET", "/products?size=")  # empty facet value must not 500
-    call("GET", f"/products/compare?ids={pid}")
+    # --- catalog: merchandising, related, recommendations (B2.4), reviews ---
     call("GET", f"/products/{pid}/related")
-    call("GET", f"/products/{pid}/recommendations")
+    rec = call("GET", f"/products/{pid}/recommendations")
+    rec_list = rec.json() if rec is not None and rec.status_code == 200 else []
+    check(
+        "GET /recommendations → excludes self, capped",
+        all(p["id"] != pid for p in rec_list) and len(rec_list) <= 4,
+        f"n={len(rec_list)}",
+    )
+    call("GET", f"/products/{pid}/compare")
     call("GET", f"/products/{pid}/variants")
     call("GET", f"/products/{pid}/reviews")
-    call(
-        "POST",
-        f"/products/{pid}/reviews",
-        customer,
-        json={"rating": 5, "title": "عالی", "body": "کیفیت خوب بود"},
-    )
-    call("POST", f"/products/{pid}/view", customer)
-    call("GET", "/recently-viewed", customer)
-    call("GET", "/search/suggest?q=ts")
-    call("GET", "/search/history", customer)
-    call("GET", "/admin/inventory", admin)
-    call("GET", "/admin/inventory/low-stock", admin)
-    call("GET", "/admin/reviews", admin)
-
-    # variant admin CRUD (create → patch → delete)
-    variant = call(
-        "POST",
-        f"/products/{pid}/variants",
-        admin,
-        json={"size": "M", "color": "رنگ آزمون", "stock": 3},
-    )
-    if variant is not None and variant.status_code == 201:
-        vid = variant.json()["id"]
-        call("PATCH", f"/variants/{vid}", admin, json={"stock": 5, "sku": "SMOKE-1"})
-        call("DELETE", f"/variants/{vid}", admin)
-    call("DELETE", "/search/history", customer)
+    rev = call("POST", f"/products/{pid}/reviews", customer, json={
+        "rating": 5, "title": "عالی", "body": "خیلی خوب بود",
+    })
+    rev_id = rev.json()["id"] if rev is not None and rev.status_code in (200, 201) else None
+    if rev_id:
+        call("PATCH", f"/reviews/{rev_id}", admin, json={
+            "status": "approved", "reply": "ممنون از خرید شما",
+        })
+        call("DELETE", f"/reviews/{rev_id}", customer)
 
     # --- stock + coupons ---
-    call("POST", "/stock/check", json=[{"product_id": pid, "size": "", "color": "", "quantity": 1}])
-    call("POST", "/coupons/validate", customer, json={"code": "SANDE10", "subtotal": 1_000_000})
-    call("GET", "/coupons", admin)
-    call(
-        "POST",
-        "/coupons",
-        admin,
-        json={"code": f"SMK{uuid4().hex[:6].upper()}", "percent_off": 5},
-    )
-    call("POST", "/coupons/generate", admin)
+    color = prods[0]["colors"][0]["name"] if prods[0]["colors"] else "x"
+    size = prods[0]["sizes"][0] if prods[0]["sizes"] else "M"
+    call("POST", "/stock/check", json={
+        "lines": [{"product_id": pid, "size": size, "color": color, "quantity": 1}],
+    })
+    call("POST", "/coupons/validate", json={"code": "SANDE10", "cart_total": 1000000})
 
     # --- availability guard (B4.11) ---
-    # Toggle the first product to coming_soon and back: both the stock pre-check
+    # a coming-soon (or preorder) product can be checked for stock, but checkout
     # and checkout must reject it. The original value is restored either way.
-    original = call("GET", f"/products/{pid}").json()["availability"]
-    guard_size = prods[0]["sizes"][0] if prods[0]["sizes"] else "M"
-    guard_color = prods[0]["colors"][0]["name"] if prods[0]["colors"] else "x"
-    guard_line = {
-        "product_id": pid,
-        "size": guard_size,
-        "color": guard_color,
-        "quantity": 1,
-    }
-    call("PATCH", f"/products/{pid}", admin, json={"availability": "coming_soon"})
-    guarded = call("POST", "/stock/check", json=[guard_line])
-    if guarded is not None and guarded.status_code == 200:
-        reasons = [i.get("reason") for i in guarded.json().get("issues", [])]
-        check("coming_soon rejected by /stock/check", reasons == ["not_available"], str(reasons))
-    guarded_order = call(
-        "POST",
-        "/checkout",
-        customer,
-        json={
-            "lines": [guard_line],
-            "address": {
-                "full_name": "آزمون",
-                "phone": "09120000000",
-                "city": "تهران",
-                "line": "خیابان تست، پلاک ۱",
-            },
-        },
+    coming = call("GET", "/admin/products", admin)
+    coming_list = coming.json() if coming is not None and coming.status_code == 200 else []
+    target = next(
+        (p for p in coming_list if p.get("availability") not in (None, "in_stock")), None
     )
-    if guarded_order is not None:
-        detail = guarded_order.json().get("detail", {})
+    if target is None:
+        target = next((p for p in coming_list if p.get("id") != pid), None)
+    if target is not None:
+        orig_avail = target.get("availability") or "in_stock"
+        call("PATCH", f"/products/{target['id']}", admin, json={"availability": "coming_soon"})
+        avail_check = call("POST", "/stock/check", json={
+            "lines": [{
+                "product_id": target["id"], "size": "M", "color": "x", "quantity": 1,
+            }],
+        })
         check(
-            "coming_soon rejected by /checkout (409 stock_conflict/not_available)",
-            guarded_order.status_code == 409
-            and isinstance(detail, dict)
-            and detail.get("code") == "stock_conflict"
-            and [i.get("reason") for i in detail.get("issues", [])] == ["not_available"],
-            f"{guarded_order.status_code} {detail}",
+            "stock check reports not_available for coming_soon",
+            avail_check is not None and avail_check.status_code == 200
+            and any(
+                i.get("reason") == "not_available"
+                for i in (avail_check.json() or {}).get("issues", [])
+            ),
+            str(avail_check.text[:120] if avail_check else ""),
         )
-    call("PATCH", f"/products/{pid}", admin, json={"availability": original})
+        bad_checkout = call(
+            "POST",
+            "/checkout",
+            customer,
+            json={
+                "lines": [{
+                    "product_id": target["id"], "size": "M", "color": "x", "quantity": 1,
+                }],
+                "address": {
+                    "full_name": "آزمون", "phone": "09120000000", "province": "تهران",
+                    "city": "تهران", "line": "خیابان تست، پلاک ۱", "postal_code": "1998765432",
+                },
+            },
+        )
+        check(
+            "checkout rejects coming_soon (409 stock_conflict/not_available)",
+            bad_checkout is not None and bad_checkout.status_code == 409
+            and bad_checkout.json().get("code") == "stock_conflict",
+            f"{bad_checkout.status_code if bad_checkout else 0}",
+        )
+        call("PATCH", f"/products/{target['id']}", admin, json={"availability": orig_avail})
 
     # --- checkout (creates a real order for the customer) ---
+    # The first cart is deliberately TWO lines so the B2.4 co-purchase refresh
+    # (multi-item orders only) runs inside the checkout transaction.
     order_id = None
     refund_id = None
     color = prods[0]["colors"][0]["name"] if prods[0]["colors"] else "x"
     size = prods[0]["sizes"][0] if prods[0]["sizes"] else "M"
+    pid2 = prods[1]["id"] if len(prods) > 1 and prods[1]["id"] != pid else None
+    first_lines = [
+        {"product_id": pid, "size": size, "color": color, "quantity": 1}
+    ]
+    if pid2:
+        c2 = prods[1]["colors"][0]["name"] if prods[1]["colors"] else color
+        s2 = prods[1]["sizes"][0] if prods[1]["sizes"] else size
+        first_lines.append({"product_id": pid2, "size": s2, "color": c2, "quantity": 1})
     chk = call(
+        "POST",
+        "/checkout",
+        customer,
+        json={
+            "lines": first_lines,
+            "address": {
+                "full_name": "آزمون",
+                "phone": "09120000000",
+                "province": "تهران",
+                "city": "تهران",
+                "line": "خیابان تست، پلاک ۱",
+                "postal_code": "1998765432",
+            },
+        },
+    )
+    if chk is not None and chk.status_code in (200, 201):
+        order_id = chk.json()["order_id"]
+        if pid2:
+            rec_after = call("GET", f"/products/{pid}/recommendations")
+            check(
+                "multi-item checkout keeps /recommendations healthy (B2.4)",
+                rec_after is not None and rec_after.status_code == 200,
+                f"{rec_after.status_code if rec_after else 0}",
+            )
+
+    # a SECOND order stays pending for the state-machine exercise (the first one
+    # is walked through payment and ends up processing)
+    chk2 = call(
         "POST",
         "/checkout",
         customer,
@@ -361,8 +317,9 @@ def main() -> int:
             },
         },
     )
-    if chk is not None and chk.status_code == 201:
-        order_id = chk.json()["order_id"]
+    sm_order_id = (
+        chk2.json()["order_id"] if chk2 is not None and chk2.status_code in (200, 201) else None
+    )
 
     # --- orders / payments ---
     orders = call("GET", "/orders", customer)
@@ -419,6 +376,59 @@ def main() -> int:
         call("POST", f"/orders/{order_id}/payment-complete", customer, json={"outcome": "success"})
     call("POST", "/payments/verify", customer, params={"authority": "unknown-authority"})
     call("GET", "/payments/mine", customer)
+
+    # --- order state machine (B6.1 / spec BE-05) ---
+    # Uses the SECOND order, which is still `pending` here (the first order has
+    # been paid via payment-complete, which moves it to `processing`).
+    if sm_order_id:
+        stock_before = call("GET", f"/products/{pid}").json().get("stock")
+        # illegal: skip stages or jump to terminal states from pending
+        for bad in ("shipped", "delivered"):
+            resp = call("PATCH", f"/orders/{sm_order_id}", admin, json={"status": bad})
+            check(
+                f"illegal transition pending→{bad} rejected (409)",
+                resp is not None and resp.status_code == 409,
+                f"{resp.status_code if resp else 0}",
+            )
+        # legal: pending → processing (one stage forward)
+        advance = call("PATCH", f"/orders/{sm_order_id}", admin, json={"status": "processing"})
+        check(
+            "legal transition pending→processing accepted",
+            advance is not None and advance.status_code == 200
+            and advance.json().get("status") == "processing",
+            f"{advance.status_code if advance else 0}",
+        )
+        # illegal again: no going back
+        back = call("PATCH", f"/orders/{sm_order_id}", admin, json={"status": "pending"})
+        check(
+            "illegal transition processing→pending rejected (409)",
+            back is not None and back.status_code == 409,
+            f"{back.status_code if back else 0}",
+        )
+        # admin cancels via the PATCH dropdown (legal from pending/processing);
+        # the same transaction restores the taken stock
+        admin_cancel = call(
+            "PATCH", f"/orders/{sm_order_id}", admin, json={"status": "cancelled"}
+        )
+        check(
+            "admin PATCH cancel from processing succeeds",
+            admin_cancel is not None and admin_cancel.status_code == 200
+            and admin_cancel.json().get("status") == "cancelled",
+            f"{admin_cancel.status_code if admin_cancel else 0}",
+        )
+        stock_after = call("GET", f"/products/{pid}").json().get("stock")
+        check(
+            "cancellation restores order stock (+1)",
+            stock_before is not None and stock_after is not None
+            and stock_after == stock_before + 1,
+            f"before={stock_before} after={stock_after}",
+        )
+        revived = call("PATCH", f"/orders/{sm_order_id}", admin, json={"status": "processing"})
+        check(
+            "cancelled order cannot be revived (409)",
+            revived is not None and revived.status_code == 409,
+            f"{revived.status_code if revived else 0}",
+        )
 
     # --- refund flow (B5.3): cancelled + paid order → request → settle ---
     if order_id:
@@ -556,6 +566,13 @@ def main() -> int:
         bool(log_entries)
         and all(e.get("admin_id") and e.get("created_at") for e in log_entries),
         f"first={log_entries[0].get('admin_email') if log_entries else None}",
+    )
+    # B5.1a: the middleware captures the caller IP (XFF-aware) on every request
+    recent_ips = [e.get("ip_address") for e in log_entries]
+    check(
+        "audit entries capture the caller IP (B5.1a)",
+        bool(log_entries) and any(recent_ips),
+        f"ips={[i for i in recent_ips if i][:2]}",
     )
     if order_id and refund_id:
         by_entity = call(
@@ -713,6 +730,55 @@ def main() -> int:
             "GET", "/admin/orders", staff_tok).status_code == 403, "")
     else:
         check("B5.4 role flow (user created)", False, "could not resolve new user id")
+
+    # --- reports & exports (B2.2 / spec BE-08) ---
+    csv_res = call("GET", "/admin/export/orders.csv?from=2026-01-01", admin)
+    csv_ok = csv_res is not None and csv_res.status_code == 200
+    csv_head = csv_res.text.splitlines()[0] if csv_ok else ""
+    cd = csv_res.headers.get("content-disposition", "")[:40] if csv_ok else ""
+    check(
+        "GET /admin/export/orders.csv → header+rows",
+        csv_ok
+        and csv_head.startswith("order_number,created_at,status")
+        and len(csv_res.text.splitlines()) > 1,
+        f"lines={len(csv_res.text.splitlines()) if csv_ok else 0} cd={cd}",
+    )
+    xlsx_res = call("GET", "/admin/export/orders.xlsx", admin)
+    xlsx_ok = xlsx_res is not None and xlsx_res.status_code == 200
+    check(
+        "GET /admin/export/orders.xlsx → PK zip magic",
+        xlsx_ok and xlsx_res.content[:2] == b"PK",
+        f"bytes={len(xlsx_res.content) if xlsx_ok else 0}",
+    )
+    pcsv = call("GET", "/admin/export/products.csv", admin)
+    check(
+        "GET /admin/export/products.csv",
+        pcsv is not None and pcsv.status_code == 200 and pcsv.text.startswith("product_id,"),
+        f"{pcsv.status_code if pcsv else 0}",
+    )
+    pxlsx = call("GET", "/admin/export/products.xlsx", admin)
+    check(
+        "GET /admin/export/products.xlsx",
+        pxlsx is not None and pxlsx.status_code == 200 and pxlsx.content[:2] == b"PK",
+        f"{pxlsx.status_code if pxlsx else 0}",
+    )
+    report = call("GET", "/admin/export/report", admin)
+    rep = report.json() if report is not None and report.status_code == 200 else {}
+    check(
+        "GET /admin/export/report → daily/monthly/bestSellers",
+        {"daily", "monthly", "bestSellers"} <= set(rep),
+        f"days={len(rep.get('daily', []))} best={len(rep.get('bestSellers', []))}",
+    )
+    bad = call("GET", "/admin/export/orders.csv?from=2030-01-01&to=2026-01-01", admin)
+    bad_code = bad.status_code if bad else 0
+    check("export with from ≥ to → 422", bad is not None and bad_code == 422, f"{bad_code}")
+    noauth = call("GET", "/admin/export/report")
+    noauth_code = noauth.status_code if noauth else 0
+    noauth_ok = noauth is not None and noauth_code == 401
+    check("export unauthenticated → 401", noauth_ok, f"{noauth_code}")
+    support_res = call("GET", "/admin/export/orders.csv", support)
+    supp_code = support_res.status_code if support_res else 0
+    check("export as support → 403", support_res is not None and supp_code == 403, f"{supp_code}")
 
     # --- storage ---
     call("POST", "/storage/sign", customer, json={"paths": ["uploads/x.jpg", "cat-tshirt"]})

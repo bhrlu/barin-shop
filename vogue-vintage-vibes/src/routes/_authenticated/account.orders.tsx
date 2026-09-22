@@ -1,22 +1,28 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { useState } from "react";
+import { api, toPage } from "@/lib/api";
 import { formatToman, toFa } from "@/lib/format";
-import { ORDER_STATUS, PAYMENT_STATUS } from "@/lib/orders";
+import { StatusBadge } from "@/components/StatusBadge";
 import { CancelOrderButton } from "@/components/CancelOrderButton";
+import { Pager } from "@/components/Pager";
+
+const PAGE_SIZE = 10;
 
 export const Route = createFileRoute("/_authenticated/account/orders")({
   component: OrdersTab,
 });
 
 function OrdersTab() {
+  const [page, setPage] = useState(1);
   const { data, isLoading } = useQuery({
-    queryKey: ["my-orders"],
-    queryFn: () => api.orders(),
+    queryKey: ["my-orders", page],
+    queryFn: () => toPage(api.orders(page, PAGE_SIZE)),
   });
+  const orders = data?.items ?? [];
 
   if (isLoading) return <p className="text-sm text-muted-foreground">در حال بارگذاری…</p>;
-  if (!data?.length)
+  if (!orders.length)
     return (
       <div className="rounded-3xl border border-dashed border-border p-12 text-center">
         <p className="text-muted-foreground">هنوز سفارشی ثبت نکرده‌اید.</p>
@@ -27,8 +33,9 @@ function OrdersTab() {
     );
 
   return (
-    <ul className="space-y-4">
-      {data.map((order) => (
+    <>
+      <ul className="space-y-4">
+      {orders.map((order) => (
         <li key={order.id} className="rounded-3xl border border-border p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -38,12 +45,8 @@ function OrdersTab() {
               </p>
             </div>
             <div className="flex items-center gap-2 text-xs">
-              <span className="rounded-full bg-terracotta/10 px-3 py-1 text-terracotta">
-                {ORDER_STATUS[order.status] ?? order.status}
-              </span>
-              <span className="rounded-full bg-sand px-3 py-1">
-                {PAYMENT_STATUS[order.payment_status] ?? order.payment_status}
-              </span>
+              <StatusBadge status={order.status} />
+              <StatusBadge status={order.payment_status} />
             </div>
           </div>
           <ul className="mt-4 space-y-3 border-t border-border pt-4">
@@ -89,5 +92,14 @@ function OrdersTab() {
         </li>
       ))}
     </ul>
+
+    <Pager
+      className="mt-6"
+      page={data?.page ?? page}
+      pages={data?.pages ?? 1}
+      total={data?.total}
+      onChange={setPage}
+    />
+    </>
   );
 }

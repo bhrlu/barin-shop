@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { StatusBadge } from "@/components/StatusBadge";
 import {
   Area,
   AreaChart,
@@ -266,9 +267,7 @@ function AdminDashboard() {
           {(stats.data?.latest ?? []).map((order) => (
             <li key={order.order_number} className="flex items-center justify-between p-4 text-sm">
               <span>سفارش #{toFa(order.order_number)}</span>
-              <span className="text-muted-foreground">
-                {ORDER_STATUS[order.status] ?? order.status}
-              </span>
+              <StatusBadge status={order.status} />
               <span>{formatToman(Number(order.total))} تومان</span>
             </li>
           ))}

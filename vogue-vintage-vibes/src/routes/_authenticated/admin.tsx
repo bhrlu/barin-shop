@@ -12,6 +12,7 @@ import {
   SlidersHorizontal,
   Star,
   Store,
+  Tag,
   Users,
 } from "lucide-react";
 import { api, type KpiRange } from "@/lib/api";
@@ -39,6 +40,7 @@ type TabKey =
   | "inventory"
   | "orders"
   | "refunds"
+  | "coupons"
   | "messages"
   | "reviews"
   | "users";
@@ -65,6 +67,7 @@ const ALL_TABS: AdminTab[] = [
     key: "refunds", to: "/admin/refunds", label: "بازپرداخت‌ها", exact: false,
     icon: RotateCcw, badge: "refunds",
   },
+  { key: "coupons", to: "/admin/coupons", label: "تخفیف‌ها", exact: false, icon: Tag },
   { key: "messages", to: "/admin/messages", label: "پیام‌ها", exact: false, icon: MessageSquare },
   { key: "reviews", to: "/admin/reviews", label: "نظرات", exact: false, icon: Star },
   { key: "users", to: "/admin/users", label: "کاربران", exact: false, icon: Users },
@@ -89,7 +92,9 @@ const ROLE_TAB_KEYS: Record<string, TabKey[]> = {
     "dashboard", "products", "inventory", "orders", "refunds",
     "messages", "reviews", "users",
   ],
-  order_manager: ["dashboard", "products", "inventory", "orders", "refunds", "messages"],
+  order_manager: [
+    "dashboard", "products", "inventory", "orders", "refunds", "coupons", "messages",
+  ],
   support: ["dashboard", "messages", "reviews"],
 };
 

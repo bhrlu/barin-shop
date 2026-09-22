@@ -3,10 +3,14 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Eye, PackageCheck } from "lucide-react";
 import { toast } from "sonner";
-import { api, type Order } from "@/lib/api";
+import { api, toPage, type Order } from "@/lib/api";
 import { formatToman, toFa } from "@/lib/format";
 import { ORDER_STATUS, PAYMENT_STATUS } from "@/lib/orders";
 import { OrderDetailDrawer } from "@/components/admin/OrderDetailDrawer";
+import { Pager } from "@/components/Pager";
+
+/** Rows per page for the fulfilment list (F2.5). */
+const PAGE_SIZE = 20;
 
 export const Route = createFileRoute("/_authenticated/admin/orders")({
   component: AdminOrders,
@@ -76,9 +80,10 @@ export function TrackingCodeInput({
 function AdminOrders() {
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Order | null>(null);
+  const [page, setPage] = useState(1);
   const { data } = useQuery({
-    queryKey: ["admin-orders"],
-    queryFn: () => api.adminOrders(),
+    queryKey: ["admin-orders", page],
+    queryFn: () => toPage(api.adminOrders(page, PAGE_SIZE)),
   });
 
   const update = useMutation({
@@ -98,7 +103,7 @@ function AdminOrders() {
 
   // keep the drawer's order object fresh after mutations invalidate the list
   const selectedFresh = selected
-    ? (data?.find((order) => order.id === selected.id) ?? null)
+    ? (data?.items.find((order) => order.id === selected.id) ?? null)
     : null;
 
   const copyAddress = async (address: Record<string, string>) => {
@@ -119,7 +124,8 @@ function AdminOrders() {
     }
   };
 
-  if (!data?.length)
+  const orders = data?.items ?? [];
+  if (!orders.length)
     return (
       <div className="rounded-3xl border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
         سفارشی ثبت نشده است.
@@ -129,7 +135,7 @@ function AdminOrders() {
   return (
     <>
       <ul className="space-y-4">
-        {data.map((order) => {
+        {orders.map((order) => {
           const address = order.shipping_address as Record<string, string> | null;
           return (
             <li key={order.id} className="rounded-3xl border border-border p-5">
@@ -218,6 +224,14 @@ function AdminOrders() {
           );
         })}
       </ul>
+
+      <Pager
+        className="mt-6"
+        page={data?.page ?? page}
+        pages={data?.pages ?? 1}
+        total={data?.total}
+        onChange={setPage}
+      />
 
       <OrderDetailDrawer order={selectedFresh} onClose={() => setSelected(null)} />
     </>
