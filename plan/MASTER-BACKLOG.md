@@ -474,7 +474,7 @@ Execute them sequentially unless file ownership is explicitly separated.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "B6.9",
+    "agent_start_task": "AB-BE-03",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -500,13 +500,16 @@ Execute them sequentially unless file ownership is explicitly separated.
       "id": "B6.9",
       "title": "Narrow refund exception handling",
       "priority": "P1",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "backend",
       "depends_on": [],
       "blocks": [],
       "batch": "A",
       "source": "backend-tasks.md",
-      "scope": "Replace broad refund exception swallowing with explicit duplicate/idempotency handling and preserve unexpected failures."
+      "scope": "Replace broad refund exception swallowing with explicit duplicate/idempotency handling and preserve unexpected failures.",
+      "audit": "plan/audit/2026-09-22-b69-refund-exception-handling.md",
+      "verification_level": "integration tested",
+      "completed": "2026-09-22"
     },
     {
       "id": "AB-BE-03",
@@ -819,6 +822,18 @@ Execute them sequentially unless file ownership is explicitly separated.
       "batch": "F",
       "source": "discovered-during-B6.8",
       "scope": "order_items.variant_id is now always created by startup_ddl(), so the per-cancellation column-existence query in order_lifecycle.restore_stock() can be removed once every deployed stack has run the new DDL."
+    },
+    {
+      "id": "NEW-B69-1",
+      "title": "Narrow the remaining bare except Exception handlers in products/storage routers",
+      "priority": "P2",
+      "status": "TODO",
+      "layer": "backend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "E",
+      "source": "discovered-during-B6.9",
+      "scope": "routers/products.py turns any failure in four CRUD handlers into a 409 duplicate message, and routers/storage.py has two broad handlers to review; apply the B6.9 shape (IntegrityError + SQLSTATE 23505 only, re-raise the rest)."
     }
   ],
   "excluded": [
@@ -839,12 +854,12 @@ Execute them sequentially unless file ownership is explicitly separated.
     }
   ],
   "counts": {
-    "total_executable": 28,
-    "done": 1,
+    "total_executable": 29,
+    "done": 2,
     "open": 27,
     "P0": 0,
-    "P1": 9,
-    "P2": 11,
+    "P1": 8,
+    "P2": 12,
     "P3": 7,
     "blocked": 0,
     "dropped": 2,
@@ -924,8 +939,20 @@ Execute them sequentially unless file ownership is explicitly separated.
 ## B6.9 — Narrow refund exception handling
 
 * **Layer:** Backend
-* **Status:** TODO
+* **Status:** DONE (2026-09-22)
 * **Dependencies:** none
+* **Audit:** [`plan/audit/2026-09-22-b69-refund-exception-handling.md`](audit/2026-09-22-b69-refund-exception-handling.md)
+* **Verification level:** integration tested (10 new unit + DB-backed endpoint
+  tests, full pytest 54 passed, ruff clean, `api_smoke.py` 196/0, plus a live
+  HTTP request/duplicate/401/404 flow on the rebuilt container). Rule 14
+  clean-environment proof not repeated: no DDL, seed, Docker or config change.
+* **Delivered:** `request_refund` catches `IntegrityError` and returns the
+  unchanged 409 only for SQLSTATE `23505`; every other failure is logged and
+  re-raised, so a real database fault surfaces as a 500 instead of a false
+  "already requested". Success and duplicate contracts are byte-identical.
+* **Not delivered:** the 500 carries FastAPI's generic body (intended); the same
+  broad-handler pattern still exists in `routers/products.py` /
+  `routers/storage.py` and was recorded as `NEW-B69-1` rather than fixed here.
 
 ### Problem
 
@@ -1802,11 +1829,11 @@ B4.9
 Run first:
 
 ```text
-B6.9
 AB-BE-03
 ```
 
-`B6.8` (the former head of this batch) is DONE, so `AB-BE-01` is unblocked.
+`B6.8` and `B6.9` are DONE; `AB-BE-01` is unblocked and `AB-BE-03` is the last
+open item in this batch.
 
 ---
 
@@ -2063,13 +2090,14 @@ were freshly executed.
 ## START HERE
 
 ```text
-B6.9
+AB-BE-03
 ```
 
 Previously completed: `B6.8` (2026-09-22,
-[audit](audit/2026-09-22-b68-variant-stock-restore.md)).
+[audit](audit/2026-09-22-b68-variant-stock-restore.md)) and `B6.9` (2026-09-22,
+[audit](audit/2026-09-22-b69-refund-exception-handling.md)).
 
-After `B6.9` is completed:
+After `AB-BE-03` is completed:
 
 1. update this pointer;
 2. update the task status;
@@ -2174,11 +2202,11 @@ Current state:
 
 ```text
 27 remaining implementation units
-  (26 of the original 27, plus NEW-B68-1 discovered during B6.8)
-1 completed implementation unit (B6.8)
+  (25 of the original 27, plus NEW-B68-1 and NEW-B69-1 discovered during them)
+2 completed implementation units (B6.8, B6.9)
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = B6.9
+NEXT = AB-BE-03
 ```

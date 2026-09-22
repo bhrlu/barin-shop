@@ -276,9 +276,16 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   (`NEW-B68-1`, discovered during B6.8) — the column is now always created by
   `startup_ddl()`, so the per-cancellation existence check can go once every
   deployed stack has run the new DDL.
-- [ ] **B6.9 Stop swallowing errors in `POST /orders/{id}/refunds`** — the INSERT
-  is wrapped in a bare `except Exception` that reports every failure as "a refund
-  was already requested", masking real database errors.
+- [x] **B6.9 Stop swallowing errors in `POST /orders/{id}/refunds`** — the INSERT
+  now catches `IntegrityError` and answers 409 only for SQLSTATE `23505`
+  (`unique_violation`, i.e. the real duplicate); anything else is logged and
+  re-raised, so a genuine database fault surfaces as a 500 instead of a false
+  "a refund was already requested". Success/duplicate contracts are unchanged.
+  → audit: [2026-09-22-b69-refund-exception-handling.md](audit/2026-09-22-b69-refund-exception-handling.md)
+- [ ] **B6.9a Narrow the remaining bare `except Exception` → 409 handlers**
+  (`NEW-B69-1`, discovered during B6.9) — `routers/products.py` has four (variant
+  and product CRUD) that report any failure as «این ترکیب سایز و رنگ قبلاً ثبت شده
+  است»; `routers/storage.py` has two to review. Same fix shape as B6.9.
 - [ ] **B6.10 Pagination for `GET /products` and `GET /admin/orders`** — both
   return the entire table; the spec's `[FE-02]` grid assumes server-side paging.
 

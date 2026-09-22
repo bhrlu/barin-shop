@@ -1628,3 +1628,59 @@ touched, keeping the diff to the two places that were actually wrong.
 → audit: [2026-09-22-b68-variant-stock-restore.md](audit/2026-09-22-b68-variant-stock-restore.md)
 
 **Next backlog pointer** — `B6.9` (narrow refund exception handling).
+
+---
+
+## 2026-09-22 — B6.9 narrow refund exception handling
+
+**Task** — `B6.9` (P1, Master Backlog batch A), executed alone after B6.8.
+
+**What was done** — `POST /orders/{id}/refunds` wrapped its INSERT in a bare
+`except Exception`, so any failure — a dropped connection, a bug in the handler,
+a foreign-key violation — was answered with the 409 «برای این سفارش قبلاً
+درخواست بازپرداخت ثبت شده است». The handler now catches `IntegrityError`
+(following the existing `routers/auth.py::signup` pattern) and returns that 409
+**only** for Postgres SQLSTATE `23505` (`unique_violation`, which is the real
+`UNIQUE (order_id)` duplicate); anything else is rolled back, logged with a
+traceback and re-raised. A four-line module-private `_is_unique_violation()`
+sits next to its single caller. Success and duplicate responses are
+byte-identical to before, so no frontend change was needed.
+
+**Tests run** — new `backend/tests/test_refund_requests.py` (10 passed: four
+SQLSTATE predicate unit tests, plus DB-backed endpoint tests for the 201 success,
+the true duplicate leaving exactly one row, an injected `23503` failure
+surfacing as 500 rather than a false 409, the not-cancelled/not-paid 409, a
+wrong-owner 404 and an anonymous 401); full `pytest -q` (54 passed);
+`ruff check app tests` clean; `tests/api_smoke.py` 196 checks / 0 failed against
+the rebuilt container; and a live HTTP flow (checkout → payment-complete →
+cancel → refund 201 → repeat 409 → anonymous 401 → unknown order 404) with no
+traceback in `docker compose logs backend`. A mutation check (restoring the bare
+`except Exception`) turns exactly the unrelated-failure test red.
+
+**Verification level** — *integration tested*, plus real-HTTP exercise. Rule 14
+clean-environment verification was deliberately not repeated: this task changes
+no DDL, seed, Docker or configuration file, and B6.8's `down -v` proof earlier
+today still describes the schema.
+
+**What was explicitly NOT done** — the unexpected-failure path returns FastAPI's
+generic 500 body rather than a Persian message (intended: a fault must not
+impersonate a business condition). `api_smoke.py` was not extended with a
+duplicate-refund check, to keep the diff to the one handler. The same broad
+`except Exception` → 409 shape still exists in `routers/products.py` (four CRUD
+handlers) and `routers/storage.py`; it was recorded as `NEW-B69-1` / `B6.9a`
+instead of being fixed here (Rule 12). No README, FEATURES, DESIGN_SYSTEM,
+roadmap or plan/README change was needed — no endpoint, setup step, script,
+stack or UI convention moved.
+
+**Decisions taken** — (1) two narrowings rather than one: `Exception` →
+`IntegrityError` → SQLSTATE `23505`, because a foreign-key or check violation on
+`refund_requests` is a defect and must not be disguised as a duplicate either.
+(2) The predicate stayed module-private instead of becoming a shared service
+helper — one caller today; it should move if `NEW-B69-1` gives it more.
+(3) The unrelated-failure test injects the error through a `get_session`
+dependency override rather than mocking the router, so the real handler code
+runs.
+
+→ audit: [2026-09-22-b69-refund-exception-handling.md](audit/2026-09-22-b69-refund-exception-handling.md)
+
+**Next backlog pointer** — `AB-BE-03` (coupon max discount cap).

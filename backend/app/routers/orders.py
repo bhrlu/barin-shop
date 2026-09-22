@@ -17,6 +17,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from app.auth import CurrentUser, DbSession, StaffOrders, StaffRefunds
 from app.services.audit import record_audit
@@ -283,6 +284,15 @@ async def cancel_order(order_id: UUID, user: CurrentUser, session: DbSession) ->
     )
 
 
+def _is_unique_violation(exc: IntegrityError) -> bool:
+    """True only for Postgres `unique_violation` (SQLSTATE 23505).
+
+    Everything else IntegrityError covers — foreign-key, not-null and check
+    violations — is an unexpected failure, not a duplicate request.
+    """
+    return getattr(exc.orig, "sqlstate", None) == "23505"
+
+
 @router.post("/orders/{order_id}/refunds", response_model=RefundRequestOut, status_code=201)
 async def request_refund(
     order_id: UUID, body: RefundRequestIn, user: CurrentUser, session: DbSession
@@ -314,8 +324,16 @@ async def request_refund(
             )
         ).mappings().first()
         await session.commit()
-    except Exception as exc:
+    except IntegrityError as exc:
+        # `refund_requests` is UNIQUE (order_id): a second request for the same
+        # order is the expected duplicate, answered with 409 (B6.9). Any other
+        # integrity failure (a foreign key, a check constraint) is a real bug and
+        # must not be disguised as "already requested" — re-raise it so the
+        # 500 and the traceback survive.
         await session.rollback()
+        if not _is_unique_violation(exc):
+            log.exception("refund request failed with an unexpected integrity error")
+            raise
         raise HTTPException(
             status.HTTP_409_CONFLICT, "برای این سفارش قبلاً درخواست بازپرداخت ثبت شده است"
         ) from exc
