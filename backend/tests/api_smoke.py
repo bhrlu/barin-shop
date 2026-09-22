@@ -638,6 +638,53 @@ def main() -> int:
         )
     call("GET", "/admin/payments", admin)
 
+    # --- audit log (B5.1 / spec BE-04) ---
+    # Runs *after* the order mutations above: the assertions below look for the
+    # `update_order_*` entries those PATCHes write, so checking earlier only ever
+    # passed on a database that already held rows from a previous run.
+    logs = call(
+        "GET", "/admin/audit-logs?entity_type=order&limit=50", admin
+    )
+    log_entries = (
+        logs.json() if logs is not None and logs.status_code == 200 else []
+    ) or []
+    order_audit_actions = (
+        "update_order_status",
+        "update_order_payment_status",
+        "update_order_tracking_code",
+    )
+    check(
+        "audit log records the admin order mutation",
+        bool(log_entries)
+        and any(e["action"] in order_audit_actions for e in log_entries),
+        f"entries={len(log_entries)}",
+    )
+    check(
+        "audit entries carry admin identity + timestamps",
+        bool(log_entries)
+        and all(e.get("admin_id") and e.get("created_at") for e in log_entries),
+        f"first={log_entries[0].get('admin_email') if log_entries else None}",
+    )
+    if order_id and refund_id:
+        by_entity = call(
+            "GET", f"/admin/audit-logs?entity_type=order&entity_id={order_id}", admin
+        )
+        entity_entries = (
+            by_entity.json() if by_entity is not None and by_entity.status_code == 200 else []
+        ) or []
+        check(
+            "audit log filters by entity_id (refund resolution visible)",
+            any(e["action"] == "resolve_refund" for e in entity_entries),
+            f"actions={[e['action'] for e in entity_entries]}",
+        )
+    forbidden_logs = call("GET", "/admin/audit-logs", customer)
+    check(
+        "audit log is admin-only",
+        forbidden_logs is not None and forbidden_logs.status_code == 403,
+        f"{forbidden_logs.status_code if forbidden_logs else 0}",
+    )
+
+
     # --- granular staff roles (B5.4 / spec BE-04) ---
     # create a throwaway user, grant order_manager, exercise the capability
     # matrix, then demote — leaves the DB as it started.

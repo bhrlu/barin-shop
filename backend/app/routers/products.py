@@ -27,12 +27,10 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import text
 
-from app.auth import AuthUser, CurrentUser, DbSession, StaffCatalog
+from app.auth import CurrentUser, DbSession, OptionalUser, StaffCatalog
 from app.schemas import (
     ProductIn,
     ProductOut,
@@ -41,12 +39,10 @@ from app.schemas import (
     ProductVariantOut,
     ProductVariantUpdateIn,
 )
-from app.security import decode_access_token
 from app.services.audit import record_audit
 from app.services.catalog_filters import split_multi
 from app.services.pagination import apply_limit_offset, clamp_page_size, count_rows, envelope
 from app.services.recommendations import CO_VOTES_SQL
-from app.services.roles import resolve_roles
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["products"])
@@ -78,27 +74,6 @@ _SORTS = {
     "popular": "review_count DESC NULLS LAST, p.is_new DESC, p.created_at DESC",
     "rating": "avg_rating DESC NULLS LAST, review_count DESC NULLS LAST",
 }
-
-_bearer = HTTPBearer(auto_error=False)
-
-
-async def _optional_admin(
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
-    session: DbSession,
-) -> AuthUser | None:
-    """Resolve the caller when a valid token is presented; anonymous otherwise."""
-    if credentials is None:
-        return None
-    try:
-        payload = decode_access_token(credentials.credentials)
-        sub = payload.get("sub")
-        if not sub:
-            return None
-        roles = await resolve_roles(session, UUID(sub))
-    except (JWTError, ValueError):
-        return None
-    return AuthUser(UUID(sub), payload.get("email"), roles)
-
 
 def _row_to_out(row) -> ProductOut:
     d = dict(row)
@@ -150,7 +125,7 @@ async def list_products(
     include_inactive: bool = False,
     page: int = Query(default=0, ge=0),
     page_size: int = Query(default=0, ge=0, le=100),
-    user: Annotated[AuthUser | None, Depends(_optional_admin)] = None,
+    user: OptionalUser = None,
 ) -> list[ProductOut] | dict:
     """Public list. Admins may pass include_inactive=true with a valid token.
 

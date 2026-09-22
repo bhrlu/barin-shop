@@ -27,6 +27,8 @@ from app.services.order_lifecycle import (
     cancel_order_tx,
 )
 from app.services.pagination import clamp_page_size, count_rows, envelope
+from app.services.payments import simulation_mode
+from app.services.roles import has_capability
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["orders"])
@@ -139,7 +141,9 @@ async def my_orders(
 
 @router.get("/orders/{order_id}")
 async def get_order(order_id: UUID, user: CurrentUser, session: DbSession) -> dict:
-    order = await _fetch_order(session, str(order_id), user_id=user.id)
+    """The caller's own order; staff with the `orders` capability may read any."""
+    staff = has_capability(user.roles, "orders")
+    order = await _fetch_order(session, str(order_id), user_id=user.id, admin=staff)
     if order is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "سفارش پیدا نشد")
     return order
@@ -333,6 +337,24 @@ async def resolve_refund(
             "برای ثبت بازگشت وجه، کد رهگیری بانکی الزامی است",
         )
 
+    # A settled refund is terminal: re-running the settlement used to insert a
+    # second `refund` payment row and flip the order again (double accounting).
+    current = (
+        await session.execute(
+            text(
+                "SELECT status FROM public.refund_requests WHERE id = CAST(:rid AS uuid)"
+            ),
+            {"rid": str(request_id)},
+        )
+    ).first()
+    if current is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "درخواست پیدا نشد")
+    previous_status = current[0]
+    if previous_status == "refunded":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "این درخواست قبلاً تسویه شده است"
+        )
+
     row = (
         await session.execute(
             text(
@@ -381,7 +403,7 @@ async def resolve_refund(
         action="resolve_refund",
         entity_type="order",
         entity_id=str(row["order_id"]),
-        old_values={"refund_status": "pending"},
+        old_values={"refund_status": previous_status},
         new_values={
             "refund_status": body.status,
             "bank_tracking_code": (body.bank_tracking_code or "").strip() or None,
@@ -415,6 +437,15 @@ async def payment_complete(
 ) -> PaymentCompleteOut:
     if body.outcome not in ("success", "failure"):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "نتیجه نامعتبر است")
+
+    # This endpoint IS the simulated gateway: it marks an order paid on the
+    # client's word alone. With a real merchant id configured that would be free
+    # goods, so it is refused and the caller must go through /payments/*.
+    if not simulation_mode():
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "پرداخت باید از طریق درگاه انجام شود",
+        )
 
     order = await _fetch_order(session, str(order_id), user_id=user.id)
     if order is None:

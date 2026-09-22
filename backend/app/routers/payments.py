@@ -98,7 +98,7 @@ async def manual_verify(
 ) -> PaymentVerifyOut:
     """Manual verification for polling clients (e.g. mobile in-app browser)."""
     try:
-        result = await verify_and_finalize(session, authority, ok=True)
+        result = await verify_and_finalize(session, authority, ok=True, user_id=user.id)
     except PaymentError as exc:
         if exc.code in ("not_found", "unknown_session"):
             http_code = status.HTTP_404_NOT_FOUND

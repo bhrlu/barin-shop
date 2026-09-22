@@ -42,10 +42,15 @@ def compute_discount(coupon: Coupon, subtotal: int) -> int:
 
 
 async def get_coupon_for_update(session: AsyncSession, code: str) -> Coupon | None:
+    """Look a coupon up for redemption.
+
+    Codes are normalised exactly like `POST /coupons/validate` does, so a code
+    the validate endpoint accepted (`sande10`) is not rejected at checkout.
+    """
     row = (
         await session.execute(
             text("SELECT * FROM public.coupons WHERE code = :code FOR UPDATE"),
-            {"code": code},
+            {"code": code.strip().upper()},
         )
     ).mappings().first()
     if row is None:

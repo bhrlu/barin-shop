@@ -26,7 +26,9 @@ export const Route = createFileRoute("/")({
 
 function Index() {
   const { products } = useCatalog();
-  const newest = (products.filter((p) => p.isNew).length ? products.filter((p) => p.isNew) : products).slice(0, 3);
+  const newest = (
+    products.filter((p) => p.isNew).length ? products.filter((p) => p.isNew) : products
+  ).slice(0, 3);
   const big = categories[0]!;
   const rest = categories.slice(1);
 
@@ -46,8 +48,8 @@ function Index() {
               <span className="text-terracotta">دوخته‌شده</span> برای هر روز
             </h1>
             <p className="mt-6 max-w-md text-sm leading-8 text-muted-foreground">
-              پارچه‌های طبیعی، رنگ‌های خاکی و برش‌هایی که به مد وابسته نیستند. هر تکه طوری
-              طراحی شده که سال‌ها همراهتان بماند.
+              پارچه‌های طبیعی، رنگ‌های خاکی و برش‌هایی که به مد وابسته نیستند. هر تکه طوری طراحی شده
+              که سال‌ها همراهتان بماند.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <Link
@@ -196,8 +198,8 @@ function Index() {
         <h2 className="text-3xl">داستان ساندِه</h2>
         <span className="mx-auto mt-4 block h-0.5 w-16 bg-terracotta" />
         <p className="mt-5 text-sm leading-8 text-muted-foreground">
-          ما در یک کارگاه کوچک شروع کردیم؛ با این باور که لباس خوب لازم نیست پیچیده باشد. هر
-          فصل تعداد محدودی تکه تولید می‌کنیم، از پارچه‌هایی که به پوست و طبیعت مهربان‌اند.
+          ما در یک کارگاه کوچک شروع کردیم؛ با این باور که لباس خوب لازم نیست پیچیده باشد. هر فصل
+          تعداد محدودی تکه تولید می‌کنیم، از پارچه‌هایی که به پوست و طبیعت مهربان‌اند.
         </p>
         <Link to="/about" className="mt-6 inline-block text-sm text-terracotta underline">
           بیشتر بخوانید

@@ -129,7 +129,10 @@ function AdminDashboard() {
           {/* KPI bento grid */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {cards.map((card) => (
-              <div key={card.label} className="rounded-2xl border border-border/60 bg-card p-6 shadow-sm">
+              <div
+                key={card.label}
+                className="rounded-2xl border border-border/60 bg-card p-6 shadow-sm"
+              >
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs text-muted-foreground">{card.label}</p>
                   <DeltaBadge value={card.delta} />
@@ -194,10 +197,7 @@ function AdminDashboard() {
                         width={36}
                       />
                       <Tooltip
-                        formatter={(value: number) => [
-                          `${formatToman(value)} تومان`,
-                          "فروش",
-                        ]}
+                        formatter={(value: number) => [`${formatToman(value)} تومان`, "فروش"]}
                       />
                       <Area
                         type="monotone"

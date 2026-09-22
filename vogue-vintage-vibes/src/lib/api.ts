@@ -618,8 +618,10 @@ export const api = {
         bank_tracking_code: bank_tracking_code || null,
       },
     }),
-  patchOrder: (id: string, patch: { status?: string; payment_status?: string; tracking_code?: string | null }) =>
-    request<Order>(`/orders/${id}`, { method: "PATCH", json: patch }),
+  patchOrder: (
+    id: string,
+    patch: { status?: string; payment_status?: string; tracking_code?: string | null },
+  ) => request<Order>(`/orders/${id}`, { method: "PATCH", json: patch }),
   paymentSession: (id: string) => request<PaymentSession>(`/orders/${id}/payment-session`),
   paymentComplete: (id: string, outcome: "success" | "failure") =>
     request<{ ok: boolean; order_number: string; reference: string | null }>(
@@ -632,8 +634,7 @@ export const api = {
 
   // --- admin ---
   adminStats: () => request<AdminStats>("/admin/stats"),
-  adminKpis: (range: KpiRange = "30d") =>
-    request<AdminKpis>(`/admin/kpis?range=${range}`),
+  adminKpis: (range: KpiRange = "30d") => request<AdminKpis>(`/admin/kpis?range=${range}`),
   adminUsers: (page?: number, pageSize?: number) => {
     const qs = new URLSearchParams();
     if (page) qs.set("page", String(page));
@@ -681,8 +682,7 @@ export const api = {
     }>,
   ) => request<{ ok: boolean }>(`/coupons/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
   adminDeleteCoupon: (id: string) => request<void>(`/coupons/${id}`, { method: "DELETE" }),
-  adminGenerateCouponCode: () =>
-    request<{ code: string }>("/coupons/generate", { method: "POST" }),
+  adminGenerateCouponCode: () => request<{ code: string }>("/coupons/generate", { method: "POST" }),
 
   // --- storage (MinIO) ---
   signStorage: (paths: string[]) =>

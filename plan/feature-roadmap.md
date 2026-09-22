@@ -52,7 +52,7 @@ Unchecked items are not yet implemented.
 - [ ] Automatic notifications at each step (SMS/email)
 
 ## 5. User Account
-- ✅ Sign-up/login with email and Google
+- ✅ Sign-up/login with email and password (own JWT). **Google sign-in does not exist** in this repo — the claim was a leftover from the Supabase era (corrected 2026-09-22 audit).
 - ✅ Profile, orders, addresses (multiple), favorites, payments
 - ✅ Order status tracking with sub-steps
 - ✅ Cancel order before shipping
@@ -69,8 +69,8 @@ Unchecked items are not yet implemented.
 - [ ] Banners and campaign landing pages
 
 ## 7. Support & Returns
-- ✅ Refund request submission (infrastructure ready, UI half-done)
-- ✅ Contact form that stores messages (`POST /contact` + `contact_messages`, F2.1/B3.9); the admin inbox screen is still missing (F2.1b)
+- ✅ Refund request submission, plus the admin settlement centre with the Paya/Satna bank code (B5.3/F2.4)
+- ✅ Contact form that stores messages (`POST /contact` + `contact_messages`, F2.1/B3.9) **and the admin inbox screen** (`/admin/messages`, F2.1b — shipped; the "still missing" note was stale, corrected 2026-09-22 audit)
 - [ ] Full product return process (step by step)
 - [ ] Live chat / support tickets
 - [ ] FAQ

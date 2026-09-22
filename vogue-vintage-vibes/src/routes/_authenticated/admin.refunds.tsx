@@ -45,13 +45,7 @@ const isSettled = (status: string) => status === "rejected" || status === "refun
 /** The admin action dialog ([FE-06]): approve / reject / settle. The Paya/Satna
  * bank tracking code is **required for settlement** — the backend 422s without
  * it, and the disabled button mirrors that rule. */
-function RefundActionDialog({
-  request,
-  onClose,
-}: {
-  request: RefundRequest;
-  onClose: () => void;
-}) {
+function RefundActionDialog({ request, onClose }: { request: RefundRequest; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [note, setNote] = useState("");
   const [bankCode, setBankCode] = useState(request.bank_tracking_code ?? "");
@@ -62,8 +56,7 @@ function RefundActionDialog({
       status: Resolution;
       admin_note?: string;
       bank_tracking_code?: string;
-    }) =>
-      api.resolveRefund(input.id, input.status, input.admin_note, input.bank_tracking_code),
+    }) => api.resolveRefund(input.id, input.status, input.admin_note, input.bank_tracking_code),
     onSuccess: (_, variables) => {
       void queryClient.invalidateQueries({ queryKey: ["admin-refunds"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
@@ -102,10 +95,7 @@ function RefundActionDialog({
         )}
 
         <div className="space-y-1.5">
-          <label
-            htmlFor="refund-bank-code"
-            className="text-xs text-muted-foreground"
-          >
+          <label htmlFor="refund-bank-code" className="text-xs text-muted-foreground">
             کد رهگیری بانکی (پایا/ساتنا)
             <span className="text-terracotta"> *</span>
           </label>
@@ -239,7 +229,9 @@ function AdminRefunds() {
                   <div>
                     <p className="text-sm">
                       سفارش{" "}
-                      <span className="font-mono tracking-wider">#{toFa(request.order_number)}</span>
+                      <span className="font-mono tracking-wider">
+                        #{toFa(request.order_number)}
+                      </span>
                       <StatusBadge
                         status={request.status}
                         className="ms-2 !px-2 !py-0.5 !text-[11px]"

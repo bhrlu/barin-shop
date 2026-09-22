@@ -16,7 +16,7 @@ import json
 
 from sqlalchemy import text
 
-from app.db import engine
+from app.db import engine, startup_ddl
 
 CUSTOMER_EMAIL = "customer@sande.local"
 
@@ -212,6 +212,7 @@ async def _seed_orders(conn, uid: str) -> None:
 
 
 async def main() -> None:
+    await startup_ddl()
     print("seeding demo customer data…")
     async with engine.begin() as conn:
         row = (

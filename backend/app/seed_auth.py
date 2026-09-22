@@ -12,7 +12,7 @@ import asyncio
 from sqlalchemy import text
 
 from app.config import settings
-from app.db import engine
+from app.db import engine, startup_ddl
 from app.security import hash_password
 
 
@@ -50,6 +50,10 @@ async def seed_user(email: str, password: str, full_name: str, role: str) -> Non
 
 
 async def main() -> None:
+    # The staff roles below live in the extended `app_role` enum, which the
+    # additive startup DDL owns — run it first so this job does not depend on
+    # the API container having booted (compose starts them in parallel).
+    await startup_ddl()
     print("seeding auth users…")
     await seed_user(
         settings.admin_email, settings.admin_password, settings.admin_full_name, "admin"

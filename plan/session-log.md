@@ -1457,3 +1457,39 @@ expression.
 recommendations 200). Live: `set-18|tshirt-4 votes=2`; recommendations for
 `set-18` rank co-purchased `set-17` first. Details:
 `plan/audit/2026-09-22-b24-co-purchase-recommendations.md`.
+
+## Session 30 — 2026-09-22 — Full end-to-end audit (backend + frontend) and fixes
+
+**Done**
+- Stood the project up from nothing on a clean host: backend venv + dev deps, `infra/.env` (MinIO moved to 9010/9011 — 9000/9001 were taken), full `docker compose up --build`, Playwright/Chromium for the browser passes. Baseline recorded before any change: pytest 39 passed, ruff clean, `tsc` clean, `bun run build` OK, `bun run lint` **failing** (45 prettier errors), and `db-init` **exiting 1** on a clean volume.
+- Fixed two P0s: (1) `db-init` died in `seed_auth` on the `order_manager` enum value because the additive `ROLE_DDL` only ran if the API container booted first — the seeds now run `startup_ddl()` themselves, so products/demo/coupons stop being skipped; (2) `GET /products` returned **500 for every authenticated caller** (`_optional_admin` passed a role string where a role set was expected), which broke the cart for signed-in shoppers — every line rendered as «محصول حذف‌شده» with a ۰ تومان total. The duplicate dependency was deleted in favour of the shared `OptionalUser`.
+- Fixed two P1s: the payment simulator (`POST /orders/{id}/payment-complete`) let a customer mark their own order paid regardless of gateway configuration — now simulation-mode only; and re-settling an already-`refunded` request inserted a **second** refund payment row — settlement is now terminal.
+- Implemented the two `[BE-05]` requirements that were missing: an order status state machine (cancelled/delivered terminal; `cancelled → shipped` is now 409) and stock restoration on cancellation, guarded so a repeated cancel cannot inflate stock.
+- Hardening + consistency: no staff role from a stale JWT claim (a demoted admin kept access for up to 7 days); `POST /payments/verify` scoped to the session owner; `GET /orders/{id}` readable by staff as its docstring always claimed; coupon codes normalised at redemption so a code `validate` accepted is not rejected at checkout.
+- Frontend: per-route role guard in the admin shell (`[FE-01]`.3), Persian 404/error pages (B1.4), real staff role labels in `/admin/users`, and `bun run lint` back to zero errors.
+
+**Explicitly not done**
+- Unimplemented backlog features were left alone (coupons manager `[FE-07]`, role-change UI/LTV `[FE-08]`, SMS `[BE-07]`, exports `[BE-08]`, reusable grid `[FE-02]`, audit-log UI) — they are backlog, not regressions, and are now checkboxes.
+- Per-variant stock restoration (needs `order_items.variant_id`), the bare `except Exception` in refund creation, pagination for `/products` and `/admin/orders`, and the bundle/duplicate-fetch performance items were reported, not changed.
+- No README/FEATURES/DESIGN_SYSTEM edits: nothing about endpoints, setup, scripts, features or tokens changed — the fixes restored documented behaviour.
+
+**Verification** — pytest 39 passed; ruff clean; `tests/api_smoke.py` 173 checks, 0 failed; `tsc` clean; `bun run lint` 0 errors (14 pre-existing warnings); `bun run build` OK; clean-volume `docker compose down -v && up --build` seeds all four stages with `db-init` exiting 0; browser regression (headless Chromium) of the full purchase flow through the simulated gateway to a paid order, admin panel, role gating and 375→1920 responsive sweep — no 5xx and no page errors.
+
+**Decisions** — the state machine is expressed in the existing status vocabulary (Rule 4: no string changed); the `admin` legacy role keeps full staff access; the broken `_optional_admin` was deleted rather than repaired, since `app/auth.py` already had the correct dependency.
+
+## Session 31 — 2026-09-22 — Run the stack + optional mock dataset
+
+**Done**
+- Brought the full compose stack up from an empty volume (the audit's `db-init` fix holds: exit 0, all four seed stages) and confirmed the storefront, API and admin panel serve.
+- New `backend/app/seed_mock.py`: an **optional**, idempotent, deterministic demo dataset (fixed RNG seed, so a fresh database always produces the same figures). 8 customers with weekly-staggered registration dates, 31 orders backdated over 47 days across every status/payment combination, refund claims in all four `[BE-03]` states, 18 reviews written only by people who actually received the product, a size × colour variant matrix, a 5-message inbox and 4 campaign coupons (one exhausted, one expired). Money, stock and payment/refund ledger rows are internally consistent — verified with SQL invariants (item sums, totals, the ۸۹٬۰۰۰/۲٬۰۰۰٬۰۰۰ shipping rule, payment presence, tracking only after dispatch, no negative stock, no orphans): all zero violations.
+- Fixed a **pre-existing** bug in `tests/api_smoke.py` that this work exposed: the "audit log records the admin order mutation" assertion ran 41 lines before the script's first `PATCH /orders/{id}`, so it only ever passed on a database left dirty by a previous run. Reproduced on a clean database both with and without the mock data; the block was moved after the mutations rather than the assertion weakened.
+- Documented the optional seed in `backend/README.md` and `infra/README.md`.
+
+**Explicitly not done**
+- `seed_mock` was deliberately **not** added to the compose `db-init` chain — the default stack stays the small starter dataset.
+- No search-history / recently-viewed rows (per-session personalisation reads wrong when backdated).
+- No frontend or product-code changes in this session.
+
+**Verification** — pytest 39 passed; ruff clean; `tests/api_smoke.py` 173 checks / 0 failed on a *first* run against a clean database (with and without mock data — it used to fail there); double-run of `seed_mock` is a no-op with unchanged counts; browser check as admin confirmed the dashboard KPIs/trend/donut, 33 order cards on `/admin/orders`, refund tabs at 3 pending / 2 settled / 5 all, and populated inventory, inbox, reviews and users screens, with no failed API calls and no page errors.
+
+**Decisions** — deterministic RNG over random data so demos are reproducible; a marker account as the idempotency guard rather than per-table counts; cancelled orders never take stock, matching the restore-on-cancel rule fixed earlier in the day.

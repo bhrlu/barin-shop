@@ -230,6 +230,51 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   checks, 0 failed — capability matrix asserted end-to-end.
   → audit: [2026-09-21-backend-b54-granular-staff-roles.md](audit/2026-09-21-backend-b54-granular-staff-roles.md)
 
+## Audit follow-ups (2026-09-22 full-stack audit)
+
+- [x] **B6.1 Seed jobs run the additive DDL themselves** — `seed_auth` /
+  `seed_products` / `seed_demo` call `startup_ddl()` like `seed_coupons` does, so
+  compose's `db-init` no longer depends on the API container having booted first
+  (it used to die on `invalid input value for enum app_role: "order_manager"` and
+  abort the whole seed chain).
+- [x] **B6.2 `GET /products` 500 for authenticated callers** — `_optional_admin`
+  passed a role *string* into `AuthUser(roles=...)`, so `is_admin` raised
+  `TypeError`. Replaced by the correct shared `OptionalUser` dependency.
+- [x] **B6.3 Order lifecycle per spec [BE-05]** — status state machine
+  (cancelled/delivered terminal, forward-only) and stock restoration on
+  cancellation, for both the customer cancel and an admin status change.
+- [x] **B6.4 Refund settlement is terminal** — re-settling a `refunded` request
+  used to insert a second refund payment row; now 409.
+- [x] **B6.5 Payment simulator gated** — `POST /orders/{id}/payment-complete`
+  only works in simulation mode; with a real merchant id it is 409.
+- [x] **B6.6 Authorization hardening** — no staff role from a stale JWT claim;
+  `POST /payments/verify` is scoped to the session's owner; `GET /orders/{id}` is
+  readable by staff with the `orders` capability (as its docstring promised).
+- [x] **B6.7 Coupon code normalisation at redemption** — checkout matches codes
+  case-insensitively, like `POST /coupons/validate` already did.
+  → audit for B6.1–B6.7: [2026-09-22-full-stack-audit-and-fixes.md](audit/2026-09-22-full-stack-audit-and-fixes.md)
+- [x] **B6.11 Optional mock dataset (`app.seed_mock`)** — idempotent, deterministic
+  demo data so the admin screens are worth opening: 8 customers with staggered
+  registration dates, 31 orders backdated over 47 days across every status, refund
+  claims in all four [BE-03] states, 18 reviews from actual buyers, a size × colour
+  variant matrix, a contact inbox and campaign coupons (one exhausted, one expired).
+  Money, stock and payment rows are all internally consistent; not wired into the
+  compose `db-init` chain (run it by hand).
+- [x] **B6.12 `api_smoke.py` audit-log check ran before the mutation it asserts**
+  — the "audit log records the admin order mutation" check sat 41 lines *above*
+  the first `PATCH /orders/{id}`, so it only passed on a database that already had
+  rows from an earlier run and always failed on a clean one. The block was moved
+  after the mutations (assertion unchanged, not weakened).
+  → audit for B6.11–B6.12: [2026-09-22-mock-dataset-seed.md](audit/2026-09-22-mock-dataset-seed.md)
+- [ ] **B6.8 Per-variant stock restoration on cancellation** — `order_items` does
+  not record `variant_id`, so cancelling restores `products.stock` only and the
+  `product_variants` row stays decremented. Needs a column + backfill.
+- [ ] **B6.9 Stop swallowing errors in `POST /orders/{id}/refunds`** — the INSERT
+  is wrapped in a bare `except Exception` that reports every failure as "a refund
+  was already requested", masking real database errors.
+- [ ] **B6.10 Pagination for `GET /products` and `GET /admin/orders`** — both
+  return the entire table; the spec's `[FE-02]` grid assumes server-side paging.
+
 ## Ideas (not scheduled)
 
 - [ ] Redis cache for product catalog

@@ -339,6 +339,29 @@ conflict (DESIGN_SYSTEM.md §5).
   see audit. Customer-side refunds page stays **F2.4**; charts stay **F2.6**.
   → audit: [2026-09-21-b61-state-machine-f45-coupons-manager.md](audit/2026-09-21-b61-state-machine-f45-coupons-manager.md)
 
+## Audit follow-ups (2026-09-22 full-stack audit)
+
+- [x] **F5.1 Admin route role guard** (`[FE-01]`.3) — hiding a tab was not a
+  guard: a staff member who typed `/admin/users` still got the page plus a silent
+  403 and its empty state. The shell now maps the path to its tab and shows a
+  Persian permission notice for roles that lack it.
+- [x] **F5.2 Persian 404 and error boundary** (B1.4) — the root
+  `notFoundComponent` / `errorComponent` were still the English Lovable scaffold.
+- [x] **F5.3 Staff role labels in `/admin/users`** — every role other than
+  `admin` rendered as «مشتری», so the `support` and `order_manager` accounts
+  looked like customers.
+- [x] **F5.4 `bun run lint` green** — 45 prettier errors fixed with
+  `bun run format` (source files only).
+  → audit for F5.1–F5.4: [2026-09-22-full-stack-audit-and-fixes.md](audit/2026-09-22-full-stack-audit-and-fixes.md)
+- [ ] **F5.5 Audit-log viewer** — `GET /admin/audit-logs` shipped with B5.1 but
+  has no UI and no `api.ts` client method.
+- [ ] **F5.6 Role management UI** (`[FE-08]`) — `PUT /admin/users/{id}/roles`
+  exists and is audited; the users page is still read-only.
+- [ ] **F5.7 Split the admin chart bundle** — recharts (~553 kB raw) and lodash
+  (~164 kB) are pulled into the shared bundle for the dashboard alone.
+- [ ] **F5.8 `/shop` fetches the catalog twice** — `catalogQuery`
+  (`?include_inactive=true`) and the filtered list query both run on every visit.
+
 ## Rules reminder
 
 Every completed F-task needs an audit file in `plan/audit/` (see `plan/RULES.md` Rule 1).

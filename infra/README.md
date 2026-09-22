@@ -20,6 +20,11 @@ infra/
 | `minio` | quay.io/minio/minio | 9000 (API) / 9001 (console) | S3-compatible object storage |
 | `minio-init` | quay.io/minio/minio | – | One-shot: creates the public-read `product-images` bucket |
 | `db-init` | backend image | – | One-shot: `seed_auth → seed_products → seed_demo → seed_coupons` |
+
+> Want the admin screens populated? After the stack is up, run the optional demo
+> dataset: `docker compose -f infra/docker-compose.yml exec backend python -m
+> app.seed_mock` (8 customers, 31 backdated orders, refund claims in every state,
+> reviews, inbox, variants). Idempotent — safe to re-run.
 | `backend` | FastAPI | 8000 | The sole backend — docs at `/docs` |
 | `frontend` | Vite dev server (Bun) | 5173 | The store UI with hot reload |
 
