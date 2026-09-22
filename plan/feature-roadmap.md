@@ -85,7 +85,7 @@ Unchecked items are not yet implemented.
 - [x] Refund request management (approve/reject) — **done (F2.4/B5.3, with bank-tracking settlement)**
 - [x] Order detail drawer with fulfilment stepper + printable invoice — **done (F4.4: A4 print, app hidden while printing)**
 - [x] Review and discount-code management — **done (admin.reviews + F4.5 coupons manager with toggle/progress/delete)**
-- [x] Multiple roles (manager, warehouse, support) — **granular staff roles + per-route enforcement done (B5.4); role-gated admin shell (F4.2)**
+- [x] Multiple roles (manager, warehouse, support) — **granular staff roles + per-route enforcement done (B5.4); role-gated admin shell (F4.2); role management UI with two-step confirmation in `/admin/users` (F5.6)**
 - [x] Audit-log viewer — **done (F5.5: `/admin/audit` over `GET /admin/audit-logs`, admin/super_admin only; action/entity/staff filters, offset paging, IP + old/new values)**
 
 ## 9. Infrastructure & Experience

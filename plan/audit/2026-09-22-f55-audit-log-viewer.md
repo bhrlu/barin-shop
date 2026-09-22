@@ -21,8 +21,10 @@ Followed:
   (`admin_id` → name, `action`, `entity_type`, `entity_id`, `old_values`,
   `new_values`, `ip_address`, `created_at`).
 * **B0.2 / B1.1** — semantic tokens only (`bg-card`, `border-border/60`,
-  `bg-sand`, `text-terracotta`; error panel uses the spec's own danger triple
-  `bg-rose-50 text-rose-700 border-rose-200`).
+  `bg-sand`, `text-terracotta`). The error panel first used the spec's B0.2
+  danger triple (`bg-rose-50 …`). DESIGN_SYSTEM.md §2.3 (repo wins) maps
+  "negative" to `border-destructive/30 bg-destructive/10 text-destructive`
+  instead, so the F5.6 session corrected it; see that audit.
 * **B0.3** — identifiers (`entity_id`, IP, JSON keys/values) in `font-mono`,
   LTR.
 * **B0.4** — `rounded-2xl` cards, `shadow-sm border border-border/60`.

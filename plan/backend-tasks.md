@@ -234,6 +234,12 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   (audited as `update_user_roles`); demo staff accounts seeded. Smoke: 156
   checks, 0 failed — capability matrix asserted end-to-end.
   → audit: [2026-09-21-backend-b54-granular-staff-roles.md](audit/2026-09-21-backend-b54-granular-staff-roles.md)
+- [ ] **B5.4a Role-change lockout guard** (`NEW-F56-1`, discovered during F5.6) —
+  `PUT /admin/users/{id}/roles` lets a caller demote themselves and remove the
+  last `super_admin`; if nobody keeps the `users` capability, roles can only be
+  fixed in the DB. Reject self-demotion and removal of the last holder of the
+  `users` capability with 409, with a test. The F5.6 UI already disables the
+  caller's own row, but that is UX only.
 
 ## Audit follow-ups (2026-09-22 full-stack audit)
 

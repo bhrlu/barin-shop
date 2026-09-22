@@ -208,7 +208,7 @@ function AdminAudit() {
           ))}
         </div>
       ) : logs.isError ? (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center text-sm text-rose-700">
+        <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-6 text-center text-sm text-destructive">
           <p>
             {logs.error instanceof ApiError && logs.error.status === 403
               ? "نقش شما به گزارش فعالیت‌ها دسترسی ندارد."

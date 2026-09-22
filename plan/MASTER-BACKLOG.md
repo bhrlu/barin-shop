@@ -474,7 +474,7 @@ Execute them sequentially unless file ownership is explicitly separated.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "F5.6",
+    "agent_start_task": "AB-FE-02",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -545,13 +545,16 @@ Execute them sequentially unless file ownership is explicitly separated.
       "id": "F5.6",
       "title": "Role management UI",
       "priority": "P1",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "frontend",
       "depends_on": [],
       "blocks": [],
       "batch": "B",
       "source": "frontend-tasks.md",
-      "scope": "Manage staff role sets from the users page using the canonical backend capability model."
+      "scope": "Manage staff role sets from the users page using the canonical backend capability model.",
+      "audit": "plan/audit/2026-09-22-f56-role-management-ui.md",
+      "verification_level": "browser tested",
+      "completed": "2026-09-22"
     },
     {
       "id": "AB-FE-02",
@@ -868,6 +871,34 @@ Execute them sequentially unless file ownership is explicitly separated.
       "discovered_as": "NEW-F55-1",
       "discovered_during": "F5.5",
       "scope": "Type the admin_id query parameter of routers/admin.py::audit_logs as UUID so ?admin_id=<not-a-uuid> returns 422 instead of reaching CAST(:admin_id AS uuid) and failing with 500; add an api_smoke/pytest error-path check."
+    },
+    {
+      "id": "B5.4a",
+      "title": "Role-change lockout guard",
+      "priority": "P2",
+      "status": "TODO",
+      "layer": "backend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "C",
+      "source": "backend-tasks.md",
+      "discovered_as": "NEW-F56-1",
+      "discovered_during": "F5.6",
+      "scope": "PUT /admin/users/{id}/roles must reject (409) a caller removing their own users-capable role and the removal of the last holder of the users capability; add pytest coverage for both and for the allowed cases."
+    },
+    {
+      "id": "F5.10",
+      "title": "Hide staff nav tabs from non-staff in the admin shell",
+      "priority": "P3",
+      "status": "TODO",
+      "layer": "frontend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "D",
+      "source": "frontend-tasks.md",
+      "discovered_as": "NEW-F56-2",
+      "discovered_during": "F5.6",
+      "scope": "admin.tsx falls back to ROLE_TAB_KEYS[\"support\"] for unknown roles, so a customer on /admin/* sees dashboard/messages/reviews tabs next to the no-access notice; render no tabs for non-staff roles."
     }
   ],
   "excluded": [
@@ -888,13 +919,13 @@ Execute them sequentially unless file ownership is explicitly separated.
     }
   ],
   "counts": {
-    "total_executable": 31,
-    "done": 4,
-    "open": 27,
+    "total_executable": 33,
+    "done": 5,
+    "open": 28,
     "P0": 0,
-    "P1": 6,
-    "P2": 13,
-    "P3": 8,
+    "P1": 5,
+    "P2": 14,
+    "P3": 9,
     "blocked": 0,
     "dropped": 2,
     "obsolete": 1,
@@ -1112,9 +1143,22 @@ Typecheck + lint + build + targeted browser/manual verification.
 ## F5.6 — Role management UI
 
 * **Layer:** Frontend
-* **Status:** TODO
+* **Status:** DONE (2026-09-22)
 * **Dependencies:** none
 * **Backend:** `PUT /admin/users/{id}/roles`
+* **Audit:** [`plan/audit/2026-09-22-f56-role-management-ui.md`](audit/2026-09-22-f56-role-management-ui.md)
+* **Verification level:** browser tested (tsc clean, lint 0 errors, build OK,
+  40/40 headless-Chromium + API checks: 401/403/403/403/422/404 authority matrix,
+  page guards for anonymous/customer/support/order_manager, two-step grant and
+  revoke, effect on the target's already-issued JWT, audit row, mocked 403/500,
+  375 px; backend pytest 70 passed, `api_smoke.py` 196/0)
+* **Delivered:** per-row «نقش‌ها» dialog in `/admin/users` (disabled on your own
+  row). Step 1: `super_admin` / `order_manager` / `support` checkboxes with a
+  capability summary, legacy roles read-only. Step 2: +/− diff and typed-email
+  confirmation, then a full-set PUT. Invalidates the users + audit-log caches.
+  `api.adminSetUserRoles()` + `StaffRole`. Backend unchanged.
+* **Discovered:** `B5.4a` (was `NEW-F56-1`) — backend lockout guard;
+  `F5.10` (was `NEW-F56-2`) — customers see staff nav tabs.
 
 ### Required implementation
 
@@ -1859,6 +1903,65 @@ full pytest + ruff.
 
 ---
 
+## B5.4a — Role-change lockout guard
+
+* **Layer:** Backend
+* **Status:** TODO
+* **Priority:** P2
+* **Batch:** C
+* **Dependencies:** none
+* **Discovered as:** `NEW-F56-1` during `F5.6` — legacy discovery ID only;
+  `B5.4a` is the executable ID.
+* **Source:** `backend-tasks.md` B5.4a
+
+### Problem
+
+`PUT /admin/users/{id}/roles` accepts a caller removing their own role and the
+removal of the last `super_admin`; if no account keeps the `users` capability,
+roles can only be repaired in the database. The F5.6 UI disables your own row,
+but that is not authorization.
+
+### Required implementation
+
+Reject with 409 (Persian detail) when the caller would remove their own
+users-capable role, or when the change would leave no account holding the
+`users` capability; keep the contract otherwise unchanged.
+
+### Verification
+
+pytest for self-demotion, last-holder removal and the allowed cases; `api_smoke.py`;
+ruff.
+
+---
+
+## F5.10 — Hide staff nav tabs from non-staff in the admin shell
+
+* **Layer:** Frontend
+* **Status:** TODO
+* **Priority:** P3
+* **Batch:** D
+* **Dependencies:** none
+* **Discovered as:** `NEW-F56-2` during `F5.6` — legacy discovery ID only;
+  `F5.10` is the executable ID.
+* **Source:** `frontend-tasks.md` F5.10
+
+### Problem
+
+A signed-in customer on `/admin/*` sees the "no admin access" notice, but the
+sidebar still lists داشبورد / پیام‌ها / نظرات: `admin.tsx` falls back to
+`ROLE_TAB_KEYS["support"]` for any unknown role. No data leaks (every call is
+gated).
+
+### Required implementation
+
+Render no admin tabs for non-staff roles; keep the staff role → tab mapping as-is.
+
+### Verification
+
+Typecheck + lint + build; browser check as customer and as each staff role.
+
+---
+
 # 8. Explicitly not executable
 
 ## B4.8 — Product model dimension
@@ -1972,7 +2075,7 @@ However, `AB-FE-02` and `AB-FE-05` should not modify
 
 ```text
 F5.5   (DONE 2026-09-22)
-F5.6
+F5.6   (DONE 2026-09-22)
 AB-FE-02
 AB-FE-05
 F5.9
@@ -1991,6 +2094,7 @@ B5.1b
 AB-BE-01
 AB-BE-02
 B5.1c
+B5.4a
 ```
 
 `AB-BE-01` begins after `B6.8`.
@@ -2005,6 +2109,7 @@ F5.7
 AB-FE-01
 AB-FE-04
 F3.5b
+F5.10
 ```
 
 These can mostly run in parallel because they touch different concerns.
@@ -2065,12 +2170,12 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**27** (4 completed: B6.8, B6.9, AB-BE-03, F5.5; 4 added by discovery: NEW-B68-1,
-NEW-B69-1, F5.9, B5.1c)
+**28** (5 completed: B6.8, B6.9, AB-BE-03, F5.5, F5.6; 6 added by discovery:
+NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10)
 
 ### Ready for execution
 
-**27**
+**28**
 
 ### Blocked
 
@@ -2106,13 +2211,12 @@ D1–D9 are resolved.
 | Priority  | Remaining |
 | --------- | --------: |
 | P0        |         0 |
-| P1        |         6 |
-| P2        |        13 |
-| P3        |         8 |
-| **Total** |    **27** |
+| P1        |         5 |
+| P2        |        14 |
+| P3        |         9 |
+| **Total** |    **28** |
 
-Recomputed from the JSON index on 2026-09-22 (F5.5 session); the earlier table
-still counted the completed P0/P1 tasks.
+Recomputed from the JSON index on 2026-09-22 (F5.6 session).
 
 Priority is execution guidance, not permission to rewrite requirements.
 
@@ -2226,18 +2330,20 @@ were freshly executed.
 ## START HERE
 
 ```text
-F5.6
+AB-FE-02
 ```
 
 Batch A (`B6.8`, `B6.9`, `AB-BE-03`) is complete — audits
 [B6.8](audit/2026-09-22-b68-variant-stock-restore.md),
 [B6.9](audit/2026-09-22-b69-refund-exception-handling.md),
-[AB-BE-03](audit/2026-09-22-abbe03-coupon-max-discount-cap.md) — and so is
-`F5.5` ([audit](audit/2026-09-22-f55-audit-log-viewer.md)). `F5.6` (role
-management UI) is the highest-priority open task: P1, Batch B, no dependencies,
-next in the index after F5.5.
+[AB-BE-03](audit/2026-09-22-abbe03-coupon-max-discount-cap.md) — and so are
+`F5.5` ([audit](audit/2026-09-22-f55-audit-log-viewer.md)) and `F5.6`
+([audit](audit/2026-09-22-f56-role-management-ui.md)). `AB-FE-02` (admin export
+controls) is the highest-priority open task: P1, Batch B, no dependencies, next
+in the index after F5.6. It edits `admin.products.tsx`, so do not run it in
+parallel with `AB-FE-05`.
 
-After `F5.6` is completed:
+After `AB-FE-02` is completed:
 
 1. update this pointer;
 2. update the task status;
@@ -2341,13 +2447,14 @@ Reconciliation date:
 Current state:
 
 ```text
-27 remaining implementation units
-  (23 of the original 27, plus NEW-B68-1, NEW-B69-1, F5.9 and B5.1c —
-   the last two discovered as NEW-ABBE03-1 and NEW-F55-1 — found during them)
-4 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5)
+28 remaining implementation units
+  (22 of the original 27, plus NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a and
+   F5.10 — the last four discovered as NEW-ABBE03-1, NEW-F55-1, NEW-F56-1 and
+   NEW-F56-2 — found during them)
+5 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5, F5.6)
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = F5.6
+NEXT = AB-FE-02
 ```

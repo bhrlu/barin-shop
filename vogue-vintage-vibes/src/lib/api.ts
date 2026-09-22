@@ -439,6 +439,10 @@ export type AdminStats = {
   }[];
 };
 
+/** Roles `PUT /admin/users/{id}/roles` may set (B5.4). The legacy `admin` and
+ * `customer` rows are outside its reach and are never sent. */
+export type StaffRole = "super_admin" | "order_manager" | "support";
+
 export type AdminUser = {
   id: string;
   email: string | null;
@@ -668,6 +672,12 @@ export const api = {
     const suffix = qs.toString() ? `?${qs}` : "";
     return request<AdminUser[] | Page<AdminUser>>(`/admin/users${suffix}`);
   },
+  // full replacement of the target's staff roles (F5.6 / B5.4, audited server-side)
+  adminSetUserRoles: (userId: string, roles: StaffRole[]) =>
+    request<{ userId: string; roles: StaffRole[] }>(`/admin/users/${userId}/roles`, {
+      method: "PUT",
+      json: { roles },
+    }),
   adminOrders: (page?: number, pageSize?: number) => {
     const qs = new URLSearchParams();
     if (page) qs.set("page", String(page));

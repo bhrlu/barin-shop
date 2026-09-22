@@ -1804,3 +1804,64 @@ block was updated to 31 executable / 4 done.
 → audit: [2026-09-22-f55-audit-log-viewer.md](audit/2026-09-22-f55-audit-log-viewer.md)
 
 **Next backlog pointer** — `F5.6` (role management UI).
+
+## 2026-09-22 — F5.6 role management UI
+
+**F5.6 — done.** `/admin/users` rows now have a «نقش‌ها» button, disabled on the
+signed-in admin's own row. It opens a two-step dialog, per spec [FE-08]:
+checkboxes for `super_admin` / `order_manager` / `support`, each with a
+capability summary, with legacy `admin` / `customer` shown read-only. The second
+step shows the +/− diff and requires typing the user's email; a full-set PUT then
+goes to the existing `PUT /admin/users/{id}/roles`. Success invalidates the users
+and audit-log caches. `api.adminSetUserRoles()` + `StaffRole` in `src/lib/api.ts`.
+Backend untouched.
+
+**Verification** — tsc clean; lint 0 errors (15 pre-existing warnings); build
+OK; backend pytest 70 passed against the live DB, ruff clean, `api_smoke.py`
+196/0. Headless Chromium + API script, 40/40:
+- the 401/403/403/403/422/404 authority matrix, including order_manager
+  self-escalation and a client-sent `admin` role;
+- page guards for anonymous, customer, support and order_manager;
+- the grant and revoke flows, including the effect on the target's
+  already-issued JWT (inbox 200 after grant, 403 after revoke);
+- the audit row;
+- mocked 403/500 keeping the dialog open;
+- 375 px layout.
+
+All seeded roles were restored at the end. The F5.5 script was re-run (35/35)
+after making it independent of the audit-log size. Level: *browser tested*.
+
+**Correction to F5.5** — the audit-log error panel used literal `rose-*` classes.
+DESIGN_SYSTEM.md §2.3 forbids inline palette classes and maps "negative" to the
+`destructive` tokens, so it now uses `border-destructive/30 bg-destructive/10
+text-destructive`, and the F5.6 diff uses `text-sage-deep` / `text-destructive`.
+The F5.5 audit carries a note.
+
+**What was explicitly NOT done**
+- Backend lockout guard: the endpoint accepts self-demotion and removal of the
+  last `super_admin`. Recorded as `B5.4a` (discovered as `NEW-F56-1`, P2) and not
+  fixed. The UI's own-row block is UX only.
+- Customer sidebar: a customer on `/admin/*` sees support tabs next to the
+  no-access notice. Recorded as `F5.10` (discovered as `NEW-F56-2`, P3). This is
+  pre-existing.
+- Palette classes in `admin.refunds.tsx` / `admin.index.tsx`: pre-existing, not
+  touched.
+- Other tasks not started: F5.9, AB-FE-02, AB-FE-05, F4.3 and the rest of
+  [FE-08] (AB-FE-06).
+- Docs left untouched: `backend/README.md`, `infra/README.md`,
+  `vogue-vintage-vibes/README.md` and the spec.
+
+**Decisions taken**
+1. The typed confirmation token is the account email, the login identity, with
+   the user id as fallback. The check ignores case and surrounding spaces.
+2. The editor is blocked on your own row instead of adding a backend guard, which
+   is logged as B5.4a.
+3. The legacy `admin` role is read-only in the UI because the endpoint cannot set
+   it.
+4. The repo's DESIGN_SYSTEM token rules take precedence over the spec's literal
+   palette classes.
+
+→ audit: [2026-09-22-f56-role-management-ui.md](audit/2026-09-22-f56-role-management-ui.md)
+
+**Next backlog pointer** — `AB-FE-02` (admin export controls; don't run it in
+parallel with AB-FE-05 because both edit `admin.products.tsx`).

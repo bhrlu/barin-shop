@@ -359,8 +359,12 @@ conflict (DESIGN_SYSTEM.md §5).
   paging, Jalali timestamp, IP, old→new value table, loading / empty / error
   states; `api.adminAuditLogs()` + `formatFaDateTime()`. Browser tested.
   → audit: [2026-09-22-f55-audit-log-viewer.md](audit/2026-09-22-f55-audit-log-viewer.md)
-- [ ] **F5.6 Role management UI** (`[FE-08]`) — `PUT /admin/users/{id}/roles`
-  exists and is audited; the users page is still read-only.
+- [x] **F5.6 Role management UI** (`[FE-08]`) — `PUT /admin/users/{id}/roles`
+  existed and was audited; the users page was read-only. Now each row has a
+  «نقش‌ها» dialog (disabled on your own row): pick `super_admin` /
+  `order_manager` / `support`, then review the +/− diff and type the user's email
+  to confirm. Legacy roles are read-only. `api.adminSetUserRoles()`. Browser tested.
+  → audit: [2026-09-22-f56-role-management-ui.md](audit/2026-09-22-f56-role-management-ui.md)
 - [ ] **F5.7 Split the admin chart bundle** — recharts (~553 kB raw) and lodash
   (~164 kB) are pulled into the shared bundle for the dashboard alone.
 - [ ] **F5.8 `/shop` fetches the catalog twice** — `catalogQuery`
@@ -371,6 +375,11 @@ conflict (DESIGN_SYSTEM.md §5).
   `adminCreateCoupon` / `adminUpdateCoupon` types in `src/lib/api.ts` do not
   mention it, so a ceiling can only be set through the API. Sending `0` on the
   PATCH clears it.
+- [ ] **F5.10 Customers see staff nav tabs in the admin shell** (`NEW-F56-2`,
+  discovered during F5.6) — a signed-in customer on `/admin/*` gets the "no admin
+  access" notice, but the sidebar still lists داشبورد / پیام‌ها / نظرات because
+  `admin.tsx` falls back to `ROLE_TAB_KEYS["support"]` for any unknown role. No
+  data leaks (every call is gated), but the nav should be empty for non-staff.
 
 ## Rules reminder
 
