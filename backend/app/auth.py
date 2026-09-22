@@ -66,11 +66,16 @@ async def get_current_user(
 
 
 async def _resolve_roles(session: AsyncSession, user_id: UUID, token_role: str | None) -> set[str]:
-    """DB is the source of truth; fall back to the token claim, then customer."""
+    """DB is the source of truth for privileges.
+
+    The token's `role` claim is never promoted to a staff role: a user demoted in
+    `user_roles` would otherwise keep admin access until their (7-day) token
+    expired. Only the harmless `customer` default is taken from the claim, for
+    rows seeded before the role table existed.
+    """
     roles = await resolve_roles(session, user_id)
-    if roles == {"customer"} and token_role in ("admin", "customer"):
-        # rows seeded before the role table existed (or missing rows)
-        return {token_role}
+    if roles == {"customer"} and token_role == "customer":
+        return {"customer"}
     return roles
 
 

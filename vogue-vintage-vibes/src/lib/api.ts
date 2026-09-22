@@ -567,8 +567,10 @@ export const api = {
         bank_tracking_code: bank_tracking_code || null,
       },
     }),
-  patchOrder: (id: string, patch: { status?: string; payment_status?: string; tracking_code?: string | null }) =>
-    request<Order>(`/orders/${id}`, { method: "PATCH", json: patch }),
+  patchOrder: (
+    id: string,
+    patch: { status?: string; payment_status?: string; tracking_code?: string | null },
+  ) => request<Order>(`/orders/${id}`, { method: "PATCH", json: patch }),
   paymentSession: (id: string) => request<PaymentSession>(`/orders/${id}/payment-session`),
   paymentComplete: (id: string, outcome: "success" | "failure") =>
     request<{ ok: boolean; order_number: string; reference: string | null }>(
@@ -581,8 +583,7 @@ export const api = {
 
   // --- admin ---
   adminStats: () => request<AdminStats>("/admin/stats"),
-  adminKpis: (range: KpiRange = "30d") =>
-    request<AdminKpis>(`/admin/kpis?range=${range}`),
+  adminKpis: (range: KpiRange = "30d") => request<AdminKpis>(`/admin/kpis?range=${range}`),
   adminUsers: () => request<AdminUser[]>("/admin/users"),
   adminOrders: () => request<Order[]>("/admin/orders"),
   adminPayments: () => request<PaymentRecord[]>("/admin/payments"),

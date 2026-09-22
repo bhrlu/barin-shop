@@ -54,8 +54,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const add = useCallback((line: CartLine) => {
     setLines((current) => {
       const index = current.findIndex(
-        (l) =>
-          l.productId === line.productId && l.size === line.size && l.color === line.color,
+        (l) => l.productId === line.productId && l.size === line.size && l.color === line.color,
       );
       if (index === -1) return [...current, line];
       return current.map((l, i) =>

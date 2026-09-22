@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard,
   LogOut,
@@ -34,14 +34,7 @@ export const Route = createFileRoute("/_authenticated/admin")({
 });
 
 type TabKey =
-  | "dashboard"
-  | "products"
-  | "inventory"
-  | "orders"
-  | "refunds"
-  | "messages"
-  | "reviews"
-  | "users";
+  "dashboard" | "products" | "inventory" | "orders" | "refunds" | "messages" | "reviews" | "users";
 
 type AdminTab = {
   key: TabKey;
@@ -56,14 +49,28 @@ type AdminTab = {
 const ALL_TABS: AdminTab[] = [
   { key: "dashboard", to: "/admin", label: "داشبورد", exact: true, icon: LayoutDashboard },
   { key: "products", to: "/admin/products", label: "محصولات", exact: false, icon: Package },
-  { key: "inventory", to: "/admin/inventory", label: "انبار", exact: false, icon: SlidersHorizontal },
   {
-    key: "orders", to: "/admin/orders", label: "سفارش‌ها", exact: false,
-    icon: ShoppingBag, badge: "orders",
+    key: "inventory",
+    to: "/admin/inventory",
+    label: "انبار",
+    exact: false,
+    icon: SlidersHorizontal,
   },
   {
-    key: "refunds", to: "/admin/refunds", label: "بازپرداخت‌ها", exact: false,
-    icon: RotateCcw, badge: "refunds",
+    key: "orders",
+    to: "/admin/orders",
+    label: "سفارش‌ها",
+    exact: false,
+    icon: ShoppingBag,
+    badge: "orders",
+  },
+  {
+    key: "refunds",
+    to: "/admin/refunds",
+    label: "بازپرداخت‌ها",
+    exact: false,
+    icon: RotateCcw,
+    badge: "refunds",
   },
   { key: "messages", to: "/admin/messages", label: "پیام‌ها", exact: false, icon: MessageSquare },
   { key: "reviews", to: "/admin/reviews", label: "نظرات", exact: false, icon: Star },
@@ -82,12 +89,24 @@ const ROLE_LABELS: Record<string, string> = {
  * Anything a role can't act on via the API is hidden from its navigation. */
 const ROLE_TAB_KEYS: Record<string, TabKey[]> = {
   super_admin: [
-    "dashboard", "products", "inventory", "orders", "refunds",
-    "messages", "reviews", "users",
+    "dashboard",
+    "products",
+    "inventory",
+    "orders",
+    "refunds",
+    "messages",
+    "reviews",
+    "users",
   ],
   admin: [
-    "dashboard", "products", "inventory", "orders", "refunds",
-    "messages", "reviews", "users",
+    "dashboard",
+    "products",
+    "inventory",
+    "orders",
+    "refunds",
+    "messages",
+    "reviews",
+    "users",
   ],
   order_manager: ["dashboard", "products", "inventory", "orders", "refunds", "messages"],
   support: ["dashboard", "messages", "reviews"],
@@ -106,6 +125,14 @@ function AdminLayout() {
   // unknown roles degrade to the read-mostly trio; legacy "admin" maps above
   const allowedKeys = new Set(ROLE_TAB_KEYS[role] ?? ROLE_TAB_KEYS["support"]);
   const tabs = ALL_TABS.filter((tab) => allowedKeys.has(tab.key));
+  // Hiding a tab is not a guard: a staff member who types /admin/users still
+  // rendered the page and only saw its empty state when the API answered 403.
+  // Spec [FE-01].3 asks for an explicit Persian permission error instead.
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const currentTab = [...ALL_TABS]
+    .sort((a, b) => b.to.length - a.to.length)
+    .find((tab) => (tab.exact ? pathname === tab.to : pathname.startsWith(tab.to)));
+  const tabAllowed = !currentTab || allowedKeys.has(currentTab.key);
 
   // badge counts (pending/processing orders, active refunds) — read endpoint
   // only; a 403 here just means no badges for this role
@@ -266,7 +293,18 @@ function AdminLayout() {
                   />
                 </form>
               </div>
-              <Outlet />
+              {tabAllowed ? (
+                <Outlet />
+              ) : (
+                <div className="mt-10 rounded-3xl border border-dashed border-border p-12 text-center">
+                  <p className="text-muted-foreground">
+                    نقش «{roleLabel}» به این بخش دسترسی ندارد.
+                  </p>
+                  <Link to="/admin" className="mt-4 inline-block text-terracotta underline">
+                    بازگشت به داشبورد
+                  </Link>
+                </div>
+              )}
             </>
           )}
         </main>

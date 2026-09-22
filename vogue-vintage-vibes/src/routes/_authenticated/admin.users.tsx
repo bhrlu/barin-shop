@@ -3,6 +3,16 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { formatToman, toFa } from "@/lib/format";
 
+/** Staff roles (B5.4) each have their own Persian label; an unknown role shows
+ * its raw name rather than being mislabelled as a customer. */
+const ROLE_LABELS: Record<string, string> = {
+  super_admin: "مدیر ارشد",
+  admin: "مدیر",
+  order_manager: "مدیر سفارش‌ها",
+  support: "پشتیبانی",
+  customer: "مشتری",
+};
+
 export const Route = createFileRoute("/_authenticated/admin/users")({
   component: AdminUsers,
 });
@@ -33,7 +43,7 @@ function AdminUsers() {
           <div className="flex items-center gap-3 text-xs">
             {user.roles.map((role) => (
               <span key={role} className="rounded-full bg-sand px-3 py-1">
-                {role === "admin" ? "مدیر" : "مشتری"}
+                {ROLE_LABELS[role] ?? role}
               </span>
             ))}
             <span>{toFa(user.order_count)} سفارش</span>

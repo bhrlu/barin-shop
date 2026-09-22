@@ -18,7 +18,7 @@ import json
 
 from sqlalchemy import text
 
-from app.db import engine
+from app.db import engine, startup_ddl
 
 TSHIRT_SIZES = ["XS", "S", "M", "L", "XL"]
 SOCK_SIZES = ["36-38", "39-41", "42-44"]
@@ -332,6 +332,8 @@ _INSERT = text(
 
 
 async def main() -> None:
+    # `tags` is an additive column owned by the startup DDL, not by infra/initdb.
+    await startup_ddl()
     async with engine.begin() as conn:
         for product in PRODUCTS:
             await conn.execute(

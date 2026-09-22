@@ -20,6 +20,8 @@ from sqlalchemy import text
 
 from app.auth import CurrentUser, DbSession, StaffOrders, StaffRefunds
 from app.services.audit import record_audit
+from app.services.payments import simulation_mode
+from app.services.roles import has_capability
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["orders"])
@@ -78,6 +80,36 @@ class PaymentCompleteOut(BaseModel):
 _ALLOWED_STATUS = {"pending", "processing", "shipped", "delivered", "cancelled"}
 _ALLOWED_PAYMENT_STATUS = {"unpaid", "paid", "refunded"}
 
+# Spec [BE-05]: an order may only move forward through fulfilment, and a
+# cancelled or delivered order is terminal. Keys/values are the existing status
+# strings (Rule 4 — the vocabulary itself is unchanged).
+_STATUS_TRANSITIONS: dict[str, set[str]] = {
+    "pending": {"processing", "shipped", "cancelled"},
+    "processing": {"shipped", "cancelled"},
+    "shipped": {"delivered", "cancelled"},
+    "delivered": set(),
+    "cancelled": set(),
+}
+
+
+async def _restore_stock(session, order_id: str) -> None:
+    """Spec [BE-05]: give the reserved units back when an order is cancelled.
+
+    Checkout decremented `products.stock` per line, so cancellation adds the same
+    quantities back. Called only on the pending/processing/shipped → cancelled
+    transition, so a repeated cancel can never inflate stock.
+    """
+    await session.execute(
+        text(
+            "UPDATE public.products p SET stock = p.stock + i.qty FROM ("
+            "  SELECT product_id, SUM(quantity) AS qty FROM public.order_items "
+            "  WHERE order_id = CAST(:oid AS uuid) AND product_id IS NOT NULL "
+            "  GROUP BY product_id"
+            ") i WHERE p.id = i.product_id"
+        ),
+        {"oid": str(order_id)},
+    )
+
 _ORDER_SELECT = (
     "SELECT o.id, o.order_number, o.user_id, o.status, o.payment_status, o.payment_method, "
     "o.subtotal, o.discount, o.shipping, o.total, o.shipping_address, o.note, "
@@ -123,7 +155,9 @@ async def my_orders(user: CurrentUser, session: DbSession) -> list[dict]:
 
 @router.get("/orders/{order_id}")
 async def get_order(order_id: UUID, user: CurrentUser, session: DbSession) -> dict:
-    order = await _fetch_order(session, str(order_id), user_id=user.id)
+    """The caller's own order; staff with the `orders` capability may read any."""
+    staff = has_capability(user.roles, "orders")
+    order = await _fetch_order(session, str(order_id), user_id=user.id, admin=staff)
     if order is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "سفارش پیدا نشد")
     return order
@@ -137,6 +171,20 @@ async def patch_order(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "وضعیت نامعتبر است")
     if body.payment_status and body.payment_status not in _ALLOWED_PAYMENT_STATUS:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "وضعیت پرداخت نامعتبر است")
+
+    # capture the previous values so the audit entry shows old → new
+    before = await _fetch_order(session, str(order_id), admin=True)
+    if before is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "سفارش پیدا نشد")
+
+    # spec [BE-05]: reject impossible transitions (a cancelled order can never
+    # become shipped); re-setting the same status stays a no-op success
+    if body.status and body.status != before["status"]:
+        if body.status not in _STATUS_TRANSITIONS.get(before["status"], set()):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                f"تغییر وضعیت از «{before['status']}» به «{body.status}» مجاز نیست",
+            )
 
     sets = []
     params: dict = {"oid": str(order_id)}
@@ -153,8 +201,9 @@ async def patch_order(
     if not sets:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "چیزی برای به‌روزرسانی نیست")
 
-    # capture the previous values so the audit entry shows old → new
-    before = await _fetch_order(session, str(order_id), admin=True)
+    # spec [BE-05]: cancelling releases the reserved units back to the catalog
+    if body.status == "cancelled" and before["status"] != "cancelled":
+        await _restore_stock(session, str(order_id))
 
     # perform the update first, then re-select
     await session.execute(
@@ -218,6 +267,7 @@ async def cancel_order(order_id: UUID, user: CurrentUser, session: DbSession) ->
     if order["status"] in ("shipped", "delivered"):
         raise HTTPException(status.HTTP_409_CONFLICT, "سفارش ارسال شده و امکان لغو ندارد")
 
+    await _restore_stock(session, str(order_id))
     await session.execute(
         text("UPDATE public.orders SET status = 'cancelled' WHERE id = CAST(:oid AS uuid)"),
         {"oid": str(order_id)},
@@ -293,6 +343,24 @@ async def resolve_refund(
             "برای ثبت بازگشت وجه، کد رهگیری بانکی الزامی است",
         )
 
+    # A settled refund is terminal: re-running the settlement used to insert a
+    # second `refund` payment row and flip the order again (double accounting).
+    current = (
+        await session.execute(
+            text(
+                "SELECT status FROM public.refund_requests WHERE id = CAST(:rid AS uuid)"
+            ),
+            {"rid": str(request_id)},
+        )
+    ).first()
+    if current is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "درخواست پیدا نشد")
+    previous_status = current[0]
+    if previous_status == "refunded":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "این درخواست قبلاً تسویه شده است"
+        )
+
     row = (
         await session.execute(
             text(
@@ -341,7 +409,7 @@ async def resolve_refund(
         action="resolve_refund",
         entity_type="order",
         entity_id=str(row["order_id"]),
-        old_values={"refund_status": "pending"},
+        old_values={"refund_status": previous_status},
         new_values={
             "refund_status": body.status,
             "bank_tracking_code": (body.bank_tracking_code or "").strip() or None,
@@ -375,6 +443,15 @@ async def payment_complete(
 ) -> PaymentCompleteOut:
     if body.outcome not in ("success", "failure"):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "نتیجه نامعتبر است")
+
+    # This endpoint IS the simulated gateway: it marks an order paid on the
+    # client's word alone. With a real merchant id configured that would be free
+    # goods, so it is refused and the caller must go through /payments/*.
+    if not simulation_mode():
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "پرداخت باید از طریق درگاه انجام شود",
+        )
 
     order = await _fetch_order(session, str(order_id), user_id=user.id)
     if order is None:

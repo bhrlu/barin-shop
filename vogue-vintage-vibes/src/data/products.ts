@@ -1,4 +1,3 @@
-
 import type { Availability, ProductBadge } from "@/lib/api";
 
 export type CategoryId = "tshirt" | "crop" | "shorts" | "socks" | "set";
@@ -34,8 +33,7 @@ export const categories: { id: CategoryId; title: string; image: string }[] = [
   { id: "set", title: "ست", image: "cat-set" },
 ];
 
-export const categoryTitle = (id: CategoryId) =>
-  categories.find((c) => c.id === id)?.title ?? "";
+export const categoryTitle = (id: CategoryId) => categories.find((c) => c.id === id)?.title ?? "";
 
 const palette = {
   cream: { name: "کرم", hex: "#f0ebe3" },
@@ -103,8 +101,7 @@ const seeds: Seed[] = [
     sizes: clothingSizes,
     images: ["model-crop", "cat-crop"],
     material: "بافت ریب با نخ ویسکوز",
-    description:
-      "قد کوتاه با لبه‌ی کشی؛ روی شورت فاق‌بلند و دامن ماکسی هر دو خوش می‌نشیند.",
+    description: "قد کوتاه با لبه‌ی کشی؛ روی شورت فاق‌بلند و دامن ماکسی هر دو خوش می‌نشیند.",
     isNew: true,
   },
   {
@@ -146,8 +143,7 @@ const seeds: Seed[] = [
     sizes: clothingSizes,
     images: ["cat-shorts", "model-crop"],
     material: "کتان و پنبه، آستر ندارد",
-    description:
-      "فاق بلند با دو پیلی جلو و جیب مورب؛ خطی رسمی با راحتی پارچه‌ی نفس‌گیر.",
+    description: "فاق بلند با دو پیلی جلو و جیب مورب؛ خطی رسمی با راحتی پارچه‌ی نفس‌گیر.",
     isNew: true,
   },
   {

@@ -23,6 +23,8 @@ backend/
 │   ├── seed_products.py   # 20-product catalog + browse tags (idempotent)
 │   ├── seed_demo.py       # demo addresses/favorites/orders
 │   ├── seed_coupons.py    # SANDE10 + WELCOME500
+│   ├── seed_mock.py       # optional demo dataset: 8 customers, 31 backdated orders,
+│                          # refund claims in all 4 states, reviews, inbox, variants
 │   ├── services/          # coupons, checkout, payments, pricing, search, roles, variants
 │   └── routers/           # health, auth, products, reviews, addresses, favorites,
 │                          # orders, admin, storage, search, stock, coupons, checkout, payments
@@ -39,10 +41,17 @@ cp .env.example .env          # then fill DATABASE_URL + JWT_SECRET
 python -m app.seed_auth       # bootstrap admin + demo customer + demo staff
 python -m app.seed_products   # 20 catalog products + tags
 python -m app.seed_coupons    # starter coupons
+python -m app.seed_mock       # optional: fills the admin screens with demo activity
 uvicorn app.main:app --reload --port 8000
 ```
 
 Docs at http://localhost:8000/docs.
+
+> `app.seed_mock` is **optional** and not part of the compose `db-init` chain — run
+> it by hand when you want a populated dashboard (`docker compose exec backend
+> python -m app.seed_mock`). It is idempotent and deterministic: a second run is a
+> no-op, and every fresh database produces the same figures. Its customers sign in
+> with `customer1234`.
 
 > `DATABASE_URL` must use the **asyncpg** driver
 > (`postgresql+asyncpg://…`) — bare `postgresql://` fails (`psycopg2` not installed).

@@ -97,9 +97,7 @@ function AdminOrders() {
   });
 
   // keep the drawer's order object fresh after mutations invalidate the list
-  const selectedFresh = selected
-    ? (data?.find((order) => order.id === selected.id) ?? null)
-    : null;
+  const selectedFresh = selected ? (data?.find((order) => order.id === selected.id) ?? null) : null;
 
   const copyAddress = async (address: Record<string, string>) => {
     const text = [

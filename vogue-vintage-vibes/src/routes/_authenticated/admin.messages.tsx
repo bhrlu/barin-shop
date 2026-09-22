@@ -39,7 +39,8 @@ function AdminMessages() {
 
   const messages = useQuery({
     queryKey: ["admin-contact-messages", filter],
-    queryFn: () => api.adminContactMessages(filter === "" ? undefined : (filter as ContactMessageStatus)),
+    queryFn: () =>
+      api.adminContactMessages(filter === "" ? undefined : (filter as ContactMessageStatus)),
   });
 
   const refresh = () => {
@@ -51,7 +52,9 @@ function AdminMessages() {
       api.markContactMessage(input.id, input.status),
     onSuccess: (message) => {
       refresh();
-      toast.success(message.status === "answered" ? "پیام پاسخ‌داده‌شده علامت خورد" : "پیام بازگشایی شد");
+      toast.success(
+        message.status === "answered" ? "پیام پاسخ‌داده‌شده علامت خورد" : "پیام بازگشایی شد",
+      );
     },
     onError: (error) =>
       toast.error(error instanceof ApiError ? error.message : "تغییر وضعیت انجام نشد"),
@@ -63,8 +66,7 @@ function AdminMessages() {
       refresh();
       toast.success("پیام حذف شد");
     },
-    onError: (error) =>
-      toast.error(error instanceof ApiError ? error.message : "حذف انجام نشد"),
+    onError: (error) => toast.error(error instanceof ApiError ? error.message : "حذف انجام نشد"),
   });
 
   const copyContact = async (value: string) => {
@@ -81,9 +83,7 @@ function AdminMessages() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h2 className="text-lg">
-          پیام‌های مشتریان {list.length ? `(${toFa(list.length)})` : ""}
-        </h2>
+        <h2 className="text-lg">پیام‌های مشتریان {list.length ? `(${toFa(list.length)})` : ""}</h2>
         <div className="flex gap-2">
           {FILTERS.map((option) => (
             <button
@@ -157,7 +157,9 @@ function AdminMessages() {
                 <div className="mt-3 flex flex-wrap items-center gap-3">
                   <button
                     type="button"
-                    onClick={() => mark.mutate({ id: message.id, status: answered ? "new" : "answered" })}
+                    onClick={() =>
+                      mark.mutate({ id: message.id, status: answered ? "new" : "answered" })
+                    }
                     disabled={mark.isPending}
                     className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
                   >

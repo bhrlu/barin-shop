@@ -85,7 +85,8 @@ def _api_base() -> str:
     )
 
 
-def _simulation_mode() -> bool:
+def simulation_mode() -> bool:
+    """True when no real merchant id is configured (the built-in simulator)."""
     return (
         not settings.zarinpal_merchant_id
         or settings.zarinpal_merchant_id == "00000000-0000-0000-0000-000000000000"
@@ -182,7 +183,7 @@ async def start_payment(
 
     amount = int(row["total"])
 
-    if _simulation_mode():
+    if simulation_mode():
         authority = f"SIM{secrets.token_hex(12).upper()}"
     else:
         authority = await gateway_request_payment(
@@ -206,7 +207,9 @@ async def start_payment(
     )
 
 
-async def verify_and_finalize(session: AsyncSession, authority: str, ok: bool) -> PaymentVerify:
+async def verify_and_finalize(
+    session: AsyncSession, authority: str, ok: bool, user_id: UUID | None = None
+) -> PaymentVerify:
     """Called from the gateway callback. Finalizes order + payment rows.
 
     Idempotent: a session that already succeeded reports `already_paid` (with the
@@ -229,6 +232,13 @@ async def verify_and_finalize(session: AsyncSession, authority: str, ok: bool) -
     ).mappings().first()
 
     if pay is None:
+        raise PaymentError("unknown_session", "جلسه پرداخت پیدا نشد")
+
+    # `user_id` is set when an authenticated caller drives the verification
+    # (POST /payments/verify): a session belonging to someone else is reported
+    # as unknown rather than finalized on their behalf. The gateway callback
+    # passes None because the gateway is not signed in.
+    if user_id is not None and pay["user_id"] != user_id:
         raise PaymentError("unknown_session", "جلسه پرداخت پیدا نشد")
 
     # already finalized → report it instead of reprocessing (or 400-ing)
@@ -278,7 +288,7 @@ async def verify_and_finalize(session: AsyncSession, authority: str, ok: bool) -
             status="failed", reference=None, amount=amount, order_id=order_id
         )
 
-    if _simulation_mode():
+    if simulation_mode():
         reference = fake_reference(order["order_number"])
     else:
         verify = await gateway_verify_payment(authority, amount)

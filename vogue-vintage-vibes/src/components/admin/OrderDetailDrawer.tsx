@@ -69,12 +69,12 @@ function OrderInvoice({ order }: { order: Order }) {
       <div className="grid grid-cols-2 gap-3 text-xs print:text-sm">
         <div>
           <p>
-            شماره سفارش: <span className="font-mono font-semibold">#{toFa(order.order_number)}</span>
+            شماره سفارش:{" "}
+            <span className="font-mono font-semibold">#{toFa(order.order_number)}</span>
           </p>
           <p className="mt-1">تاریخ ثبت: {formatFaDate(order.created_at)}</p>
           <p className="mt-1">
-            وضعیت پرداخت:{" "}
-            {PAYMENT_STATUS[order.payment_status] ?? PAYMENT_STATUS["unpaid"]}
+            وضعیت پرداخت: {PAYMENT_STATUS[order.payment_status] ?? PAYMENT_STATUS["unpaid"]}
           </p>
         </div>
         <div>
@@ -82,13 +82,7 @@ function OrderInvoice({ order }: { order: Order }) {
           <p className="mt-1">تلفن: {toFa(address["phone"] ?? "—")}</p>
           <p className="mt-1">
             نشانی:{" "}
-            {[
-              address["province"],
-              address["city"],
-              address["line"],
-            ]
-              .filter(Boolean)
-              .join("، ")}
+            {[address["province"], address["city"], address["line"]].filter(Boolean).join("، ")}
           </p>
         </div>
       </div>
@@ -275,9 +269,7 @@ export function OrderDetailDrawer({
             <span className="rounded-full bg-secondary px-2.5 py-1">
               {PAYMENT_STATUS[order.payment_status] ?? order.payment_status}
             </span>
-            <span className="font-mono text-xs">
-              {formatToman(Number(order.total))} تومان
-            </span>
+            <span className="font-mono text-xs">{formatToman(Number(order.total))} تومان</span>
           </div>
         </SheetHeader>
 
@@ -381,11 +373,7 @@ export function OrderDetailDrawer({
             <div className="col-span-2">
               <dt className="text-muted-foreground">نشانی</dt>
               <dd className="mt-0.5 leading-relaxed">
-                {[
-                  address["province"],
-                  address["city"],
-                  address["line"],
-                ]
+                {[address["province"], address["city"], address["line"]]
                   .filter(Boolean)
                   .join("، ") || "—"}
               </dd>
@@ -492,12 +480,7 @@ export function OrderDetailDrawer({
 
         {/* ---- actions ---- */}
         <div className="mt-auto flex flex-wrap items-center gap-2 px-6 py-5 print:hidden">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={printInvoice}
-            className="print:hidden"
-          >
+          <Button variant="outline" size="sm" onClick={printInvoice} className="print:hidden">
             <Printer className="size-4" />
             چاپ فاکتور رسمی
           </Button>
