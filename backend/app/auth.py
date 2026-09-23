@@ -14,6 +14,7 @@ from uuid import UUID
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
@@ -61,8 +62,37 @@ async def get_current_user(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token has no subject")
 
     user_id = UUID(sub)
+    if await _session_revoked(session, user_id, payload.get("iat")):
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED, "نشست شما پایان یافته است؛ دوباره وارد شوید"
+        )
     roles = await _resolve_roles(session, user_id, payload.get("role"))
     return AuthUser(user_id=user_id, email=payload.get("email"), roles=roles)
+
+
+async def _session_revoked(session: AsyncSession, user_id: UUID, issued_at) -> bool:
+    """B6.14: a token issued before the account's last password change is dead.
+
+    JWTs are stateless for 7 days, so without this a token stolen before a reset
+    kept working after it. `iat` is whole seconds, so the cutoff is compared at
+    whole-second precision: the login right after a reset (same second) must work;
+    the price is that a token issued in that same second before the reset survives.
+    """
+    cutoff = (
+        await session.execute(
+            text(
+                "SELECT floor(extract(epoch FROM password_changed_at)) "
+                "FROM public.users WHERE id = :uid"
+            ),
+            {"uid": str(user_id)},
+        )
+    ).scalar()
+    if cutoff is None:
+        return False  # never changed through a reset (or no such user): no cutoff
+    try:
+        return int(issued_at) < int(cutoff)
+    except (TypeError, ValueError):
+        return True  # a token without a usable `iat` cannot prove it is newer
 
 
 async def _resolve_roles(session: AsyncSession, user_id: UUID, token_role: str | None) -> set[str]:
@@ -122,6 +152,8 @@ async def get_optional_user(
         if not sub:
             return None
         user_id = UUID(sub)
+        if await _session_revoked(session, user_id, payload.get("iat")):
+            return None  # an ended session is just an anonymous caller here
         roles = await _resolve_roles(session, user_id, payload.get("role"))
     except (JWTError, ValueError):
         return None

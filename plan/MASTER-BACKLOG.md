@@ -507,7 +507,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "B6.14",
+    "agent_start_task": "F5.16",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -1122,7 +1122,7 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "B6.14",
       "title": "A password reset does not end existing sessions",
       "priority": "P2",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "backend",
       "depends_on": [],
       "blocks": [],
@@ -1130,7 +1130,10 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "backend-tasks.md",
       "discovered_as": "NEW-F23-1",
       "discovered_during": "F2.3",
-      "scope": "JWTs are stateless for 7 days, so a token stolen before a password reset keeps working after it. Add users.password_changed_at (or a token version) set by reset_password, and reject tokens whose iat predates it in get_current_user / get_optional_user; tests for both."
+      "scope": "JWTs are stateless for 7 days, so a token stolen before a password reset keeps working after it. Add users.password_changed_at (or a token version) set by reset_password, and reject tokens whose iat predates it in get_current_user / get_optional_user; tests for both.",
+      "audit": "plan/audit/2026-09-23-b614-reset-ends-sessions.md",
+      "verification_level": "fully verified",
+      "completed": "2026-09-23"
     }
   ],
   "excluded": [
@@ -1152,11 +1155,11 @@ changes to the file shipped in sequence; the collision is closed.
   ],
   "counts": {
     "total_executable": 45,
-    "done": 15,
-    "open": 30,
+    "done": 16,
+    "open": 29,
     "P0": 0,
     "P1": 0,
-    "P2": 18,
+    "P2": 17,
     "P3": 12,
     "blocked": 0,
     "dropped": 2,
@@ -2204,7 +2207,12 @@ invalid/expired token still signs out.
 ## B6.14 — A password reset does not end existing sessions
 
 * **Layer:** Backend (auth)
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-b614-reset-ends-sessions.md`](audit/2026-09-23-b614-reset-ends-sessions.md)
+* **Verification level:** fully verified — 6 tests (negative control: 4 fail on the
+  old guard), pytest 163, smoke 229/0, two-browser check 5/5, clean environment.
+  `users.password_changed_at` stamped by the reset; `app/auth.py` rejects tokens
+  whose `iat` is older (401; anonymous on optional-auth endpoints).
 * **Priority:** P2
 * **Batch:** C
 * **Dependencies:** none
@@ -2873,7 +2881,7 @@ B2.2b
 B5.4b
 B5.1d  (DONE 2026-09-23)
 B6.13  (DONE 2026-09-23)
-B6.14
+B6.14  (DONE 2026-09-23)
 ```
 
 `AB-BE-01` begins after `B6.8`.
@@ -2957,14 +2965,14 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**30** (15 completed: B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02, AB-FE-05, B3.11,
-B2.1, F5.14, F2.3, F5.15, B6.13, B5.1d, F5.13; 18 added by discovery: NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a,
+**29** (16 completed: B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02, AB-FE-05, B3.11,
+B2.1, F5.14, F2.3, F5.15, B6.13, B5.1d, F5.13, B6.14; 18 added by discovery: NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a,
 F5.10, B2.2b, B5.4b, F5.11, F5.12, B2.1a, B5.1d, B6.13, F5.13, F5.14, F5.15, F5.16,
 B6.14)
 
 ### Ready for execution
 
-**30** (`B2.1a` also needs real provider credentials) (`B2.1a` additionally needs real provider credentials from the user)
+**29** (`B2.1a` also needs real provider credentials) (`B2.1a` additionally needs real provider credentials from the user)
 
 ### Blocked
 
@@ -3001,11 +3009,11 @@ D1–D9 are resolved.
 | --------- | --------: |
 | P0        |         0 |
 | P1        |         0 |
-| P2        |        18 |
+| P2        |        17 |
 | P3        |        12 |
-| **Total** |    **30** |
+| **Total** |    **29** |
 
-Recomputed from the JSON index on 2026-09-23 (F5.13).
+Recomputed from the JSON index on 2026-09-23 (B6.14).
 
 Priority is execution guidance, not permission to rewrite requirements.
 
@@ -3119,7 +3127,7 @@ were freshly executed.
 ## START HERE
 
 ```text
-B6.14
+F5.16
 ```
 
 Batch A (`B6.8`, `B6.9`, `AB-BE-03`) is complete — audits
@@ -3149,9 +3157,9 @@ The user asked for this run back to back: `F5.15` (DONE) → `B6.13` (DONE) →
 `B5.1d` (DONE) → `B2.1a` (stopped — no credentials) → `F5.13` (DONE, [audit](audit/2026-09-23-f513-guard-redirect-after-mount.md)). The
 back-to-back run is complete.
 
-**`B6.14`** (a password reset does not end existing sessions; P2 security, Batch C,
-found during F2.3) is proposed next: it closes the gap F2.3 left in account
-recovery. `B2.1a` resumes when the user supplies real Kavenegar/SMTP credentials. `B2.1a` will hit its stop condition (no real credentials) —
+`B6.14` is DONE ([audit](audit/2026-09-23-b614-reset-ends-sessions.md)) — a reset now ends older sessions. The user
+asked for `B6.14` then **`F5.16`** (coupon edit dialog cannot clear expiry / total
+cap / discount kind; P2, Batch D) back to back — `F5.16` is next. `B2.1a` resumes when the user supplies real Kavenegar/SMTP credentials. `B2.1a` will hit its stop condition (no real credentials) —
 report it, do not fake it.
 
 After each task: update this pointer, the task status, the audit link and the
@@ -3253,18 +3261,18 @@ Reconciliation date:
 Current state:
 
 ```text
-30 remaining implementation units
+29 remaining implementation units
   (17 of the original 27, plus NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10,
-   B2.2b, B5.4b, F5.11, F5.12, B2.1a, F5.16 and B6.14 —
-   the last eleven discovered as NEW-ABBE03-1, NEW-F55-1, NEW-F56-1,
+   B2.2b, B5.4b, F5.11, F5.12, B2.1a and F5.16 —
+   the last ten discovered as NEW-ABBE03-1, NEW-F55-1, NEW-F56-1,
    NEW-F56-2, NEW-ABFE02-1, NEW-ABFE05-1/2/3, NEW-B21-1…4/6, NEW-F514-1 and
-   NEW-F23-1 — found during them)
-15 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02,
-  AB-FE-05, B3.11, B2.1, F5.14, F2.3, F5.15, B6.13, B5.1d, F5.13 — F5.14, F5.15,
-  B6.13, B5.1d and F5.13 themselves discovered as NEW-B21-5/6/3/2/4)
+   NEW-F23-1 (B6.14, since DONE) — found during them)
+16 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02,
+  AB-FE-05, B3.11, B2.1, F5.14, F2.3, F5.15, B6.13, B5.1d, F5.13, B6.14 — the
+  last six but F2.3 themselves discovered as NEW-B21-5/6/3/2/4 and NEW-F23-1)
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = B6.14
+NEXT = F5.16
 ```

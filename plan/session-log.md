@@ -2299,3 +2299,26 @@ Level: *browser tested*.
 stopped: B2.1a (no credentials); discovered: F5.16, B6.14.
 
 **Next backlog pointer** — `B6.14` (proposed: closes F2.3's session-revocation gap).
+
+## 2026-09-23 — B6.14 a password reset ends existing sessions (run: B6.14 → F5.16)
+
+**What was done** — `users.password_changed_at` (additive; NULL for everyone
+today), stamped by `reset_password`; `app/auth.py::_session_revoked()` makes both
+guards reject tokens whose `iat` predates it (401 / anonymous), at whole-second
+precision so the login right after a reset works.
+
+**Verification** — 6 tests (negative control: 4 fail on the old guard); pytest 163;
+smoke 229/0; two-browser check 5/5 (the other session is sent to `/auth` on its next
+load); clean environment (`db-init` four stages, column present). Level: *fully
+verified*.
+
+**Harness fixes** — the F2.3 suite's "same answer" check lost a response body to the
+next navigation (backend log shows both requests answered 202); it now awaits each
+response. One cold-server text wait failed right after the rebuild; the warm rerun
+passed.
+
+**Not done** — no "sign out everywhere"/change-password endpoint; same-second edge.
+
+→ audit: [2026-09-23-b614-reset-ends-sessions.md](audit/2026-09-23-b614-reset-ends-sessions.md)
+
+**Next backlog pointer** — `F5.16`.

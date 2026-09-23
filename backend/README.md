@@ -200,8 +200,9 @@ once, and a newer request spends older links; at most
 for unknown addresses, `/auth/password/forgot` answers exactly the same. The link
 is `${FRONTEND_URL}/reset-password?token=…`. With SMTP unconfigured nothing is
 sent (no dev shortcut prints the link); to see the email locally, point `SMTP_*`
-at a mail catcher and switch email on in `/admin/settings`. Existing sessions are
-**not** revoked by a reset (B6.14).
+at a mail catcher and switch email on in `/admin/settings`. A reset stamps
+`users.password_changed_at`; `app/auth.py` then rejects every token issued before
+it (401; anonymous on optional-auth endpoints) — B6.14.
 
 ## Search model
 

@@ -363,10 +363,13 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   `frontend-tasks.md` F2.3): `password_reset_tokens`, `services/password_reset.py`,
   `POST /auth/password/forgot|reset`, `notifications.queue_private_email`.
   → audit: [2026-09-23-f23-forgot-password.md](audit/2026-09-23-f23-forgot-password.md)
-- [ ] **B6.14 A password reset does not end existing sessions** (`NEW-F23-1`,
+- [x] **B6.14 A password reset does not end existing sessions** (`NEW-F23-1`,
   discovered during F2.3) — JWTs are stateless for 7 days, so a token stolen before
   a reset keeps working. Add `users.password_changed_at` (or a token version) set
   on reset and reject older `iat` in `get_current_user` / `get_optional_user`.
+  Done (2026-09-23): `users.password_changed_at` + `_session_revoked()` in
+  `app/auth.py` (whole-second cutoff). 6 tests, two-browser check, clean env.
+  → audit: [2026-09-23-b614-reset-ends-sessions.md](audit/2026-09-23-b614-reset-ends-sessions.md)
 - [x] **B6.13 The documented `pytest -q` silently skips every DB test**
   (`NEW-B21-3`, discovered during B2.1) — `test_addresses.py` (collected first) and
   three other modules `os.environ.setdefault("DATABASE_URL", "…u:p@…/db")` at

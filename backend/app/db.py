@@ -393,6 +393,9 @@ PASSWORD_RESET_DDL = [
         "CREATE INDEX IF NOT EXISTS password_reset_tokens_created_idx "
         "ON public.password_reset_tokens(created_at)"
     ),
+    # B6.14: tokens issued before this moment are dead (checked in app/auth.py).
+    # NULL on every existing row = no cutoff, so no current session is affected.
+    "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ",
 ]
 
 

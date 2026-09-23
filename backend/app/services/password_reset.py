@@ -8,7 +8,8 @@ A new link supersedes every earlier one, a link works once, and it expires after
 service (`queue_private_email`: email switch on AND SMTP configured, sent after
 COMMIT, body never persisted).
 
-Existing sessions are not revoked by a reset — the JWTs are stateless (B6.14).
+A reset stamps `users.password_changed_at`, which ends every session issued
+before it (B6.14, enforced in `app/auth.py`).
 """
 
 import hashlib
@@ -128,8 +129,8 @@ async def reset_password(session: AsyncSession, raw_token: str, new_password: st
 
     await session.execute(
         text(
-            "UPDATE public.users SET password_hash = :ph, updated_at = now() "
-            "WHERE id = :uid"
+            "UPDATE public.users SET password_hash = :ph, password_changed_at = now(), "
+            "updated_at = now() WHERE id = :uid"
         ),
         {"ph": hash_password(new_password), "uid": str(row["user_id"])},
     )

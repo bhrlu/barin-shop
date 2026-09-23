@@ -178,7 +178,7 @@ Canonical implementations in this repo — use these, do not re-derive them:
 
 | Concern | Canonical home |
 | --- | --- |
-| Authentication / current user | `backend/app/auth.py` (`get_current_user`, `get_optional_user`) |
+| Authentication / current user | `backend/app/auth.py` (`get_current_user`, `get_optional_user`; tokens older than `users.password_changed_at` are rejected — B6.14) |
 | Roles & capabilities | `backend/app/services/roles.py` (`STAFF_ROLES`, `resolve_roles`, `has_capability`) + the `Staff*` aliases in `auth.py` |
 | Password hashing / JWT | `backend/app/security.py` |
 | Totals, shipping, discount | `backend/app/services/pricing.py` (`shipping_fee`, `quote`) |
