@@ -92,7 +92,14 @@ function AuthPage() {
           />
         </div>
         <div>
-          <Label htmlFor="password">رمز عبور</Label>
+          <div className="flex items-center justify-between gap-2">
+            <Label htmlFor="password">رمز عبور</Label>
+            {mode === "signin" && (
+              <Link to="/forgot-password" className="text-xs text-terracotta hover:underline">
+                رمز عبور را فراموش کرده‌اید؟
+              </Link>
+            )}
+          </div>
           <Input
             id="password"
             type="password"

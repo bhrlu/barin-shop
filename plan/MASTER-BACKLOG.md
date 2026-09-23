@@ -507,7 +507,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "F2.3",
+    "agent_start_task": "F5.15",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -667,13 +667,16 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "F2.3",
       "title": "Forgot password",
       "priority": "P1",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "fullstack",
       "depends_on": ["B2.1"],
       "blocks": [],
       "batch": "F",
       "source": "frontend-tasks.md",
-      "scope": "Implement secure reset tokens, expiry, one-time use, email delivery, backend reset API, request UI, and reset UI."
+      "scope": "Implement secure reset tokens, expiry, one-time use, email delivery, backend reset API, request UI, and reset UI.",
+      "audit": "plan/audit/2026-09-23-f23-forgot-password.md",
+      "verification_level": "fully verified (real reset-email delivery unverified — SMTP not configured, B2.1a)",
+      "completed": "2026-09-23"
     },
     {
       "id": "B5.1b",
@@ -1101,6 +1104,20 @@ changes to the file shipped in sequence; the collision is closed.
       "discovered_as": "NEW-F514-1",
       "discovered_during": "F5.14",
       "scope": "admin.coupons.tsx sends null for an emptied expiry / max_uses / the other discount kind; PATCH /coupons/{id} treats null as unchanged (expires_at clears only on \"\"; max_uses has no clear encoding). Define clear semantics in CouponUpdate, send them from the dialog, add pytest + browser checks."
+    },
+    {
+      "id": "B6.14",
+      "title": "A password reset does not end existing sessions",
+      "priority": "P2",
+      "status": "TODO",
+      "layer": "backend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "C",
+      "source": "backend-tasks.md",
+      "discovered_as": "NEW-F23-1",
+      "discovered_during": "F2.3",
+      "scope": "JWTs are stateless for 7 days, so a token stolen before a password reset keeps working after it. Add users.password_changed_at (or a token version) set by reset_password, and reject tokens whose iat predates it in get_current_user / get_optional_user; tests for both."
     }
   ],
   "excluded": [
@@ -1121,12 +1138,12 @@ changes to the file shipped in sequence; the collision is closed.
     }
   ],
   "counts": {
-    "total_executable": 44,
-    "done": 10,
+    "total_executable": 45,
+    "done": 11,
     "open": 34,
     "P0": 0,
-    "P1": 1,
-    "P2": 20,
+    "P1": 0,
+    "P2": 21,
     "P3": 13,
     "blocked": 0,
     "dropped": 2,
@@ -1621,7 +1638,18 @@ mock/stub transport.
 ## F2.3 — Forgot password
 
 * **Layer:** Full-stack
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-f23-forgot-password.md`](audit/2026-09-23-f23-forgot-password.md)
+* **Verification level:** fully verified — 14 new tests (mutation-checked),
+  pytest 151, smoke 229/0, browser 20/20 (incl. a full UI reset + login with the
+  new password), clean environment. Real email delivery is **not** verified (SMTP
+  unconfigured, B2.1a); no dev shortcut exposes the link. Found on the way: `B6.14`.
+* **Delivered:** `password_reset_tokens` (SHA-256 only, 30-min expiry, one-time,
+  superseded by a newer link, ≤3 links/account/hour); `POST /auth/password/forgot`
+  (identical 202 for every address) and `POST /auth/password/reset` (400 for a bad
+  link); the email goes through `notifications.queue_private_email` (email switch +
+  SMTP, after COMMIT, body never persisted); `/forgot-password`, `/reset-password`
+  and the «رمز عبور را فراموش کرده‌اید؟» link on `/auth`.
 * **Dependencies:** B2.1 notification transport (DONE)
 * **B2.1 hand-off:** send the reset email through
   `backend/app/services/notifications.py` — add an **email-only** entry point there
@@ -2145,6 +2173,38 @@ it, stay "loading"/signed-out for this render and retry.
 
 Browser: interrupted `/auth/me` and a stopped backend keep the token; an
 invalid/expired token still signs out.
+
+---
+
+## B6.14 — A password reset does not end existing sessions
+
+* **Layer:** Backend (auth)
+* **Status:** TODO
+* **Priority:** P2
+* **Batch:** C
+* **Dependencies:** none
+* **Discovered as:** `NEW-F23-1` during `F2.3` — legacy discovery ID only;
+  `B6.14` is the executable ID.
+* **Source:** `backend-tasks.md` B6.14
+
+### Problem
+
+Access tokens are stateless HS256 JWTs valid for 7 days. `reset_password` changes
+the hash but nothing invalidates tokens issued before it, so an attacker holding a
+stolen token keeps access after the victim resets — the reset does not recover the
+account.
+
+### Required implementation
+
+Record `password_changed_at` (or a token version) on the user when the password
+changes (reset — and any future change-password endpoint) and reject tokens whose
+`iat` is older in `get_current_user` / `get_optional_user`. Keep the existing
+role-from-DB resolution unchanged.
+
+### Verification
+
+pytest: a token issued before a reset → 401 afterwards; a token issued after → 200;
+login still works. Smoke + clean environment (DDL).
 
 ---
 
@@ -2775,6 +2835,7 @@ B2.2b
 B5.4b
 B5.1d
 B6.13
+B6.14
 ```
 
 `AB-BE-01` begins after `B6.8`.
@@ -2819,7 +2880,7 @@ These are no longer blocked, but some have task dependencies:
 ```text
 B3.11  (DONE 2026-09-22)
 B2.1   (DONE 2026-09-22)
-F2.3
+F2.3   (DONE 2026-09-23)
 B2.5
 B2.2a
 B4.13
@@ -2858,9 +2919,10 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**34** (10 completed: B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02, AB-FE-05, B3.11,
-B2.1, F5.14; 17 added by discovery: NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10,
-B2.2b, B5.4b, F5.11, F5.12, B2.1a, B5.1d, B6.13, F5.13, F5.14, F5.15, F5.16)
+**34** (11 completed: B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02, AB-FE-05, B3.11,
+B2.1, F5.14, F2.3; 18 added by discovery: NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a,
+F5.10, B2.2b, B5.4b, F5.11, F5.12, B2.1a, B5.1d, B6.13, F5.13, F5.14, F5.15, F5.16,
+B6.14)
 
 ### Ready for execution
 
@@ -2900,12 +2962,12 @@ D1–D9 are resolved.
 | Priority  | Remaining |
 | --------- | --------: |
 | P0        |         0 |
-| P1        |         1 |
-| P2        |        20 |
+| P1        |         0 |
+| P2        |        21 |
 | P3        |        13 |
 | **Total** |    **34** |
 
-Recomputed from the JSON index on 2026-09-22 (F5.14).
+Recomputed from the JSON index on 2026-09-23 (F2.3).
 
 Priority is execution guidance, not permission to rewrite requirements.
 
@@ -3019,7 +3081,7 @@ were freshly executed.
 ## START HERE
 
 ```text
-F2.3
+F5.15
 ```
 
 Batch A (`B6.8`, `B6.9`, `AB-BE-03`) is complete — audits
@@ -3036,24 +3098,16 @@ only `F5.9` (P2).
 `B2.1` ([audit](audit/2026-09-22-b21-notification-infrastructure.md)) — executed as notification infrastructure under the D2
 product adjustment: in-app notifications live, SMS/email built but unconfigured.
 
-`F5.14` is DONE ([audit](audit/2026-09-22-f514-coupon-json-body.md)) — the coupon manager saves again.
-**`F2.3`** (forgot password, Batch F; its dependency `B2.1` is DONE) is the only
-remaining P1.
+`F5.14` is DONE ([audit](audit/2026-09-22-f514-coupon-json-body.md)) and so is
+`F2.3` ([audit](audit/2026-09-23-f23-forgot-password.md)) — **no P1 remains**.
 
-**For `F2.3`, check the stop conditions (§18) first.** The reset email must go through
-`services/notifications.py` (add an email-only entry point; see the F2.3 hand-off),
-and SMTP is **not configured** (`B2.1a`). Building tokens, endpoints, UI and the
-email path with a stub transport is possible; real delivery is not. Decide — with
-the user if needed — how a reset link is verified locally before inventing one,
-and report real delivery as unverified instead of faking it.
+The user asked for this run back to back: `F5.15` → `B6.13` → `B5.1d` →
+`B2.1a` → `F5.13`. **`F5.15`** (a failed `/auth/me` signs the user out; P2,
+Batch D) is next. `B2.1a` will hit its stop condition (no real credentials) —
+report it, do not fake it.
 
-After `F2.3` is completed:
-
-1. update this pointer (to the highest-priority P2);
-2. update the task status;
-3. link the new audit;
-4. record the actual verification level;
-5. identify the next highest-priority `TODO`.
+After each task: update this pointer, the task status, the audit link and the
+verification level, and name the next task.
 
 The execution pointer must always identify a single concrete next task.
 
@@ -3152,15 +3206,16 @@ Current state:
 
 ```text
 34 remaining implementation units
-  (18 of the original 27, plus NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10,
-   B2.2b, B5.4b, F5.11, F5.12, B2.1a, B5.1d, B6.13, F5.13, F5.15 and F5.16 — the
-   last fourteen discovered as NEW-ABBE03-1, NEW-F55-1, NEW-F56-1, NEW-F56-2,
-   NEW-ABFE02-1, NEW-ABFE05-1/2/3, NEW-B21-1…4/6 and NEW-F514-1 — found during them)
-10 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02,
-  AB-FE-05, B3.11, B2.1, F5.14 — the last one itself discovered as NEW-B21-5)
+  (17 of the original 27, plus NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10,
+   B2.2b, B5.4b, F5.11, F5.12, B2.1a, B5.1d, B6.13, F5.13, F5.15, F5.16 and
+   B6.14 — the last fifteen discovered as NEW-ABBE03-1, NEW-F55-1, NEW-F56-1,
+   NEW-F56-2, NEW-ABFE02-1, NEW-ABFE05-1/2/3, NEW-B21-1…4/6, NEW-F514-1 and
+   NEW-F23-1 — found during them)
+11 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02,
+  AB-FE-05, B3.11, B2.1, F5.14, F2.3 — F5.14 itself discovered as NEW-B21-5)
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = F2.3
+NEXT = F5.15
 ```

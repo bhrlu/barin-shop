@@ -370,6 +370,32 @@ NOTIFICATION_DDL = [
 ]
 
 
+# --- Password reset tokens (idempotent) --------------------------------------
+# F2.3. Only the SHA-256 of the emailed token is stored, so a database reader
+# cannot use a pending link. A row is spent by setting `used_at` (on reset, or
+# when a newer link supersedes it); rows older than a day are pruned on request.
+PASSWORD_RESET_DDL = [
+    """
+    CREATE TABLE IF NOT EXISTS public.password_reset_tokens (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+      token_hash TEXT NOT NULL UNIQUE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+    """,
+    (
+        "CREATE INDEX IF NOT EXISTS password_reset_tokens_user_idx "
+        "ON public.password_reset_tokens(user_id, created_at DESC)"
+    ),
+    (
+        "CREATE INDEX IF NOT EXISTS password_reset_tokens_created_idx "
+        "ON public.password_reset_tokens(created_at)"
+    ),
+]
+
+
 async def startup_ddl() -> None:
     # enum extension first, on its own autocommit connection (ADD VALUE and
     # older Postgres transactions do not mix)
@@ -391,6 +417,7 @@ async def startup_ddl() -> None:
             PAYMENT_DDL,
             CONTACT_DDL,
             NOTIFICATION_DDL,
+            PASSWORD_RESET_DDL,
             [co_purchase_ddl()],
         ):
             for stmt in statements:

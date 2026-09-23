@@ -28,6 +28,17 @@ class SignInRequest(BaseModel):
     password: str = Field(min_length=1, max_length=128)
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=120)
+
+
+class ResetPasswordRequest(BaseModel):
+    # token_urlsafe(32) is 43 chars; the bound only keeps junk input small
+    token: str = Field(min_length=20, max_length=200)
+    # same policy as SignUpRequest
+    password: str = Field(min_length=6, max_length=128)
+
+
 class TokenOut(BaseModel):
     access_token: str
     token_type: Literal["bearer"] = "bearer"

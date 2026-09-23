@@ -60,8 +60,9 @@ class NotificationType:
     channels: tuple[str, ...]
 
 
-# Transactional scope of decision D2 that has a live flow today. Password reset
-# (F2.3) and preorder (B4.13) have no flow yet and add their types with it.
+# Transactional scope of decision D2 that has a live flow today. The password
+# reset (F2.3) is email-only and goes through `queue_private_email` below;
+# preorder (B4.13) has no flow yet and adds its type with it.
 TYPES: dict[str, NotificationType] = {
     "order_created": NotificationType("سفارش شما ثبت شد", CHANNELS),
     "order_paid": NotificationType("پرداخت سفارش تأیید شد", CHANNELS),
@@ -377,9 +378,59 @@ async def notify_refund_event(
     )
 
 
+# --- email-only messages that must not be stored --------------------------------------
+
+
+async def queue_private_email(
+    session: AsyncSession, *, to: str, subject: str, body: str, kind: str
+) -> str:
+    """Send one email whose body carries a secret (e.g. a password-reset link).
+
+    Same channel rule as every notification — only when the admin switched email
+    on AND SMTP is configured — and, like the outbox, only after the caller's
+    COMMIT (a rolled-back request sends nothing). Unlike the outbox nothing is
+    written to `notification_deliveries`: that row would put the secret in the
+    database. It is sent once; a failure is logged (never the body) and the user
+    can simply ask again. Returns "queued", "email_disabled" or
+    "provider_not_configured".
+    """
+    switches = await load_switches(session)
+    if not switches["email"]:
+        log.info("notify: %s email not sent — email channel switched off", kind)
+        return "email_disabled"
+    if not providers.email_provider().configured():
+        log.info("notify: %s email not sent — SMTP not configured", kind)
+        return "provider_not_configured"
+    session.info.setdefault(_PRIVATE_KEY, []).append(
+        {"to": to, "subject": subject, "body": body, "kind": kind}
+    )
+    return "queued"
+
+
+async def _send_private_emails(items: list[dict]) -> None:
+    loop = asyncio.get_running_loop()
+    slots = _slots.setdefault(loop, asyncio.Semaphore(2))
+    for item in items:
+        async with slots:
+            try:
+                async with SessionLocal() as session:
+                    switches = await load_switches(session)
+                provider = providers.email_provider()
+                if not switches["email"] or not provider.configured():
+                    log.info("notify: %s email skipped at send time", item["kind"])
+                    continue
+                await provider.send(item["to"], item["subject"], item["body"])
+                log.info("notify: %s email sent", item["kind"])
+            except ProviderError as exc:
+                log.warning("notify: %s email failed: %s", item["kind"], exc)
+            except Exception:  # noqa: BLE001 — a background send must never crash the app
+                log.exception("notify: %s email crashed", item["kind"])
+
+
 # --- after-commit dispatch -------------------------------------------------------------
 
 _QUEUE_KEY = "notification_deliveries"
+_PRIVATE_KEY = "notification_private_emails"
 _inflight: set[asyncio.Task] = set()
 # at most two provider calls hold a pooled connection at once (pool is 5 + 5)
 _slots: "WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore]" = WeakKeyDictionary()
@@ -390,17 +441,24 @@ def _dispatch_after_commit(sync_session: Session) -> None:
     if sync_session.in_nested_transaction():
         return  # a SAVEPOINT release: nothing is durable until the outer COMMIT
     ids = sync_session.info.pop(_QUEUE_KEY, None)
-    if not ids:
+    private = sync_session.info.pop(_PRIVATE_KEY, None)
+    if not ids and not private:
         return
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
-        # sync context: the rows stay `pending` for a later dispatch/sweeper
-        log.warning("notify: no running loop; %d deliveries left pending", len(ids))
+        # sync context: outbox rows stay `pending` for a later dispatch/sweeper;
+        # private emails are dropped (the user can ask again)
+        log.warning("notify: no running loop; nothing dispatched")
         return
-    task = loop.create_task(dispatch_deliveries(ids))
-    _inflight.add(task)
-    task.add_done_callback(_inflight.discard)
+    for job in (
+        dispatch_deliveries(ids) if ids else None,
+        _send_private_emails(private) if private else None,
+    ):
+        if job is not None:
+            task = loop.create_task(job)
+            _inflight.add(task)
+            task.add_done_callback(_inflight.discard)
 
 
 @event.listens_for(Session, "after_transaction_end")
@@ -409,6 +467,7 @@ def _drop_after_rollback(sync_session: Session, transaction) -> None:
     # the outer transaction ends was rolled back with the notification rows
     if transaction.parent is None:
         sync_session.info.pop(_QUEUE_KEY, None)
+        sync_session.info.pop(_PRIVATE_KEY, None)
 
 
 async def drain() -> None:

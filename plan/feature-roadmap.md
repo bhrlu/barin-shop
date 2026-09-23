@@ -58,7 +58,7 @@ Unchecked items are not yet implemented.
 - ✅ Cancel order before shipping
 - [ ] SMS one-time-password (OTP) login
 - [ ] Two-factor authentication
-- [ ] Forgot / reset password
+- [x] Forgot / reset password — **done (F2.3)**: emailed one-time link (hash-stored, 30 min); the email needs SMTP (B2.1a)
 - [ ] Wallet and gift credit (Gift Card)
 
 ## 6. Marketing & Sales
@@ -136,7 +136,7 @@ Endpoints noted in `code` already exist and are verified working.
 - [ ] PDF invoice + payment receipt email
 
 ### Account & auth
-- [ ] Forgot / reset password
+- [x] Forgot / reset password (F2.3)
 - [ ] SMS OTP login
 - [ ] Two-factor authentication
 

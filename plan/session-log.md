@@ -2167,3 +2167,36 @@ expiry / total cap / discount kind (sends `null`, PATCH ignores it).
 → audit: [2026-09-22-f514-coupon-json-body.md](audit/2026-09-22-f514-coupon-json-body.md)
 
 **Next backlog pointer** — `F2.3`.
+
+## 2026-09-23 — F2.3 forgot password (back-to-back run, task 2)
+
+**What was done** — `password_reset_tokens` (SHA-256 only), `services/password_reset.py`,
+`POST /auth/password/forgot` (identical 202 for unknown / known / throttled
+addresses) and `POST /auth/password/reset` (400 for a bad link); links last 30 min,
+work once, are superseded by a newer request, ≤3 per account per hour. The email goes
+through a new `notifications.queue_private_email()` (email switch + SMTP, after COMMIT,
+never persisted — the outbox row would store the secret). UI: `/forgot-password`,
+`/reset-password`, the link on `/auth`, a channel note on `/admin/settings`.
+
+**Decision taken (stop-condition check)** — SMTP is unconfigured, so no real reset
+email can be delivered. No dev shortcut exposes the link (it would be an
+account-takeover path); tests use a stub provider and the browser test inserts a
+hash-only fixture link. Local testing: point `SMTP_*` at a mail catcher.
+
+**Verification** — 14 new tests (mutation-checked: one-time use, throttle,
+enumeration); pytest 151; smoke 229/0; browser 20/20 incl. a full UI reset and a
+login with the new password; clean environment (`db-init` four stages, table +
+indexes, env vars). Level: *fully verified* except real email delivery.
+
+**Harness fixes** — wait for React's fiber on `<form>` before clicking (pre-hydration
+native submit); issue the fixture link after the test's own forgot request (the app
+correctly superseded it).
+
+**Discovered** — B6.14 (P2): a reset does not end existing sessions (stateless JWTs).
+
+**Not done** — B6.14, real delivery (B2.1a), per-IP limit on forgot, confirmation
+email after a change.
+
+→ audit: [2026-09-23-f23-forgot-password.md](audit/2026-09-23-f23-forgot-password.md)
+
+**Next backlog pointer** — `F5.15`.

@@ -112,13 +112,19 @@ new session can pick up exactly where this one stopped. Legend: `[ ]` todo ·
   Paya/Satna bank tracking code (backend enforces it since B5.3) and settled
   cards show the code + settlement date.
   → audit: same file as F2.1b; bank-code UI in [2026-09-21-backend-b53-refund-bank-tracking.md](audit/2026-09-21-backend-b53-refund-bank-tracking.md)
-- [ ] **F2.3 Forgot password** — **backend work needed** (this line used to say
+- [x] **F2.3 Forgot password** — **backend work needed** (this line used to say
   "Supabase reset email flow"; there is no Supabase any more and `auth.py` has no
   reset endpoint). Add a reset-token endpoint + email to `backend-tasks.md` first,
   then the UI. B2.1 (DONE) provides the email transport: add an email-only entry
   point to `backend/app/services/notifications.py` (never call
   `SmtpEmailProvider` directly). SMTP is unconfigured, so decide how the reset
   link is verified without real delivery before building.
+  Done (2026-09-23): `password_reset_tokens` (hash-only, 30 min, one-time,
+  superseded by a newer link, ≤3/hour), `POST /auth/password/forgot` (identical
+  202 for every address) + `/reset`, email via `notifications.queue_private_email`
+  (not sent while SMTP is unconfigured — no dev link shortcut), `/forgot-password`,
+  `/reset-password`, link on `/auth`. Browser tested 20/20 + clean environment.
+  → audit: [2026-09-23-f23-forgot-password.md](audit/2026-09-23-f23-forgot-password.md)
 - [x] **F2.5 Pagination for shop & admin lists** — envelope pagination
   (`{items,total,page,page_size,pages}`, bare list without `?page=`) on
   `/products`, `/orders`, `/admin/{orders,users,payments,contact-messages,reviews}`

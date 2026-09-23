@@ -630,6 +630,18 @@ export const api = {
   signIn: (body: { email: string; password: string }) =>
     request<TokenResponse>("/auth/login", { method: "POST", json: body }),
   me: () => request<UserInfo>("/auth/me"),
+  // F2.3: always 202 with the same message, whether or not the address has an account
+  forgotPassword: (email: string) =>
+    request<{ ok: boolean; message: string }>("/auth/password/forgot", {
+      method: "POST",
+      json: { email },
+    }),
+  // 400 = unknown / used / superseded / expired link
+  resetPassword: (token: string, password: string) =>
+    request<{ ok: boolean }>("/auth/password/reset", {
+      method: "POST",
+      json: { token, password },
+    }),
   updateMe: (body: {
     full_name?: string | null;
     phone?: string | null;

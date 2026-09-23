@@ -190,6 +190,7 @@ Canonical implementations in this repo — use these, do not re-derive them:
 | Audit logging | `backend/app/services/audit.py` |
 | Client IP (audit trail, throttles) | `backend/app/services/client_ip.py` (`resolve_client_ip`; XFF only from `TRUSTED_PROXIES`), stored per request in `audit.client_ip_ctx` |
 | Contact-form abuse guard | `backend/app/services/contact_guard.py` (`record_attempt`) |
+| Password reset tokens + reset email | `backend/app/services/password_reset.py` (`request_reset`, `reset_password`); the email goes through `notifications.queue_private_email` |
 | Customer notifications (in-app + SMS/email outbox), channel switches | `backend/app/services/notifications.py` (`notify_order_event`, `notify_refund_event`, `notify`, `load_switches`); providers only behind it in `notification_providers.py` — never call Kavenegar/SMTP from a router |
 | Startup DDL | `startup_ddl()` in `backend/app/db.py` |
 | All frontend HTTP | `vogue-vintage-vibes/src/lib/api.ts` (the `api` object + `request()`) |

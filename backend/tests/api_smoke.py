@@ -108,6 +108,27 @@ def main() -> int:
     })
     call("POST", "/auth/login", json={"email": "customer@sande.local", "password": "wrong"})
 
+    # --- password reset (F2.3): one answer for every address; bad links → 400 ---
+    known = call("POST", "/auth/password/forgot", json={"email": "customer@sande.local"})
+    unknown = call(
+        "POST", "/auth/password/forgot", json={"email": f"nobody_{uuid4().hex[:6]}@example.com"}
+    )
+    check(
+        "forgot password: known and unknown email answer identically (202)",
+        known is not None and unknown is not None
+        and known.status_code == unknown.status_code == 202
+        and known.json() == unknown.json(),
+        f"{known.status_code if known else 0}/{unknown.status_code if unknown else 0}",
+    )
+    bad_reset = call(
+        "POST", "/auth/password/reset", json={"token": "x" * 43, "password": "secret123"}
+    )
+    check(
+        "reset with an unknown token → 400",
+        bad_reset is not None and bad_reset.status_code == 400,
+        f"{bad_reset.status_code if bad_reset else 0}",
+    )
+
     # --- addresses (the reported bug) ---
     call("GET", "/addresses", customer)
     created = call("POST", "/addresses", customer, json={

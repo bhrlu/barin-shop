@@ -189,6 +189,12 @@ function ChannelCards({
                   <p className="mt-1 text-sm leading-7 text-muted-foreground">
                     {channelSummary(enabled, configured, channel.title)}
                   </p>
+                  {channel.key === "email" ? (
+                    <p className="mt-1 text-xs leading-6 text-muted-foreground">
+                      ایمیل بازیابی رمز عبور هم از همین کانال ارسال می‌شود؛ تا روشن و تنظیم نشود،
+                      مشتری لینک بازیابی دریافت نمی‌کند.
+                    </p>
+                  ) : null}
                   {!configured ? (
                     <p className="mt-2 text-xs leading-6 text-muted-foreground">
                       اطلاعات سرویس فقط از متغیرهای محیطی سرور خوانده می‌شود (

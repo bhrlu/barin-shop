@@ -1,4 +1,4 @@
-"""Own auth endpoints: signup, signin, and current-user profile.
+"""Own auth endpoints: signup, signin, current-user profile, password reset.
 
 The store's own auth (it replaced Supabase Auth). Passwords are bcrypt-hashed;
 sessions are HS256 JWTs issued by this service. On signup the profile row and the
@@ -14,13 +14,16 @@ from sqlalchemy.exc import IntegrityError
 
 from app.auth import CurrentUser, DbSession
 from app.schemas import (
+    ForgotPasswordRequest,
     ProfileUpdateIn,
+    ResetPasswordRequest,
     SignInRequest,
     SignUpRequest,
     TokenOut,
     UserInfoOut,
 )
 from app.security import create_access_token, hash_password, verify_password
+from app.services.password_reset import ResetError, request_reset, reset_password
 from app.services.roles import resolve_role
 
 log = logging.getLogger(__name__)
@@ -95,6 +98,37 @@ async def login(body: SignInRequest, session: DbSession) -> TokenOut:
     if row is None or not verify_password(body.password, row[1]):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "ایمیل یا رمز عبور اشتباه است")
     return await _issue_token(session, row[0], email)
+
+
+# F2.3: one answer for every address, so the endpoint cannot tell who has an account
+_FORGOT_MESSAGE = (
+    "اگر این ایمیل در ساندِه حساب داشته باشد، لینک بازیابی رمز عبور به آن ارسال می‌شود."
+)
+
+
+@router.post("/password/forgot", status_code=status.HTTP_202_ACCEPTED)
+async def forgot_password(body: ForgotPasswordRequest, session: DbSession) -> dict:
+    """Email a one-time reset link if the address has an account (F2.3).
+
+    Unknown, known and throttled addresses all get this same 202 body.
+    """
+    await request_reset(session, body.email)
+    await session.commit()  # the email is sent after this commit
+    return {"ok": True, "message": _FORGOT_MESSAGE}
+
+
+@router.post("/password/reset")
+async def reset_password_endpoint(body: ResetPasswordRequest, session: DbSession) -> dict:
+    """Set a new password with a valid, unused, unexpired link (F2.3)."""
+    try:
+        await reset_password(session, body.token, body.password)
+    except ResetError as exc:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "لینک بازیابی نامعتبر است یا منقضی شده است. دوباره درخواست دهید.",
+        ) from exc
+    await session.commit()
+    return {"ok": True}
 
 
 @router.patch("/me", response_model=UserInfoOut)

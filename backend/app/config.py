@@ -70,6 +70,11 @@ class Settings(BaseSettings):
     smtp_ssl: bool = False
     notification_provider_timeout_seconds: float = 10.0
 
+    # Password reset (F2.3): link lifetime, and links per account per hour (the
+    # cap stops mail-bombing an inbox; over it the API still answers the same way)
+    password_reset_ttl_minutes: int = 30
+    password_reset_max_per_hour: int = 3
+
     # Bootstrap admin (used by `python -m app.seed_auth`)
     admin_email: str = "admin@sande.local"
     admin_password: str = "admin1234"

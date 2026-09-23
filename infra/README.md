@@ -93,4 +93,7 @@ regresses to a private tarball URL, the build fails loudly at `bun install`.
   when the credentials are set **and** an admin switched the channel on at
   `/admin/settings`. Put real credentials in `infra/.env` only (never in git or
   the database) and recreate the backend: `docker compose up -d backend`.
+  The password-reset email (F2.3) uses the same email channel; its knobs are
+  `PASSWORD_RESET_TTL_MINUTES` (30) and `PASSWORD_RESET_MAX_PER_HOUR` (3). To see
+  reset emails locally, point `SMTP_*` at a mail catcher (e.g. Mailpit).
 - The stack is for **development**; no TLS, default passwords, published ports.

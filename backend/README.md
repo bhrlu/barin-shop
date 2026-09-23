@@ -81,6 +81,8 @@ Public / customer:
 | GET | `/health` | – | liveness (used by the compose healthcheck) |
 | POST | `/auth/signup` · `/auth/login` | – | register / sign in → token |
 | GET/PATCH | `/auth/me` | user | profile read / update |
+| POST | `/auth/password/forgot` | – | `{email}` → **202** with the same message for every address (never reveals an account); emails a one-time link if the account exists (F2.3) |
+| POST | `/auth/password/reset` | – | `{token, password}` → 200; 400 for an unknown / used / superseded / expired link |
 | GET | `/products` | optional | catalog list — filters `category, tag, badge, availability, on_sale, size, color, min_price, max_price` + `sort`. `size`/`color` are **multi-value** (repeatable and/or comma-separated) |
 | GET | `/products/compare?ids=` | – | side-by-side comparison |
 | GET | `/products/{id}` | – | one product (with `avg_rating`, `review_count`) |
@@ -184,6 +186,22 @@ rejected refund notifies nobody (D2 scope).
   = unconfigured, a valid state. **Neither has been run against the real service
   yet** (no credentials exist); they are tested with stub transports only.
 - The in-app inbox has no switch; SMS and email default to **off**.
+- **Secret-bearing email** (the F2.3 reset link) uses
+  `queue_private_email()`: same switch + configured rule, sent after COMMIT, but
+  **no** outbox row (the body would put the secret in the DB) — sent once, failures
+  logged without the body.
+
+## Password reset (F2.3)
+
+`services/password_reset.py`. `password_reset_tokens` keeps only the SHA-256 of
+`secrets.token_urlsafe(32)`; a link lasts `PASSWORD_RESET_TTL_MINUTES` (30), works
+once, and a newer request spends older links; at most
+`PASSWORD_RESET_MAX_PER_HOUR` (3) links per account per hour — over the cap, and
+for unknown addresses, `/auth/password/forgot` answers exactly the same. The link
+is `${FRONTEND_URL}/reset-password?token=…`. With SMTP unconfigured nothing is
+sent (no dev shortcut prints the link); to see the email locally, point `SMTP_*`
+at a mail catcher and switch email on in `/admin/settings`. Existing sessions are
+**not** revoked by a reset (B6.14).
 
 ## Search model
 
