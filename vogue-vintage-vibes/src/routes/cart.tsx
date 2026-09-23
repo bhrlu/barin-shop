@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { api, type StockIssue } from "@/lib/api";
 import { useCatalog } from "@/lib/catalog";
 import { formatToman, toFa } from "@/lib/format";
-import { useCart, type CartLine } from "@/lib/cart";
+import { useCart, useCartSubtotal, type CartLine } from "@/lib/cart";
 import { stockIssueMessage } from "@/lib/stock-issues";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,7 +56,8 @@ function issuesForLines(lines: CartLine[], issues: StockIssue[]): (StockIssue | 
 }
 
 function CartPage() {
-  const { lines, subtotal, setQuantity, remove } = useCart();
+  const { lines, setQuantity, remove } = useCart();
+  const subtotal = useCartSubtotal();
   const { byId } = useCatalog();
   const [code, setCode] = useState("");
   const [discount, setDiscount] = useState(0);

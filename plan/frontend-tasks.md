@@ -415,11 +415,13 @@ conflict (DESIGN_SYSTEM.md §5).
   `/shop?page=abc` sends `page=abc` (422, retried 3×, no products) and
   `?category=hack` filters on it. Return rejected keys as explicit `undefined`
   (the AB-FE-05 fix in `admin.products.tsx`).
-- [ ] **F5.12 Cart provider loads the whole catalogue on every route**
+- [x] **F5.12 Cart provider loads the whole catalogue on every route**
   (`NEW-ABFE05-3`, discovered during AB-FE-05) — `CartProvider` in `__root.tsx`
   runs `catalogQuery` (all products, `include_inactive=true`) on every page, admin
   pages included, to price and stock-check the cart. Fetch only the cart's products
   (or defer until the cart is used). Related to F5.8 but broader.
+  Done (2026-09-23): `CartProvider` no longer queries the catalogue; the display subtotal moved to `useCartSubtotal()`, called only by `/cart` and `/checkout`. Admin and other storefront routes make 0 catalogue requests (was 1 each); cart, coupon, stock-issue and checkout flows re-tested (27 browser checks; negative control: 6 fail on the old code). Browser tested.
+  → audit: [2026-09-23-f512-cart-provider-no-catalog.md](audit/2026-09-23-f512-cart-provider-no-catalog.md)
 
 - [x] **B2.1 (frontend part) Notification centre + admin notification settings**
   — delivered with backend task B2.1: header bell (`NotificationBell` in

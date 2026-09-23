@@ -507,7 +507,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "F5.12",
+    "agent_start_task": "F5.8",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -1028,7 +1028,7 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "F5.12",
       "title": "Cart provider loads the whole catalogue on every route",
       "priority": "P2",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "frontend",
       "depends_on": [],
       "blocks": [],
@@ -1036,7 +1036,10 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "frontend-tasks.md",
       "discovered_as": "NEW-ABFE05-3",
       "discovered_during": "AB-FE-05",
-      "scope": "CartProvider in __root.tsx runs catalogQuery (all products, include_inactive=true) on every page incl. admin; fetch only the cart's products or defer until the cart is used. Related to F5.8."
+      "scope": "CartProvider in __root.tsx runs catalogQuery (all products, include_inactive=true) on every page incl. admin; fetch only the cart's products or defer until the cart is used. Related to F5.8.",
+      "audit": "plan/audit/2026-09-23-f512-cart-provider-no-catalog.md",
+      "verification_level": "browser tested",
+      "completed": "2026-09-23"
     },
     {
       "id": "B5.1d",
@@ -1222,11 +1225,11 @@ changes to the file shipped in sequence; the collision is closed.
   ],
   "counts": {
     "total_executable": 48,
-    "done": 23,
-    "open": 25,
+    "done": 24,
+    "open": 24,
     "P0": 0,
     "P1": 0,
-    "P2": 11,
+    "P2": 10,
     "P3": 14,
     "blocked": 0,
     "dropped": 2,
@@ -2860,7 +2863,10 @@ unaffected.
 ## F5.12 — Cart provider loads the whole catalogue on every route
 
 * **Layer:** Frontend
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-f512-cart-provider-no-catalog.md`](audit/2026-09-23-f512-cart-provider-no-catalog.md)
+* **Verification level:** browser tested
+* **Delivered:** `CartProvider` no longer queries the catalogue; the display subtotal moved to `useCartSubtotal()`, called only by `/cart` and `/checkout`. Admin and other storefront routes make 0 catalogue requests (was 1 each); cart, coupon, stock-issue and checkout flows re-tested (27 browser checks; negative control: 6 fail on the old code). Browser tested.
 * **Priority:** P2
 * **Batch:** D
 * **Dependencies:** none (related to `F5.8`)
@@ -3143,7 +3149,7 @@ AB-FE-04
 F3.5b
 F5.10
 F5.11
-F5.12
+F5.12  (DONE 2026-09-23)
 F5.13  (DONE 2026-09-23)
 F5.14  (DONE 2026-09-22)
 F5.15  (DONE 2026-09-23)
@@ -3212,13 +3218,13 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**25** open · **23** DONE · 48 executable in total.
+**24** open · **24** DONE · 48 executable in total.
 21 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
 
-**25** (`B2.1a` additionally needs real provider credentials from the user)
+**24** (`B2.1a` additionally needs real provider credentials from the user)
 
 ### Blocked
 
@@ -3255,9 +3261,9 @@ D1–D9 are resolved.
 | --------- | --------: |
 | P0        |         0 |
 | P1        |         0 |
-| P2        |        11 |
+| P2        |        10 |
 | P3        |        14 |
-| **Total** |    **25** |
+| **Total** |    **24** |
 
 Generated from the JSON index on 2026-09-23.
 
@@ -3373,11 +3379,11 @@ were freshly executed.
 ## START HERE
 
 ```text
-F5.12
+F5.8
 ```
 
-23 of 48 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. **`F5.12`** (cart provider loads the whole catalogue on every route; P2, Batch D) is next.
+24 of 48 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. next P2 in Batch D — `/shop` still requests the catalogue and the filtered page (related to F5.12)
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -3481,11 +3487,11 @@ Reconciliation date:
 Current state:
 
 ```text
-25 remaining implementation units (B2.1a, AB-BE-01, AB-BE-02, F5.8, F5.7, F4.3, AB-FE-01, AB-FE-03, AB-FE-04, F3.5b, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, F5.12, B6.15, B5.1e)
-23 completed implementation units
+24 remaining implementation units (B2.1a, AB-BE-01, AB-BE-02, F5.8, F5.7, F4.3, AB-FE-01, AB-FE-03, AB-FE-04, F3.5b, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B6.15, B5.1e)
+24 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = F5.12
+NEXT = F5.8
 ```

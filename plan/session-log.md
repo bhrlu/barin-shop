@@ -2417,3 +2417,16 @@ failed twice — it asserted every audit row in the table has an admin, which de
 users (by design) break — and now checks this run's own entries. pytest 203, smoke
 229/0, clean environment. Found: **B5.1e** (least-privilege DB role, P3).
 → audit: [2026-09-23-b51b-audit-log-append-only.md](audit/2026-09-23-b51b-audit-log-append-only.md)
+
+## 2026-09-23 — F5.12 cart provider no longer loads the catalogue
+
+`CartProvider` (every route, admin included) ran `catalogQuery` only for the display
+subtotal. The subtotal moved to `useCartSubtotal()` (same formula, same query), called
+by `/cart` and `/checkout`, which already load the catalogue for their line items.
+Network inspection: `/admin/products`, `/admin/orders`, `/account`, `/product/<id>`,
+`/about` and `/contact` make 0 catalogue requests (the old code made 1 on each; this
+was the negative control). Cart subtotal, coupon, stock-issue block and a real
+checkout (server total = displayed total, then cancelled) were re-tested: 27 checks.
+Not done: `/shop`'s double fetch (F5.8, next). Lint +1 warning of the rule already on
+`useCart`. Level: *browser tested*.
+→ audit: [2026-09-23-f512-cart-provider-no-catalog.md](audit/2026-09-23-f512-cart-provider-no-catalog.md)

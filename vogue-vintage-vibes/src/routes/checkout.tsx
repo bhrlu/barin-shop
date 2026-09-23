@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { ShieldCheck } from "lucide-react";
 import { api, ApiError, type StockIssue } from "@/lib/api";
 import { formatToman, toFa } from "@/lib/format";
-import { useCart } from "@/lib/cart";
+import { useCart, useCartSubtotal } from "@/lib/cart";
 import { useAuth } from "@/lib/auth";
 import { useCatalog } from "@/lib/catalog";
 import { stockIssueLabel } from "@/lib/stock-issues";
@@ -31,7 +31,8 @@ const SHIPPING = 89000;
 const FREE_SHIPPING_FROM = 2000000;
 
 function CheckoutPage() {
-  const { lines, subtotal, clear } = useCart();
+  const { lines, clear } = useCart();
+  const subtotal = useCartSubtotal();
   const { user, loading } = useAuth();
   const { byId } = useCatalog();
   const navigate = useNavigate();
