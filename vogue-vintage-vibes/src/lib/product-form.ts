@@ -10,6 +10,7 @@
 import { z } from "zod";
 import type { Availability, ProductBadge, ProductWrite } from "@/lib/api";
 import type { AdminProduct } from "@/lib/catalog";
+import { toLatinDigits } from "@/lib/format";
 
 export const BADGES: { value: ProductBadge | ""; label: string }[] = [
   { value: "", label: "بدون نشان" },
@@ -25,13 +26,6 @@ export const AVAILABILITIES: { value: Availability; label: string }[] = [
   { value: "coming_soon", label: "به‌زودی" },
   { value: "preorder", label: "پیش‌خرید" },
 ];
-
-/** «۱۲۰۰۰۰» / «١٢٠٠٠٠» → "120000"; anything else is left as typed. */
-export function toLatinDigits(value: string): string {
-  return value
-    .replace(/[۰-۹]/g, (digit) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)))
-    .replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)));
-}
 
 const digits = (value: string) => toLatinDigits(value.trim());
 

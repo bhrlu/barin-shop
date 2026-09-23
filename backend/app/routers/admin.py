@@ -1,7 +1,7 @@
 """Admin endpoints: dashboard stats, users, refunds, inventory, KPIs, audit log."""
 
 import logging
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -10,8 +10,9 @@ from sqlalchemy import text
 
 from app.auth import DbSession, StaffAudit, StaffOrders, StaffRefunds, StaffStats, StaffUsers
 from app.services.audit import record_audit
+from app.services.catalog_filters import split_multi
 from app.services.pagination import clamp_page_size, count_rows, envelope
-from app.services.roles import ROLE_CAPABILITIES, role_lockout_reason
+from app.services.roles import ROLE_CAPABILITIES, STAFF_ROLES, role_lockout_reason
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -64,12 +65,31 @@ async def stats(user: StaffStats, session: DbSession) -> dict:
     }
 
 
+# F4.3 (admin data table): optional server-side search / filter / sort for the admin
+# lists; omitted parameters keep the old answer exactly
+_USER_SORTS = {
+    "new": "p.created_at DESC",
+    "spent": "COALESCE(o.spent, 0) DESC, p.created_at DESC",
+    "orders": "COALESCE(o.order_count, 0) DESC, p.created_at DESC",
+}
+_STAFF_ROLE_LIST = sorted(STAFF_ROLES)
+
+
+def _like(term: str) -> str:
+    """`%term%` with LIKE wildcards in the term escaped (`\\` is the default escape)."""
+    escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
 @router.get("/users")
 async def users(
     user: StaffUsers,
     session: DbSession,
     page: int = Query(default=0, ge=0),
     page_size: int = Query(default=0, ge=0, le=100),
+    q: str | None = Query(default=None, max_length=100, description="email, name or phone"),
+    role: Literal["staff", "customer"] | None = None,
+    sort: Literal["new", "spent", "orders"] = "new",
 ) -> list[dict] | dict:
     """Customers with role/order aggregates; envelope when `page` is given."""
     base_sql = (
@@ -85,13 +105,26 @@ async def users(
         "                  SUM(total) FILTER (WHERE status <> 'cancelled') AS spent "
         "           FROM public.orders GROUP BY user_id) o ON o.user_id = p.id"
     )
+    conditions: list[str] = []
+    params: dict = {}
+    if q and q.strip():
+        conditions.append(
+            "(u.email ILIKE :q OR p.full_name ILIKE :q OR p.phone ILIKE :q)"
+        )
+        params["q"] = _like(q.strip())
+    if role is not None:
+        staff = "COALESCE(r.roles, '{}') && CAST(:staff AS text[])"
+        conditions.append(staff if role == "staff" else f"NOT ({staff})")
+        params["staff"] = _STAFF_ROLE_LIST
+    if conditions:
+        base_sql += " WHERE " + " AND ".join(conditions)
     page, page_size = clamp_page_size(page, page_size, default_size=20)
-    sql = base_sql + " ORDER BY p.created_at DESC"
+    sql = base_sql + " ORDER BY " + _USER_SORTS[sort]
     total = 0
     if page > 0:
-        total = await count_rows(session, base_sql, {})
+        total = await count_rows(session, base_sql, params)
         sql += f" LIMIT {page_size} OFFSET {(page - 1) * page_size}"
-    rows = (await session.execute(text(sql), {})).mappings().all()
+    rows = (await session.execute(text(sql), params)).mappings().all()
     items = [
         {
             **dict(r),
@@ -328,27 +361,73 @@ async def audit_logs(
     ]
 
 
+_ORDER_SORTS = {
+    "new": "o.created_at DESC",
+    "old": "o.created_at ASC",
+    "total_desc": "o.total DESC, o.created_at DESC",
+    "total_asc": "o.total ASC, o.created_at DESC",
+}
+
+
 @router.get("/orders")
 async def all_orders(
     user: StaffOrders,
     session: DbSession,
     page: int = Query(default=0, ge=0),
     page_size: int = Query(default=0, ge=0, le=100),
+    status_filter: Annotated[
+        list[str] | None,
+        Query(alias="status", description="repeatable and/or comma-separated order statuses"),
+    ] = None,
+    payment_status: str | None = None,
+    q: str | None = Query(
+        default=None, max_length=100,
+        description="order number, customer name, phone, email or tracking code",
+    ),
+    sort: Literal["new", "old", "total_desc", "total_asc"] = "new",
 ) -> list[dict] | dict:
     """All orders with items — same shape as GET /orders but unscoped.
     Envelope when `page` is given."""
-    from app.routers.orders import _ORDER_SELECT, _order_row
+    from app.routers.orders import (
+        _ALLOWED_PAYMENT_STATUS,
+        _ALLOWED_STATUS,
+        _ORDER_SELECT,
+        _order_row,
+    )
 
-    base_sql = _ORDER_SELECT + " GROUP BY o.id"
+    conditions: list[str] = []
+    params: dict = {}
+    statuses = split_multi(status_filter)
+    if statuses:
+        if not set(statuses) <= _ALLOWED_STATUS:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "وضعیت نامعتبر است")
+        conditions.append("o.status = ANY(:statuses)")
+        params["statuses"] = statuses
+    if payment_status:
+        if payment_status not in _ALLOWED_PAYMENT_STATUS:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "وضعیت پرداخت نامعتبر است")
+        conditions.append("o.payment_status = :payment_status")
+        params["payment_status"] = payment_status
+    if q and q.strip():
+        conditions.append(
+            "(o.order_number ILIKE :q OR o.tracking_code ILIKE :q "
+            " OR o.shipping_address->>'full_name' ILIKE :q "
+            " OR o.shipping_address->>'receiver' ILIKE :q "
+            " OR o.shipping_address->>'phone' ILIKE :q "
+            " OR o.user_id IN (SELECT id FROM public.users WHERE email ILIKE :q))"
+        )
+        params["q"] = _like(q.strip())
+    where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+    base_sql = _ORDER_SELECT + where + " GROUP BY o.id"
     page, page_size = clamp_page_size(page, page_size, default_size=20)
-    sql = base_sql + " ORDER BY o.created_at DESC"
+    sql = base_sql + " ORDER BY " + _ORDER_SORTS[sort]
     total = 0
     if page > 0:
         # count over the join without the item aggregation ordering; the
         # GROUP BY keeps one row per order so COUNT(*) is the order count
-        total = await count_rows(session, base_sql, {})
+        total = await count_rows(session, base_sql, params)
         sql += f" LIMIT {page_size} OFFSET {(page - 1) * page_size}"
-    rows = (await session.execute(text(sql), {})).mappings().all()
+    rows = (await session.execute(text(sql), params)).mappings().all()
     items = [_order_row(r) for r in rows]
     if page > 0:
         return envelope(items, total, page, page_size)

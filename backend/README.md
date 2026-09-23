@@ -136,6 +136,13 @@ unchanged. `GET /products/{id}/related` stays purely same-category.
 `{items, total, page, page_size, pages}`. **Without `?page=` they keep
 returning bare arrays.** `/admin/audit-logs` uses `?limit=&offset=` instead
 (append-only log).
+
+**Admin list filters (F4.3, all optional — omitted = the old answer):**
+`/admin/orders` takes `status` (repeatable / comma-separated; unknown → 422),
+`payment_status`, `q` (order number, receiver name, phone, customer email or
+tracking code; LIKE wildcards are literal) and `sort=new|old|total_desc|total_asc`;
+`/admin/users` takes `q` (email, name, phone), `role=staff|customer` and
+`sort=new|spent|orders`. The admin data table (`AdminDataTable`) drives them.
 | GET | `/admin/kpis?range=today\|7d\|30d\|all` | KPI aggregation: gross/net revenue, paid orders, AOV, pending refunds, low-stock, daily revenue series, status breakdown, deltas |
 | GET | `/admin/audit-logs` | audit trail (B5.1): filters `action`, `entity_type`, `entity_id`, `admin_id`, `limit`/`offset` paging; written automatically on privileged mutations. **Append-only at the DB level (B5.1b):** triggers refuse UPDATE/DELETE/TRUNCATE; deleting a user only nulls `admin_id` |
 | PUT | `/admin/users/{id}/roles` | set a user's staff roles `super_admin`/`order_manager`/`support` (B5.4, audited). **409** if the caller would remove their own role-management access or leave no account holding it (B5.4a; serialized by an advisory lock) |

@@ -2662,3 +2662,40 @@ Verification:
 
 Level: *browser tested*.
 → audit: [2026-09-23-abfe03-product-editor-rhf-zod.md](audit/2026-09-23-abfe03-product-editor-rhf-zod.md)
+
+## 2026-09-23 — F4.3 AdminDataTable (D8: @tanstack/react-table)
+
+The canonical admin table, `components/admin/AdminDataTable.tsx`:
+
+- search, filter chips, sort and server page are controlled by the screen;
+- page-scoped row selection drives a dark floating bulk bar, and the selection resets
+  on any page, filter, sort or search change;
+- `CopyValue` copy helper;
+- skeleton, empty and error-with-retry states.
+
+**Orders** (`/admin/orders`) now uses it:
+
+- search, status and payment chips, date/total sort;
+- copy for order number, phone, tracking code and address;
+- inline selects kept; the drawer opens from each row;
+- bulk status goes through one canonical `PATCH /orders/{id}` per order, so illegal
+  moves are refused per order and reported;
+- receiver names render: the old list read `receiver`, but checkout stores
+  `full_name`.
+
+**Users** (`/admin/users`) uses it with search, staff/customer chips and sort.
+
+**Backend:** additive optional params (`q`, `status`, `payment_status`, `sort` on
+orders; `q`, `role`, `sort` on users), with LIKE escaping and whitelisted sorts.
+`@tanstack/react-table` was added: +5 lockfile lines, and bun's unrelated URL
+rewrites were reverted.
+
+Verification:
+
+- 12 backend tests. Negative control: old admin.py fails 11.
+- pytest 242, smoke 241/0.
+- 26 browser checks, which caught two real bugs: sortable columns need accessors,
+  and an unpositioned scroller let absolute children widen the page at 390 px.
+
+Not done: the other admin lists. Level: *browser + integration tested*.
+→ audit: [2026-09-23-f43-admin-data-table.md](audit/2026-09-23-f43-admin-data-table.md)

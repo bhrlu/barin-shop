@@ -548,6 +548,25 @@ function exportQuery(range: ExportRange, status?: string): string {
  * `customer` rows are outside its reach and are never sent. */
 export type StaffRole = "super_admin" | "order_manager" | "support";
 
+/** `GET /admin/orders` query (F4.3). `q`: order number, name, phone, email, tracking. */
+export type AdminOrderListParams = {
+  page?: number;
+  pageSize?: number;
+  q?: string;
+  status?: string[];
+  payment_status?: string;
+  sort?: "new" | "old" | "total_desc" | "total_asc";
+};
+
+/** `GET /admin/users` query (F4.3). `q`: email, name or phone. */
+export type AdminUserListParams = {
+  page?: number;
+  pageSize?: number;
+  q?: string;
+  role?: "staff" | "customer";
+  sort?: "new" | "spent" | "orders";
+};
+
 export type AdminUser = {
   id: string;
   email: string | null;
@@ -833,10 +852,13 @@ export const api = {
   // --- admin ---
   adminStats: () => request<AdminStats>("/admin/stats"),
   adminKpis: (range: KpiRange = "30d") => request<AdminKpis>(`/admin/kpis?range=${range}`),
-  adminUsers: (page?: number, pageSize?: number) => {
+  adminUsers: (params: AdminUserListParams = {}) => {
     const qs = new URLSearchParams();
-    if (page) qs.set("page", String(page));
-    if (pageSize) qs.set("page_size", String(pageSize));
+    if (params.page) qs.set("page", String(params.page));
+    if (params.pageSize) qs.set("page_size", String(params.pageSize));
+    if (params.q?.trim()) qs.set("q", params.q.trim());
+    if (params.role) qs.set("role", params.role);
+    if (params.sort) qs.set("sort", params.sort);
     const suffix = qs.toString() ? `?${qs}` : "";
     return request<AdminUser[] | Page<AdminUser>>(`/admin/users${suffix}`);
   },
@@ -846,10 +868,15 @@ export const api = {
       method: "PUT",
       json: { roles },
     }),
-  adminOrders: (page?: number, pageSize?: number) => {
+  // F4.3: optional server-side search / filters / sort (omitted = the old answer)
+  adminOrders: (params: AdminOrderListParams = {}) => {
     const qs = new URLSearchParams();
-    if (page) qs.set("page", String(page));
-    if (pageSize) qs.set("page_size", String(pageSize));
+    if (params.page) qs.set("page", String(params.page));
+    if (params.pageSize) qs.set("page_size", String(params.pageSize));
+    if (params.q?.trim()) qs.set("q", params.q.trim());
+    for (const value of params.status ?? []) qs.append("status", value);
+    if (params.payment_status) qs.set("payment_status", params.payment_status);
+    if (params.sort) qs.set("sort", params.sort);
     const suffix = qs.toString() ? `?${qs}` : "";
     return request<Order[] | Page<Order>>(`/admin/orders${suffix}`);
   },

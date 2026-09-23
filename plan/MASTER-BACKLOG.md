@@ -507,7 +507,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "F4.3",
+    "agent_start_task": "AB-BE-01",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -755,13 +755,16 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "F4.3",
       "title": "Reusable AdminDataTable",
       "priority": "P2",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "frontend",
       "depends_on": [],
       "blocks": [],
       "batch": "F",
       "source": "frontend-tasks.md",
-      "scope": "Build the canonical admin table abstraction with @tanstack/react-table, controlled server-side state, filters, sorting, pagination, bulk actions, and copy helpers."
+      "scope": "Build the canonical admin table abstraction with @tanstack/react-table, controlled server-side state, filters, sorting, pagination, bulk actions, and copy helpers.",
+      "audit": "plan/audit/2026-09-23-f43-admin-data-table.md",
+      "verification_level": "browser tested + integration tested",
+      "completed": "2026-09-23"
     },
     {
       "id": "AB-FE-01",
@@ -1308,11 +1311,11 @@ changes to the file shipped in sequence; the collision is closed.
   ],
   "counts": {
     "total_executable": 52,
-    "done": 33,
-    "open": 19,
+    "done": 34,
+    "open": 18,
     "P0": 0,
     "P1": 0,
-    "P2": 3,
+    "P2": 2,
     "P3": 16,
     "blocked": 0,
     "dropped": 2,
@@ -2053,7 +2056,10 @@ Documented before/after bundle measurement + successful build.
 ## F4.3 — Reusable AdminDataTable
 
 * **Layer:** Frontend
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-f43-admin-data-table.md`](audit/2026-09-23-f43-admin-data-table.md)
+* **Verification level:** browser tested + integration tested
+* **Delivered:** `AdminDataTable` (`@tanstack/react-table`, D8): controlled search / filter chips / sort / server pagination, row selection → floating bulk bar, `CopyValue`, loading/empty/error states; used by `/admin/orders` (bulk status through the state machine, copy order#/phone/tracking/address, receiver names fixed) and `/admin/users`. Backend: optional `q`/`status`/`payment_status`/`sort` on `/admin/orders`, `q`/`role`/`sort` on `/admin/users` (12 tests, negative control 11 fail; smoke 241/0). 26 browser checks. Browser + integration tested.
 * **Dependencies:** resolved D8
 
 ### Canonical library
@@ -3450,7 +3456,7 @@ B4.13
 B2.1a  (needs real credentials)
 B6.8a
 F3.4b
-F4.3
+F4.3  (DONE 2026-09-23)
 AB-FE-06
 ```
 
@@ -3483,13 +3489,13 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**19** open · **33** DONE · 52 executable in total.
+**18** open · **34** DONE · 52 executable in total.
 25 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
 
-**19** (`B2.1a` additionally needs real provider credentials from the user)
+**18** (`B2.1a` additionally needs real provider credentials from the user)
 
 ### Blocked
 
@@ -3526,9 +3532,9 @@ D1–D9 are resolved.
 | --------- | --------: |
 | P0        |         0 |
 | P1        |         0 |
-| P2        |         3 |
+| P2        |         2 |
 | P3        |        16 |
-| **Total** |    **19** |
+| **Total** |    **18** |
 
 Generated from the JSON index on 2026-09-23.
 
@@ -3644,11 +3650,11 @@ were freshly executed.
 ## START HERE
 
 ```text
-F4.3
+AB-BE-01
 ```
 
-33 of 52 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. next P2 — reusable AdminDataTable
+34 of 52 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. next P2 — inventory ledger (depends on B6.8, done)
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -3752,11 +3758,11 @@ Reconciliation date:
 Current state:
 
 ```text
-19 remaining implementation units (B2.1a, AB-BE-01, F4.3, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B6.15, B5.1e, F5.17, B6.18)
-33 completed implementation units
+18 remaining implementation units (B2.1a, AB-BE-01, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B6.15, B5.1e, F5.17, B6.18)
+34 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = F4.3
+NEXT = AB-BE-01
 ```

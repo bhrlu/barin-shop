@@ -325,12 +325,14 @@ conflict (DESIGN_SYSTEM.md §5).
   backend capabilities — support sees داشبورد/پیام‌ها/نظرات only, order_manager
   adds fulfillment). Breadcrumbs/avatar/command-palette deferred — see audit.
   → audit: [2026-09-21-frontend-f42-admin-shell-role-gating.md](audit/2026-09-21-frontend-f42-admin-shell-role-gating.md)
-- [ ] **F4.3 Reusable admin data grid** (`[FE-02]`) — search, filter chips, sort,
+- [x] **F4.3 Reusable admin data grid** (`[FE-02]`) — search, filter chips, sort,
   pagination, bulk actions, copy-to-clipboard for tracking codes/phones. Needs a
   **decision to install `@tanstack/react-table`**; overlaps F2.5 (pagination).
   The export buttons for `/admin/export/*.{csv,xlsx}` (B2.2) shipped on their
   own in AB-FE-02 (`components/admin/ExportControls.tsx`); when the grid is
   built, its toolbar can host them.
+  Done (2026-09-23): `AdminDataTable` (`@tanstack/react-table`, D8): controlled search / filter chips / sort / server pagination, row selection → floating bulk bar, `CopyValue`, loading/empty/error states; used by `/admin/orders` (bulk status through the state machine, copy order#/phone/tracking/address, receiver names fixed) and `/admin/users`. Backend: optional `q`/`status`/`payment_status`/`sort` on `/admin/orders`, `q`/`role`/`sort` on `/admin/users` (12 tests, negative control 11 fail; smoke 241/0). 26 browser checks. Browser + integration tested.
+  → audit: [2026-09-23-f43-admin-data-table.md](audit/2026-09-23-f43-admin-data-table.md)
 - [x] **F4.4 Order detail drawer + invoice printing** (`[FE-05]`) — `Sheet` with the
   fulfilment stepper, customer address box with copy, itemised breakdown, postal
   tracking input (F2.8) and a `@media print` A4/A5 invoice (no print stylesheet

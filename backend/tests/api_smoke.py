@@ -105,6 +105,29 @@ def main() -> int:
         ok = isinstance(env, dict) and {"items", "total", "page", "page_size", "pages"} <= set(env)
         total = env.get("total") if isinstance(env, dict) else "?"
         check(f"GET {ep} → envelope", ok, f"total={total}")
+    # --- admin data table filters (F4.3) ---
+    filtered = call(
+        "GET", "/admin/orders?page=1&page_size=5&status=pending,cancelled&sort=total_asc", admin
+    ).json()
+    totals = [o["total"] for o in filtered.get("items", [])] if isinstance(filtered, dict) else []
+    check(
+        "GET /admin/orders?status&sort → filtered envelope, ascending totals",
+        isinstance(filtered, dict)
+        and all(o["status"] in {"pending", "cancelled"} for o in filtered["items"])
+        and totals == sorted(totals),
+        f"total={filtered.get('total') if isinstance(filtered, dict) else '?'}",
+    )
+    staff = call("GET", "/admin/users?page=1&role=staff&q=sande.local", admin).json()
+    check(
+        "GET /admin/users?role=staff&q → the seeded staff accounts",
+        isinstance(staff, dict) and staff["total"] >= 3
+        and all(set(u["roles"]) & {"admin", "super_admin", "order_manager", "support"}
+                for u in staff["items"]),
+        f"total={staff.get('total') if isinstance(staff, dict) else '?'}",
+    )
+    bad = call("GET", "/admin/orders?page=1&status=lost", admin)
+    check("GET /admin/orders?status=lost → 422", bad is not None and bad.status_code == 422,
+          f"{bad.status_code if bad is not None else 0}")
     offset_rows = call("GET", "/admin/audit-logs?limit=2&offset=2", admin).json()
     check(
         "GET /admin/audit-logs offset", isinstance(offset_rows, list), f"rows={len(offset_rows)}"

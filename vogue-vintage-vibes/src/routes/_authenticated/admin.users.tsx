@@ -1,12 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ColumnDef, SortingState } from "@tanstack/react-table";
 import { useState } from "react";
 import { ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
-import { api, ApiError, toPage, type AdminUser, type StaffRole } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  toPage,
+  type AdminUser,
+  type AdminUserListParams,
+  type StaffRole,
+} from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { formatToman, toFa } from "@/lib/format";
-import { Pager } from "@/components/Pager";
+import { formatFaDate, formatToman, toFa, toLatinDigits } from "@/lib/format";
+import { AdminDataTable, CopyValue } from "@/components/admin/AdminDataTable";
 import {
   Dialog,
   DialogContent,
@@ -50,78 +58,157 @@ export const Route = createFileRoute("/_authenticated/admin/users")({
 
 const PAGE_SIZE = 20;
 
+/** Column → `GET /admin/users?sort=` (F4.3); the backend sorts these newest / largest first. */
+const USER_SORT: Record<string, AdminUserListParams["sort"]> = {
+  created_at: "new",
+  order_count: "orders",
+  spent: "spent",
+};
+
 function AdminUsers() {
   const { user: me } = useAuth();
   const [page, setPage] = useState(1);
+  const [q, setQ] = useState("");
+  const [role, setRole] = useState<string[]>([]);
+  const [sorting, setSorting] = useState<SortingState>([{ id: "created_at", desc: true }]);
   const [editing, setEditing] = useState<AdminUser | null>(null);
-  const { data, isLoading } = useQuery({
-    queryKey: ["admin-users", page],
-    queryFn: () => toPage(api.adminUsers(page, PAGE_SIZE)),
+
+  const params: AdminUserListParams = {
+    page,
+    pageSize: PAGE_SIZE,
+    q: toLatinDigits(q),
+    ...(role[0] ? { role: role[0] as "staff" | "customer" } : {}),
+    sort: USER_SORT[sorting[0]?.id ?? "created_at"] ?? "new",
+  };
+  const users = useQuery({
+    queryKey: ["admin-users", params],
+    queryFn: () => toPage(api.adminUsers(params)),
+    placeholderData: keepPreviousData,
   });
-  const users = data?.items ?? [];
 
-  if (isLoading)
-    return (
-      <div className="rounded-3xl border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
-        در حال بارگذاری…
-      </div>
-    );
-
-  if (!users.length)
-    return (
-      <div className="rounded-3xl border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
-        کاربری ثبت نشده است.
-      </div>
-    );
+  const columns: ColumnDef<AdminUser>[] = [
+    {
+      id: "user",
+      header: "کاربر",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <div className="min-w-44">
+          <p>{row.original.full_name ?? "بدون نام"}</p>
+          <div className="text-xs text-muted-foreground">
+            <CopyValue value={row.original.email} label="ایمیل" mono={false} />
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "phone",
+      header: "تلفن",
+      enableSorting: false,
+      cell: ({ row }) => <CopyValue value={row.original.phone} label="تلفن" />,
+    },
+    {
+      id: "roles",
+      header: "نقش‌ها",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <div className="flex flex-wrap gap-1.5 text-xs">
+          {row.original.roles.map((item) => (
+            <span key={item} className="rounded-full bg-sand px-2.5 py-0.5">
+              {ROLE_LABELS[item] ?? item}
+            </span>
+          ))}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "order_count",
+      header: "سفارش",
+      sortDescFirst: true,
+      cell: ({ row }) => toFa(row.original.order_count),
+    },
+    {
+      accessorKey: "spent",
+      header: "خرید (تومان)",
+      sortDescFirst: true,
+      cell: ({ row }) => formatToman(row.original.spent),
+    },
+    {
+      accessorKey: "created_at",
+      header: "عضویت",
+      sortDescFirst: true,
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap text-xs">{formatFaDate(row.original.created_at)}</span>
+      ),
+    },
+    {
+      id: "actions",
+      header: () => <span className="sr-only">اقدام</span>,
+      enableSorting: false,
+      cell: ({ row }) => {
+        const isSelf = row.original.id === me?.id;
+        return (
+          <button
+            type="button"
+            onClick={() => setEditing(row.original)}
+            disabled={isSelf}
+            title={isSelf ? "نقش‌های حساب خودتان را از اینجا نمی‌توانید تغییر دهید" : undefined}
+            className="flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-terracotta hover:text-terracotta disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <ShieldCheck className="size-3.5" aria-hidden />
+            نقش‌ها
+          </button>
+        );
+      },
+    },
+  ];
 
   return (
     <>
-      <ul className="divide-y divide-border rounded-3xl border border-border">
-        {users.map((user) => {
-          const isSelf = user.id === me?.id;
-          return (
-            <li
-              key={user.id}
-              className="flex flex-wrap items-center justify-between gap-3 p-5 text-sm"
-            >
-              <div>
-                <p>{user.full_name ?? "بدون نام"}</p>
-                <p className="mt-1 text-xs text-muted-foreground" dir="ltr">
-                  {user.phone ?? "—"} ·{" "}
-                  {toFa(new Date(user.created_at).toLocaleDateString("fa-IR"))}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-3 text-xs">
-                {user.roles.map((role) => (
-                  <span key={role} className="rounded-full bg-sand px-3 py-1">
-                    {ROLE_LABELS[role] ?? role}
-                  </span>
-                ))}
-                <span>{toFa(user.order_count)} سفارش</span>
-                <span>{formatToman(user.spent)} تومان</span>
-                <button
-                  type="button"
-                  onClick={() => setEditing(user)}
-                  disabled={isSelf}
-                  title={
-                    isSelf ? "نقش‌های حساب خودتان را از اینجا نمی‌توانید تغییر دهید" : undefined
-                  }
-                  className="flex items-center gap-1 rounded-full border border-border px-3 py-1 text-muted-foreground transition-colors hover:border-terracotta hover:text-terracotta disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <ShieldCheck className="size-3.5" aria-hidden />
-                  نقش‌ها
-                </button>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-      <Pager
-        className="mt-6"
-        page={data?.page ?? page}
-        pages={data?.pages ?? 1}
-        total={data?.total}
-        onChange={setPage}
+      <AdminDataTable
+        caption="کاربران"
+        columns={columns}
+        data={users.data?.items ?? []}
+        getRowId={(user) => user.id}
+        page={users.data?.page ?? page}
+        pages={users.data?.pages ?? 1}
+        total={users.data?.total}
+        onPageChange={setPage}
+        sorting={sorting}
+        // one column at a time, always largest / newest first (what the API sorts by)
+        onSortingChange={(updater) => {
+          const next = typeof updater === "function" ? updater(sorting) : updater;
+          setSorting(next.slice(0, 1).map((item) => ({ ...item, desc: true })));
+          setPage(1);
+        }}
+        search={{
+          value: q,
+          onChange: (value) => {
+            setQ(value);
+            setPage(1);
+          },
+          placeholder: "جست‌وجو: ایمیل، نام یا تلفن",
+        }}
+        filters={[
+          {
+            id: "role",
+            label: "نوع حساب",
+            multiple: false,
+            options: [
+              { value: "staff", label: "کارکنان" },
+              { value: "customer", label: "مشتریان" },
+            ],
+            selected: role,
+            onChange: (next) => {
+              setRole(next);
+              setPage(1);
+            },
+          },
+        ]}
+        isLoading={users.isLoading}
+        isFetching={users.isFetching}
+        isError={users.isError}
+        onRetry={() => void users.refetch()}
+        emptyMessage={q || role.length ? "کاربری با این جست‌وجو پیدا نشد." : "کاربری ثبت نشده است."}
       />
       {editing ? (
         <RolesDialog key={editing.id} user={editing} onClose={() => setEditing(null)} />

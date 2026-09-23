@@ -4,6 +4,13 @@ export function toFa(value: string | number): string {
   return String(value).replace(/\d/g, (d) => FA_DIGITS[Number(d)] ?? d);
 }
 
+/** «۱۲۰۰۰۰» / «١٢٠٠٠٠» → "120000" (Persian and Arabic digits); anything else as typed. */
+export function toLatinDigits(value: string): string {
+  return value
+    .replace(/[۰-۹]/g, (digit) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)))
+    .replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)));
+}
+
 export function formatToman(value: number): string {
   return toFa(value.toLocaleString("en-US"));
 }
