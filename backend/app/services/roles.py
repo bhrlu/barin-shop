@@ -59,3 +59,20 @@ def has_capability(roles: set[str], capability: str) -> bool:
     """Can any of the caller's roles exercise this capability?"""
     required = ROLE_CAPABILITIES.get(capability, {"admin", "super_admin"})
     return bool(roles & required)
+
+
+def role_lockout_reason(
+    *, is_self: bool, target_roles_after: set[str], other_users_holders: int
+) -> str | None:
+    """Why a role change must be refused (B5.4a), or None when it is allowed.
+
+    The `users` capability is the only way to repair roles from the UI, so a change
+    may neither take it from the caller themselves nor leave nobody holding it
+    (`other_users_holders` counts every *other* account that holds it).
+    """
+    keeps = has_capability(target_roles_after, "users")
+    if is_self and not keeps:
+        return "نمی‌توانید دسترسی مدیریت کاربران را از حساب خودتان بردارید"
+    if other_users_holders + (1 if keeps else 0) == 0:
+        return "دست‌کم یک حساب باید دسترسی مدیریت کاربران را نگه دارد"
+    return None

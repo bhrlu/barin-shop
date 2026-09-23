@@ -11,6 +11,7 @@ from sqlalchemy import text
 from app.auth import DbSession, StaffAudit, StaffOrders, StaffRefunds, StaffStats, StaffUsers
 from app.services.audit import record_audit
 from app.services.pagination import clamp_page_size, count_rows, envelope
+from app.services.roles import ROLE_CAPABILITIES, role_lockout_reason
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -500,6 +501,12 @@ async def set_user_roles(
     if target is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "کاربر پیدا نشد")
 
+    # B5.4a: one role change at a time, so two admins demoting each other
+    # concurrently cannot both pass the lockout check below
+    await session.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended('roles:users', 0))")
+    )
+
     old_rows = (
         await session.execute(
             text(
@@ -511,6 +518,36 @@ async def set_user_roles(
     ).all()
     old_roles = sorted(r[0] for r in old_rows)
     new_roles = sorted(set(body.roles))
+
+    # the roles this endpoint does not manage (legacy `admin`, `customer`) stay
+    kept = {
+        r[0]
+        for r in (
+            await session.execute(
+                text(
+                    "SELECT role::text FROM public.user_roles "
+                    "WHERE user_id = cast(:uid as uuid) AND NOT (role::text = ANY(:roles))"
+                ),
+                {"uid": str(user_id), "roles": list(_ALLOWED_ROLES)},
+            )
+        ).all()
+    }
+    other_holders = (
+        await session.execute(
+            text(
+                "SELECT COUNT(DISTINCT user_id) FROM public.user_roles "
+                "WHERE role::text = ANY(:users_roles) AND user_id <> cast(:uid as uuid)"
+            ),
+            {"users_roles": sorted(ROLE_CAPABILITIES["users"]), "uid": str(user_id)},
+        )
+    ).scalar_one()
+    reason = role_lockout_reason(
+        is_self=user_id == user.id,
+        target_roles_after=kept | set(new_roles),
+        other_users_holders=int(other_holders),
+    )
+    if reason:
+        raise HTTPException(status.HTTP_409_CONFLICT, reason)
 
     await session.execute(
         text(

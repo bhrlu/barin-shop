@@ -507,7 +507,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "B5.4a",
+    "agent_start_task": "B5.4b",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -946,7 +946,7 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "B5.4a",
       "title": "Role-change lockout guard",
       "priority": "P2",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "backend",
       "depends_on": [],
       "blocks": [],
@@ -954,7 +954,10 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "backend-tasks.md",
       "discovered_as": "NEW-F56-1",
       "discovered_during": "F5.6",
-      "scope": "PUT /admin/users/{id}/roles must reject (409) a caller removing their own users-capable role and the removal of the last holder of the users capability; add pytest coverage for both and for the allowed cases."
+      "scope": "PUT /admin/users/{id}/roles must reject (409) a caller removing their own users-capable role and the removal of the last holder of the users capability; add pytest coverage for both and for the allowed cases.",
+      "audit": "plan/audit/2026-09-23-b54a-role-lockout-guard.md",
+      "verification_level": "integration tested",
+      "completed": "2026-09-23"
     },
     {
       "id": "F5.10",
@@ -1179,11 +1182,11 @@ changes to the file shipped in sequence; the collision is closed.
   ],
   "counts": {
     "total_executable": 46,
-    "done": 18,
-    "open": 28,
+    "done": 19,
+    "open": 27,
     "P0": 0,
     "P1": 0,
-    "P2": 15,
+    "P2": 14,
     "P3": 13,
     "blocked": 0,
     "dropped": 2,
@@ -2581,7 +2584,10 @@ full pytest + ruff.
 ## B5.4a — Role-change lockout guard
 
 * **Layer:** Backend
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-b54a-role-lockout-guard.md`](audit/2026-09-23-b54a-role-lockout-guard.md)
+* **Verification level:** integration tested
+* **Delivered:** 409 when a role change would take role management from the caller or leave nobody holding it; `role_lockout_reason` in `services/roles.py`, serialized by an advisory lock. 9 tests (negative control: self-demotion fails on the old code).
 * **Priority:** P2
 * **Batch:** C
 * **Dependencies:** none
@@ -2995,7 +3001,7 @@ B5.1b
 AB-BE-01
 AB-BE-02
 B5.1c
-B5.4a
+B5.4a  (DONE 2026-09-23)
 B2.2b
 B5.4b
 B5.1d  (DONE 2026-09-23)
@@ -3087,13 +3093,13 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**28** open · **18** DONE · 46 executable in total.
+**27** open · **19** DONE · 46 executable in total.
 19 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
 
-**28** (`B2.1a` additionally needs real provider credentials from the user)
+**27** (`B2.1a` additionally needs real provider credentials from the user)
 
 ### Blocked
 
@@ -3130,9 +3136,9 @@ D1–D9 are resolved.
 | --------- | --------: |
 | P0        |         0 |
 | P1        |         0 |
-| P2        |        15 |
+| P2        |        14 |
 | P3        |        13 |
-| **Total** |    **28** |
+| **Total** |    **27** |
 
 Generated from the JSON index on 2026-09-23.
 
@@ -3248,11 +3254,11 @@ were freshly executed.
 ## START HERE
 
 ```text
-B5.4a
+B5.4b
 ```
 
-18 of 46 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. **`B5.4a`** (role-change lockout guard; P2, Batch C, security) is next — the user asked to run the whole backlog.
+19 of 46 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. **`B5.4b`** (`include_inactive` follows `is_admin`, not the `catalog` capability; P2, Batch C) is next.
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -3356,11 +3362,11 @@ Reconciliation date:
 Current state:
 
 ```text
-28 remaining implementation units (B2.1a, B5.1b, AB-BE-01, AB-BE-02, F5.8, F5.7, F4.3, AB-FE-01, AB-FE-03, AB-FE-04, F3.5b, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B6.9a, B5.1c, B5.4a, F5.10, B2.2b, B5.4b, F5.11, F5.12, B6.15)
-18 completed implementation units
+27 remaining implementation units (B2.1a, B5.1b, AB-BE-01, AB-BE-02, F5.8, F5.7, F4.3, AB-FE-01, AB-FE-03, AB-FE-04, F3.5b, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B6.9a, B5.1c, F5.10, B2.2b, B5.4b, F5.11, F5.12, B6.15)
+19 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = B5.4a
+NEXT = B5.4b
 ```

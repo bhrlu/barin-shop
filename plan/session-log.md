@@ -2359,3 +2359,13 @@ to clear), shown on the card; the page's duplicate `AdminCoupon` type replaced b
 canonical import. Browser 14/14 (real discount checked via `/coupons/validate`),
 coupon regressions 15/15 + 14/14, tsc/lint/build clean. Level: *browser tested*.
 → audit: [2026-09-23-f59-coupon-cap-field.md](audit/2026-09-23-f59-coupon-cap-field.md)
+
+## 2026-09-23 — B5.4a role-change lockout guard
+
+`PUT /admin/users/{id}/roles` now answers 409 when the caller would lose role
+management themselves or when no account would keep it; the pure decision lives in
+`services/roles.py::role_lockout_reason`, the endpoint takes an advisory lock so two
+admins demoting each other cannot both pass. 9 tests (negative control), pytest 179,
+smoke 229/0. Level: *integration tested*. "No holder left" is pinned by pure tests
+only (the dev DB always keeps the seeded admin).
+→ audit: [2026-09-23-b54a-role-lockout-guard.md](audit/2026-09-23-b54a-role-lockout-guard.md)

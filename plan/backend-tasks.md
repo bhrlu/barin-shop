@@ -291,12 +291,14 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   (audited as `update_user_roles`); demo staff accounts seeded. Smoke: 156
   checks, 0 failed — capability matrix asserted end-to-end.
   → audit: [2026-09-21-backend-b54-granular-staff-roles.md](audit/2026-09-21-backend-b54-granular-staff-roles.md)
-- [ ] **B5.4a Role-change lockout guard** (`NEW-F56-1`, discovered during F5.6) —
+- [x] **B5.4a Role-change lockout guard** (`NEW-F56-1`, discovered during F5.6) —
   `PUT /admin/users/{id}/roles` lets a caller demote themselves and remove the
   last `super_admin`; if nobody keeps the `users` capability, roles can only be
   fixed in the DB. Reject self-demotion and removal of the last holder of the
   `users` capability with 409, with a test. The F5.6 UI already disables the
   caller's own row, but that is UX only.
+  Done (2026-09-23): 409 when a role change would take role management from the caller or leave nobody holding it; `role_lockout_reason` in `services/roles.py`, serialized by an advisory lock. 9 tests (negative control: self-demotion fails on the old code).
+  → audit: [2026-09-23-b54a-role-lockout-guard.md](audit/2026-09-23-b54a-role-lockout-guard.md)
 - [ ] **B5.4b `include_inactive` follows `is_admin`, not the `catalog` capability**
   (`NEW-ABFE05-1`, discovered during AB-FE-05) — `GET /products` shows inactive
   products only to admin/super_admin, so an `order_manager` (who may edit the

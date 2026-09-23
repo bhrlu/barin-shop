@@ -137,7 +137,7 @@ returning bare arrays.** `/admin/audit-logs` uses `?limit=&offset=` instead
 (append-only log).
 | GET | `/admin/kpis?range=today\|7d\|30d\|all` | KPI aggregation: gross/net revenue, paid orders, AOV, pending refunds, low-stock, daily revenue series, status breakdown, deltas |
 | GET | `/admin/audit-logs` | audit trail (B5.1): filters `action`, `entity_type`, `entity_id`, `admin_id`, `limit`/`offset` paging; written automatically on privileged mutations |
-| PUT | `/admin/users/{id}/roles` | set a user's staff roles `super_admin`/`order_manager`/`support` (B5.4, audited) |
+| PUT | `/admin/users/{id}/roles` | set a user's staff roles `super_admin`/`order_manager`/`support` (B5.4, audited). **409** if the caller would remove their own role-management access or leave no account holding it (B5.4a; serialized by an advisory lock) |
 | GET/PATCH | `/admin/settings/notifications` | SMS/email switches (B2.1, `settings` capability = admin/super_admin). `PATCH {sms_enabled?, email_enabled?}` (strict booleans, at least one → else 400; audited). Response adds per channel `*_provider`, `*_configured` (credentials present) and `*_active` (switch **and** configured); `internal_enabled` is always `true` |
 | PATCH | `/refunds/{id}` | resolve a refund request — settling (`refunded`) **requires** `bank_tracking_code` (Paya/Satna); every resolution records `resolved_by` + `resolved_at` |
 | GET/DELETE | `/admin/contact-messages` | contact inbox (`?status=new`), delete a message |
