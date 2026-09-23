@@ -247,10 +247,24 @@ def main() -> int:
     )
 
     # --- contact inbox mark-answered (F2.1b) ---
-    listed = call("GET", "/admin/contact-messages?status=new", admin)
+    # B6.20: this run's POST /contact may have been refused by the per-IP limit
+    # (5 / 10 min) on back-to-back runs, which used to skip this whole block silently.
+    # Exercise this run's message when it exists, else any message, and restore its
+    # status. One smoke message is kept as the fixture for later throttled runs (a
+    # second one is deleted), so the block always runs. No message at all is a FAIL.
+    own_id = (
+        str(contact.json()["id"]) if contact is not None and contact.status_code == 201 else None
+    )
+    listed = call("GET", "/admin/contact-messages?limit=200", admin)
     msgs = listed.json() if listed is not None and listed.status_code == 200 else []
-    msg2 = next((m["id"] for m in msgs if m.get("status") == "new"), None)
-    if msg2:
+    target = next((m for m in msgs if str(m.get("id")) == own_id), None) or next(iter(msgs), None)
+    check(
+        "contact inbox has a message to exercise",
+        target is not None,
+        f"own={'yes' if own_id else 'rate-limited'} inbox={len(msgs)}",
+    )
+    if target:
+        msg2, original = target["id"], target.get("status", "new")
         ans = call(
             "PATCH", f"/admin/contact-messages/{msg2}", admin, json={"status": "answered"}
         )
@@ -265,8 +279,12 @@ def main() -> int:
             bad is not None and bad.status_code == 422,
             f"{bad.status_code if bad else 0}",
         )
-        call("PATCH", f"/admin/contact-messages/{msg2}", admin, json={"status": "new"})
-        call("DELETE", f"/admin/contact-messages/{msg2}", admin)
+        call("PATCH", f"/admin/contact-messages/{msg2}", admin, json={"status": original})
+        older_smoke = any(
+            m.get("contact") == "smoke@example.com" and str(m.get("id")) != own_id for m in msgs
+        )
+        if own_id and older_smoke:
+            call("DELETE", f"/admin/contact-messages/{own_id}", admin)
 
     # --- favorites ---
     call("GET", "/favorites", customer)

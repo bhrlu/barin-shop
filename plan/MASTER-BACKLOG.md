@@ -1357,7 +1357,7 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "B6.20",
       "title": "Smoke contact-inbox checks skip silently under the rate limit",
       "priority": "P3",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "backend_tests",
       "depends_on": [],
       "blocks": [],
@@ -1365,7 +1365,10 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "backend-tasks.md",
       "discovered_as": "NEW-B51C-1",
       "discovered_during": "B5.1c",
-      "scope": "tests/api_smoke.py runs its contact inbox checks (mark answered, bogus status 422, cleanup) only when a `new` message exists; its own POST /contact is throttled (5/10 min/IP) on back-to-back runs, so 6 entries vanish without a FAIL. Seed the message directly (or record an explicit FAIL/skip line) so the run is deterministic."
+      "scope": "tests/api_smoke.py runs its contact inbox checks (mark answered, bogus status 422, cleanup) only when a `new` message exists; its own POST /contact is throttled (5/10 min/IP) on back-to-back runs, so 6 entries vanish without a FAIL. Seed the message directly (or record an explicit FAIL/skip line) so the run is deterministic.",
+      "audit": "plan/audit/2026-09-23-b620-smoke-contact-inbox-deterministic.md",
+      "verification_level": "locally tested",
+      "completed": "2026-09-23"
     }
   ],
   "excluded": [
@@ -1387,12 +1390,12 @@ changes to the file shipped in sequence; the collision is closed.
   ],
   "counts": {
     "total_executable": 56,
-    "done": 39,
-    "open": 17,
+    "done": 40,
+    "open": 16,
     "P0": 0,
     "P1": 0,
     "P2": 0,
-    "P3": 17,
+    "P3": 16,
     "blocked": 0,
     "dropped": 2,
     "obsolete": 1,
@@ -2700,7 +2703,10 @@ old code. The live race probe shows 0 double restores.
 ## B6.20 — Smoke contact-inbox checks skip silently under the rate limit
 
 * **Layer:** Backend tests
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-b620-smoke-contact-inbox-deterministic.md`](audit/2026-09-23-b620-smoke-contact-inbox-deterministic.md)
+* **Verification level:** locally tested
+* **Delivered:** The smoke's contact-inbox block exercises this run's message or any existing one (status restored), keeps one smoke message as a fixture for throttled runs, never deletes others' messages, and FAILs explicitly when nothing exists. Four back-to-back runs: 0 failed, identical check sets. Locally tested.
 * **Priority:** P3
 * **Batch:** C
 * **Dependencies:** none
@@ -3627,7 +3633,7 @@ B6.15  (DONE 2026-09-23)
 B6.17  (DONE 2026-09-23)
 B6.18
 B6.19  (DONE 2026-09-23)
-B6.20
+B6.20  (DONE 2026-09-23)
 ```
 
 `AB-BE-01` begins after `B6.8`.
@@ -3717,13 +3723,13 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**17** open · **39** DONE · 56 executable in total.
+**16** open · **40** DONE · 56 executable in total.
 29 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
 
-**17** (`B2.1a` additionally needs real provider credentials from the user)
+**16** (`B2.1a` additionally needs real provider credentials from the user)
 
 ### Blocked
 
@@ -3761,8 +3767,8 @@ D1–D9 are resolved.
 | P0        |         0 |
 | P1        |         0 |
 | P2        |         0 |
-| P3        |        17 |
-| **Total** |    **17** |
+| P3        |        16 |
+| **Total** |    **16** |
 
 Generated from the JSON index on 2026-09-23.
 
@@ -3881,7 +3887,7 @@ were freshly executed.
 F5.10
 ```
 
-39 of 56 executable units are DONE — each links its audit
+40 of 56 executable units are DONE — each links its audit
 and verification level in the JSON index and in its own section. next P3 (Batch D) — staff nav tabs visible to non-staff in the admin shell
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
@@ -3986,8 +3992,8 @@ Reconciliation date:
 Current state:
 
 ```text
-17 remaining implementation units (B2.1a, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, F5.10, B2.2b, F5.11, B5.1e, F5.17, B6.18, F5.19, B2.5a, B6.20)
-39 completed implementation units
+16 remaining implementation units (B2.1a, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, F5.10, B2.2b, F5.11, B5.1e, F5.17, B6.18, F5.19, B2.5a)
+40 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete

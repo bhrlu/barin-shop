@@ -2808,3 +2808,15 @@ POST /contact is rate-limited on back-to-back runs. Recorded as **B6.20**.
 
 Level: *integration tested*.
 → audit: [2026-09-23-b51c-audit-log-admin-id-422.md](audit/2026-09-23-b51c-audit-log-admin-id-422.md)
+
+## 2026-09-23 — B6.20 deterministic smoke contact-inbox checks
+
+The contact-inbox block no longer depends on this run's (rate-limited)
+POST /contact. It uses this run's message or any existing one and restores its
+status. It keeps one smoke message as the fixture for throttled runs, and it no
+longer deletes a message someone else created. An empty inbox is an explicit FAIL
+instead of a silent skip.
+
+Verification: four back-to-back runs, all 0 failed, with identical check sets; only
+the cleanup call differs. The rate limit is untouched. Level: *locally tested*.
+→ audit: [2026-09-23-b620-smoke-contact-inbox-deterministic.md](audit/2026-09-23-b620-smoke-contact-inbox-deterministic.md)

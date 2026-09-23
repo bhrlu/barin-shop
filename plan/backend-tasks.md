@@ -401,10 +401,12 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   exactly one kind on create (422). The admin dialog already blocks both cases.
   Done (2026-09-23): `POST /coupons` requires exactly one of `percent_off` / `amount_off` (both or neither → 422 in Persian, as PATCH); the no-op `_not_both` validator is gone. 4 tests (negative control: 2 fail), pytest 271, smoke 247/0. Integration tested.
   → audit: [2026-09-23-b615-coupon-create-one-kind.md](audit/2026-09-23-b615-coupon-create-one-kind.md)
-- [ ] **B6.20 Smoke contact-inbox checks skip silently under the rate limit**
+- [x] **B6.20 Smoke contact-inbox checks skip silently under the rate limit**
   (`NEW-B51C-1`, discovered during B5.1c) — the block runs only when a `new` message
   exists; its own `POST /contact` is throttled (5/10 min/IP) on back-to-back runs,
   so 6 entries vanish without a FAIL. Seed the message or log an explicit skip.
+  Done (2026-09-23): The smoke's contact-inbox block exercises this run's message or any existing one (status restored), keeps one smoke message as a fixture for throttled runs, never deletes others' messages, and FAILs explicitly when nothing exists. Four back-to-back runs: 0 failed, identical check sets. Locally tested.
+  → audit: [2026-09-23-b620-smoke-contact-inbox-deterministic.md](audit/2026-09-23-b620-smoke-contact-inbox-deterministic.md)
 - [x] **B6.19 Concurrent cancellation restores stock twice** (`NEW-ABBE01-1`, P1,
   discovered during AB-BE-01) — `cancel_order_tx` trusted a status read without a
   lock; a customer POST /cancel racing a staff PATCH restored the stock twice (5 of 6
