@@ -362,10 +362,12 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   transaction; legacy `NULL` rows still restore the aggregate only and a repeated
   cancellation is a no-op. Historical rows are not backfilled.
   → audit: [2026-09-22-b68-variant-stock-restore.md](audit/2026-09-22-b68-variant-stock-restore.md)
-- [ ] **B6.8a Drop the redundant `information_schema` probe in `restore_stock()`**
+- [x] **B6.8a Drop the redundant `information_schema` probe in `restore_stock()`**
   (`NEW-B68-1`, discovered during B6.8) — the column is now always created by
   `startup_ddl()`, so the per-cancellation existence check can go once every
   deployed stack has run the new DDL.
+  Done (2026-09-23): `restore_stock` selects `order_items.variant_id` directly (the column is always ensured by startup DDL); variant-then-aggregate order and NULL-variant lines unchanged. A SQL-recording test proves no information_schema query (fails on the old code); pytest 278, smoke 252/0. Integration tested.
+  → audit: [2026-09-23-b68a-restore-stock-no-schema-probe.md](audit/2026-09-23-b68a-restore-stock-no-schema-probe.md)
 - [x] **B6.9 Stop swallowing errors in `POST /orders/{id}/refunds`** — the INSERT
   now catches `IntegrityError` and answers 409 only for SQLSTATE `23505`
   (`unique_violation`, i.e. the real duplicate); anything else is logged and

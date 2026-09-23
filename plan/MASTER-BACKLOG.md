@@ -512,7 +512,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "B6.8a",
+    "agent_start_task": "B2.2b",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -925,7 +925,7 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "B6.8a",
       "title": "Drop the redundant information_schema probe in restore_stock()",
       "priority": "P3",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "backend",
       "depends_on": ["B6.8"],
       "blocks": [],
@@ -933,7 +933,10 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "backend-tasks.md",
       "scope": "order_items.variant_id is now always created by startup_ddl(), so the per-cancellation column-existence query in order_lifecycle.restore_stock() can be removed once every deployed stack has run the new DDL.",
       "discovered_as": "NEW-B68-1",
-      "discovered_during": "B6.8"
+      "discovered_during": "B6.8",
+      "audit": "plan/audit/2026-09-23-b68a-restore-stock-no-schema-probe.md",
+      "verification_level": "integration tested",
+      "completed": "2026-09-23"
     },
     {
       "id": "B6.9a",
@@ -1399,12 +1402,12 @@ changes to the file shipped in sequence; the collision is closed.
   ],
   "counts": {
     "total_executable": 56,
-    "done": 43,
-    "open": 13,
+    "done": 44,
+    "open": 12,
     "P0": 0,
     "P1": 0,
     "P2": 0,
-    "P3": 13,
+    "P3": 12,
     "blocked": 0,
     "dropped": 2,
     "obsolete": 1,
@@ -3482,7 +3485,10 @@ Headless browser: guest direct-load of `/account`, `/account/orders`,
 ## B6.8a — Drop the redundant `information_schema` probe in `restore_stock()`
 
 * **Layer:** Backend
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-b68a-restore-stock-no-schema-probe.md`](audit/2026-09-23-b68a-restore-stock-no-schema-probe.md)
+* **Verification level:** integration tested
+* **Delivered:** `restore_stock` selects `order_items.variant_id` directly (the column is always ensured by startup DDL); variant-then-aggregate order and NULL-variant lines unchanged. A SQL-recording test proves no information_schema query (fails on the old code); pytest 278, smoke 252/0. Integration tested.
 * **Priority:** P3
 * **Batch:** F
 * **Dependencies:** `B6.8` (DONE)
@@ -3706,7 +3712,7 @@ B2.5a  (needs a product decision)
 B2.2a
 B4.13
 B2.1a  (needs real credentials)
-B6.8a
+B6.8a  (DONE 2026-09-23)
 F3.4b
 F4.3  (DONE 2026-09-23)
 AB-FE-06
@@ -3741,13 +3747,13 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**13** open · **43** DONE · 56 executable in total.
+**12** open · **44** DONE · 56 executable in total.
 29 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
 
-**13** (`B2.1a` additionally needs real provider credentials from the user)
+**12** (`B2.1a` additionally needs real provider credentials from the user)
 
 ### Blocked
 
@@ -3785,8 +3791,8 @@ D1–D9 are resolved.
 | P0        |         0 |
 | P1        |         0 |
 | P2        |         0 |
-| P3        |        13 |
-| **Total** |    **13** |
+| P3        |        12 |
+| **Total** |    **12** |
 
 Generated from the JSON index on 2026-09-23.
 
@@ -3902,11 +3908,11 @@ were freshly executed.
 ## START HERE
 
 ```text
-B6.8a
+B2.2b
 ```
 
-43 of 56 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. next P3 — drop the redundant information_schema probe in restore_stock()
+44 of 56 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. next P3 — export date/encoding correctness
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -4010,11 +4016,11 @@ Reconciliation date:
 Current state:
 
 ```text
-13 remaining implementation units (B2.1a, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B2.2b, B5.1e, B6.18, F5.19, B2.5a)
-43 completed implementation units
+12 remaining implementation units (B2.1a, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B2.2b, B5.1e, B6.18, F5.19, B2.5a)
+44 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = B6.8a
+NEXT = B2.2b
 ```

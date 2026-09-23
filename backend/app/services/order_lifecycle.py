@@ -71,23 +71,12 @@ async def restore_stock(
     concurrency. Rows missing their `variant_id` (legacy items) only bump the
     product aggregate. Returns the number of items processed.
     """
-    # `variant_id` may not exist on order_items in older stacks (the column is
-    # only added by the variants DDL). Check before selecting it.
-    has_variant_col = (
-        await session.execute(
-            text(
-                "SELECT EXISTS ("
-                "  SELECT 1 FROM information_schema.columns "
-                "  WHERE table_schema = 'public' AND table_name = 'order_items' "
-                "  AND column_name = 'variant_id')"
-            )
-        )
-    ).scalar()
-    select_cols = "product_id, variant_id, quantity" if has_variant_col else "product_id, quantity"
+    # B6.8a: `order_items.variant_id` always exists — `startup_ddl()` adds it on every
+    # boot and every seed job — so it is selected directly (no information_schema probe)
     items = (
         await session.execute(
             text(
-                f"SELECT {select_cols} "
+                "SELECT product_id, variant_id, quantity "
                 "FROM public.order_items WHERE order_id = CAST(:oid AS uuid)"
             ),
             {"oid": order_id},
@@ -96,7 +85,7 @@ async def restore_stock(
 
     for item in items:
         qty = int(item["quantity"])
-        if has_variant_col and item.get("variant_id"):
+        if item["variant_id"]:
             await session.execute(
                 text(
                     "UPDATE public.product_variants SET stock = stock + :qty, "
@@ -114,7 +103,7 @@ async def restore_stock(
         await log_stock_change(
             session,
             product_id=str(item["product_id"]),
-            variant_id=item.get("variant_id") if has_variant_col else None,
+            variant_id=item["variant_id"],
             order_id=order_id,
             change=qty,
             reason="return",

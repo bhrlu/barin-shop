@@ -288,3 +288,25 @@ async def test_http_customer_and_staff_cancelling_at_once(db, fixtures):
     finally:
         await db.execute(text("DELETE FROM public.users WHERE id = :u"), {"u": str(admin_id)})
         await db.commit()
+
+
+async def test_cancellation_no_longer_probes_information_schema(db, fixtures):
+    """B6.8a: `order_items.variant_id` always exists, so restore_stock selects it
+    directly instead of asking information_schema on every cancellation."""
+    from sqlalchemy import event
+
+    order = await _checkout(db, fixtures, "M", "مشکی", qty=1)
+    statements: list[str] = []
+
+    def record(_conn, _cursor, statement, *_args):
+        statements.append(statement)
+
+    sync_engine = engine.sync_engine
+    event.listen(sync_engine, "before_cursor_execute", record)
+    try:
+        await cancel_order_tx(db, order["order_id"], "pending")
+        await db.commit()
+    finally:
+        event.remove(sync_engine, "before_cursor_execute", record)
+    assert any("FROM public.order_items" in s for s in statements)
+    assert not any("information_schema" in s for s in statements)

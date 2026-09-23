@@ -2858,3 +2858,14 @@ The entry itself grew 2.7 kB raw from re-splitting, which is why per-page loads 
 measured rather than chunk sizes. Coupon browser suites: 14/14, 15/15, 14/14.
 Level: *measured + browser tested*.
 → audit: [2026-09-23-f517-coupons-route-split.md](audit/2026-09-23-f517-coupons-route-split.md)
+
+## 2026-09-23 — B6.8a no schema probe on cancellation
+
+`restore_stock` no longer asks information_schema whether `order_items.variant_id`
+exists: startup DDL always creates it. The column is selected directly, and the
+variant-then-aggregate restore order and the NULL-variant lines are unchanged.
+
+Verification: a new test records every SQL a cancellation runs and asserts there is
+no information_schema query (it fails on the old code). pytest 278, smoke 252/0.
+Level: *integration tested*.
+→ audit: [2026-09-23-b68a-restore-stock-no-schema-probe.md](audit/2026-09-23-b68a-restore-stock-no-schema-probe.md)
