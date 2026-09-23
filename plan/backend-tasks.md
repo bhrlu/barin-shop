@@ -82,10 +82,15 @@ Legend: `[ ]` todo · `[x]` done (audit file required) · audit links in `plan/a
   `/products/{id}/recommendations` blends votes ×3 with the category/popularity
   heuristic (identical payload; `/related` untouched). Learned pairs verified live.
   → audit: [2026-09-22-b24-co-purchase-recommendations.md](audit/2026-09-22-b24-co-purchase-recommendations.md)
-- [ ] **B2.5 Webhooks + background jobs** — order events, abandoned-payment reminders, APScheduler
+- [x] **B2.5 Webhooks + background jobs** — order events, abandoned-payment reminders, APScheduler
   (B2.1 hand-off: add the sweeper that re-dispatches `notification_deliveries` left
   `pending` by a crash and retries `failed` rows with a cap — call
   `services/notifications.dispatch_deliveries()`, which is already retry-safe.)
+  Done (2026-09-23): Background worker (`python -m app.worker`, compose `worker`): advisory-locked idempotent jobs — the outbox sweeper (crash-stale `pending` sent, `failed` retried with backoff up to a cap) and abandoned-payment reminders (`payment_reminder`, once per pending+unpaid order after 60 min, via `notify_order_event`). 12 tests + 3 mutation controls; pytest 267, smoke 245/0; clean env with a live reminder, duplicate pass and worker restart. Outbound webhooks need a decision → B2.5a. Clean-environment tested.
+  → audit: [2026-09-23-b25-background-jobs.md](audit/2026-09-23-b25-background-jobs.md)
+- [ ] **B2.5a Outbound order webhooks** (`NEW-B25-1`, discovered during B2.5) — needs a
+  product decision first (consumers, payload, HMAC secret in env, retry policy); then
+  an outbox + a job in `services/jobs.py` + signed POSTs. Do not build without it.
 - [ ] **B2.6 Coupon admin UI support** — nothing to build in Python; expose whatever the admin panel needs (done as part of B1.4 API)
   → superseded by B1.9: `/admin/*` endpoints + `/coupons` CRUD now exist; the panel
   still needs wiring (frontend F1.2 / F2.4)

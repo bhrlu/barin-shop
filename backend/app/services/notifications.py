@@ -70,6 +70,8 @@ TYPES: dict[str, NotificationType] = {
     "order_cancelled": NotificationType("سفارش لغو شد", CHANNELS),
     "refund_approved": NotificationType("درخواست بازپرداخت تأیید شد", CHANNELS),
     "refund_settled": NotificationType("مبلغ بازپرداخت واریز شد", CHANNELS),
+    # B2.5: sent once by the worker for an order left pending and unpaid
+    "payment_reminder": NotificationType("یادآوری پرداخت سفارش", CHANNELS),
 }
 
 _ORDER_EVENTS = {
@@ -77,6 +79,7 @@ _ORDER_EVENTS = {
     "paid": "order_paid",
     "shipped": "order_shipped",
     "cancelled": "order_cancelled",
+    "payment_reminder": "payment_reminder",
 }
 _REFUND_EVENTS = {"approved": "refund_approved", "settled": "refund_settled"}
 
@@ -128,6 +131,11 @@ def order_message(event_name: str, order: Mapping[str, Any]) -> str:
         if order.get("payment_status") == "paid":
             text_ += " برای بازگشت وجه می‌توانید از صفحه سفارش درخواست بازپرداخت ثبت کنید."
         return text_
+    if event_name == "payment_reminder":
+        return (
+            f"سفارش شماره {number} به مبلغ {toman(order['total'])} تومان هنوز پرداخت نشده است. "
+            "برای تکمیل خرید، پرداخت را از صفحهٔ سفارش انجام دهید."
+        )
     raise ValueError(f"unknown order event {event_name!r}")
 
 
@@ -314,7 +322,7 @@ async def _enqueue_deliveries(
 
 
 async def notify_order_event(session: AsyncSession, order_id: UUID | str, event_name: str) -> None:
-    """`created` / `paid` / `shipped` / `cancelled` for the order's owner.
+    """`created` / `paid` / `shipped` / `cancelled` / `payment_reminder` for the order's owner.
 
     Call it right after the status change, on the same session. Reads the order
     as that transaction sees it (e.g. the tracking code set in the same PATCH).

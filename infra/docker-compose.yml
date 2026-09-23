@@ -101,7 +101,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-    environment:
+    # anchored so the B2.5 worker runs with exactly the same settings
+    environment: &backend_runtime_env
       <<: *backend_env
       ZARINPAL_MERCHANT_ID: ${ZARINPAL_MERCHANT_ID:-00000000-0000-0000-0000-000000000000}
       ZARINPAL_SANDBOX: ${ZARINPAL_SANDBOX:-true}
@@ -127,6 +128,14 @@ services:
       # F2.3 password reset: link lifetime and links per account per hour
       PASSWORD_RESET_TTL_MINUTES: ${PASSWORD_RESET_TTL_MINUTES:-30}
       PASSWORD_RESET_MAX_PER_HOUR: ${PASSWORD_RESET_MAX_PER_HOUR:-3}
+      # B2.5 background worker: pass interval, abandoned-payment reminder window,
+      # outbox sweeper (stale pending, retry backoff and cap)
+      JOBS_INTERVAL_SECONDS: ${JOBS_INTERVAL_SECONDS:-60}
+      PAYMENT_REMINDER_AFTER_MINUTES: ${PAYMENT_REMINDER_AFTER_MINUTES:-60}
+      PAYMENT_REMINDER_MAX_AGE_HOURS: ${PAYMENT_REMINDER_MAX_AGE_HOURS:-72}
+      NOTIFICATION_PENDING_STALE_SECONDS: ${NOTIFICATION_PENDING_STALE_SECONDS:-120}
+      NOTIFICATION_RETRY_BACKOFF_SECONDS: ${NOTIFICATION_RETRY_BACKOFF_SECONDS:-120}
+      NOTIFICATION_RETRY_MAX_ATTEMPTS: ${NOTIFICATION_RETRY_MAX_ATTEMPTS:-5}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
@@ -138,6 +147,23 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+
+  # B2.5 background jobs (app/services/jobs.py): the notification-outbox sweeper and
+  # abandoned-payment reminders, one pass every JOBS_INTERVAL_SECONDS. Same image and
+  # settings as the backend; each job takes an advisory lock, so extra workers are safe.
+  # No hot reload — `docker compose restart worker` after changing the jobs.
+  worker:
+    build:
+      context: ..
+      dockerfile: infra/backend.Dockerfile
+    restart: unless-stopped
+    command: ["python", "-m", "app.worker"]
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment: *backend_runtime_env
+    volumes:
+      - ../backend/app:/srv/app
 
   frontend:
     build:

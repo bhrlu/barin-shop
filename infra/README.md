@@ -27,6 +27,7 @@ infra/
 > reviews, inbox, variants). Idempotent — safe to re-run.
 | `backend` | FastAPI | 8000 | The sole backend — docs at `/docs` |
 | `frontend` | Vite dev server (Bun) | 5173 | The store UI with hot reload |
+| `worker` | backend image | – | B2.5 background jobs (`python -m app.worker`): outbox sweeper + abandoned-payment reminders every `JOBS_INTERVAL_SECONDS`. No hot reload — `docker compose restart worker` after changing `app/services/jobs.py`; one manual pass: `docker compose exec worker python -m app.worker --once` |
 
 ## No Supabase
 

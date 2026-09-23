@@ -26,7 +26,9 @@ backend/
 │   ├── seed_mock.py       # optional demo dataset: 8 customers, 31 backdated orders,
 │                          # refund claims in all 4 states, reviews, inbox, variants
 │   ├── services/          # coupons, checkout, payments, pricing, search, roles, variants,
-│                          # notifications (+ notification_providers: Kavenegar / SMTP)
+│                          # notifications (+ notification_providers: Kavenegar / SMTP),
+│                          # inventory_log (stock ledger), jobs (B2.5 background jobs)
+│   ├── worker.py          # B2.5: `python -m app.worker` — runs services/jobs.py
 │   └── routers/           # health, auth, products, reviews, addresses, favorites,
 │                          # orders, admin, storage, search, stock, coupons, checkout, payments,
 │                          # notifications
@@ -163,6 +165,30 @@ sends local midnights as offset-less UTC ISO strings. CORS exposes
 `Content-Disposition` so the browser can read the RFC-6266 filename on a
 cross-origin download. UI: `/admin/orders` and `/admin/products`.
 
+## Background jobs (B2.5)
+
+`python -m app.worker` (compose service `worker`) runs `app/services/jobs.py` every
+`JOBS_INTERVAL_SECONDS` (60); `--once` runs one pass and exits. Each job runs in one
+transaction behind a Postgres advisory lock (`job:<name>`), so extra workers or a
+manual `--once` next to the service are safe — a worker that finds the lock taken
+skips that tick. Jobs:
+
+- **`sweep_deliveries`** — the notification outbox: a `pending` delivery older than
+  `NOTIFICATION_PENDING_STALE_SECONDS` (120; its after-commit send was lost to a crash
+  or restart) is dispatched; a `failed` one is retried after
+  attempts × `NOTIFICATION_RETRY_BACKOFF_SECONDS` (120) until
+  `NOTIFICATION_RETRY_MAX_ATTEMPTS` (5). Rows are locked `SKIP LOCKED`, `sent` /
+  `skipped` rows are never touched; delivery is at-least-once only across a crash in
+  the middle of a send.
+- **`remind_unpaid_orders`** — one `payment_reminder` notification («یادآوری پرداخت
+  سفارش», in-app + SMS/email when switched on) for each order still `pending` +
+  `unpaid` `PAYMENT_REMINDER_AFTER_MINUTES` (60) after checkout and not older than
+  `PAYMENT_REMINDER_MAX_AGE_HOURS` (72), through `notify_order_event`; the event key
+  `order:<id>:payment_reminder` makes repeats no-ops.
+
+No outbound webhooks yet: which systems would receive order events, and how they are
+signed, is an open product decision (B2.5a).
+
 ## Notifications (B2.1)
 
 `app/services/notifications.py` is the **only** place notifications are created.
@@ -186,8 +212,9 @@ rejected refund notifies nobody (D2 scope).
   `provider_not_configured` / `no_recipient`. Pending rows are sent in the
   background **after the commit**; a provider failure is stored (`failed` +
   `last_error`) and never touches the business transaction. Re-dispatching is
-  safe — only `pending`/`failed` rows are picked, under a row lock. There is no
-  job queue/sweeper yet (B2.5): a row left `pending` by a crash stays there.
+  safe — only `pending`/`failed` rows are picked, under a row lock. The B2.5
+  worker's sweeper sends rows a crash left `pending` and retries `failed` ones
+  (see *Background jobs* below).
 - **Providers** (`services/notification_providers.py`): `KavenegarSmsProvider`
   (`KAVENEGAR_API_KEY`, optional `KAVENEGAR_SENDER`) and `SmtpEmailProvider`
   (`SMTP_HOST`, `SMTP_PORT`=587, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`,

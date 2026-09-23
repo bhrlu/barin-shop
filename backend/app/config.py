@@ -74,6 +74,17 @@ class Settings(BaseSettings):
     # cap stops mail-bombing an inbox; over it the API still answers the same way)
     password_reset_ttl_minutes: int = 30
     password_reset_max_per_hour: int = 3
+    # B2.5 background worker (`python -m app.worker`)
+    jobs_interval_seconds: int = 60
+    # an unpaid, pending order gets one reminder once it is this old…
+    payment_reminder_after_minutes: int = 60
+    # …but never when older than this (the first run after deploy skips old orders)
+    payment_reminder_max_age_hours: int = 72
+    # outbox sweeper: a `pending` delivery older than this lost its after-commit send
+    notification_pending_stale_seconds: int = 120
+    # `failed` deliveries are retried after attempts × backoff, up to max attempts
+    notification_retry_backoff_seconds: int = 120
+    notification_retry_max_attempts: int = 5
 
     # Bootstrap admin (used by `python -m app.seed_auth`)
     admin_email: str = "admin@sande.local"

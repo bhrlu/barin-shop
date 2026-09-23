@@ -2754,3 +2754,32 @@ Found: **B6.19** (fixed and pushed first) and **F5.19**, the admin viewer.
 
 Level: *clean-environment tested*.
 → audit: [2026-09-23-abbe01-inventory-ledger.md](audit/2026-09-23-abbe01-inventory-ledger.md)
+
+## 2026-09-23 — B2.5 background worker (outbox sweeper + payment reminders)
+
+`python -m app.worker` (compose service `worker`) runs `services/jobs.py`: each job
+is one transaction behind an advisory lock, so extra workers are safe.
+
+- **`sweep_deliveries`:** sends outbox rows a crash left `pending`, and retries
+  `failed` ones after attempts × backoff up to the cap. This was the B2.1 hand-off.
+- **`remind_unpaid_orders`:** one «یادآوری پرداخت سفارش» per order still pending +
+  unpaid after 60 min, within 72 h. It goes through `notify_order_event`, so
+  `order:<id>:payment_reminder` makes repeats no-ops.
+
+D2's transactional list gains the reminder (noted under D2). D5 is respected: no
+auto-cancel.
+
+Verification:
+
+- 12 tests: due / not due, duplicate and concurrent passes, a held lock skips, the
+  sweeper's stale / fresh / sent / backoff / cap cases, job isolation, `--once`.
+  3 mutation controls each fail their target.
+- pytest 267, smoke 245/0.
+- Clean env: worker running; a live aged order got 1 reminder; a second pass and a
+  worker restart kept it at 1.
+
+Not built: outbound webhooks. No consumer or contract exists, so this is **B2.5a**,
+which needs a product decision.
+
+Level: *clean-environment tested*.
+→ audit: [2026-09-23-b25-background-jobs.md](audit/2026-09-23-b25-background-jobs.md)

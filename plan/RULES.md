@@ -182,6 +182,7 @@ Canonical implementations in this repo — use these, do not re-derive them:
 | Roles & capabilities | `backend/app/services/roles.py` (`STAFF_ROLES`, `resolve_roles`, `has_capability`) + the `Staff*` aliases in `auth.py` |
 | Password hashing / JWT | `backend/app/security.py` |
 | Totals, shipping, discount | `backend/app/services/pricing.py` (`shipping_fee`, `quote`) |
+| Background jobs (scheduled work: outbox sweeper, payment reminders) | `backend/app/services/jobs.py` (advisory-locked, idempotent jobs) run by `backend/app/worker.py` — B2.5 |
 | Stock ledger (every stock movement: purchase / return / restock / manual adjustment) | `backend/app/services/inventory_log.py` (`log_stock_change`, same transaction as the movement — AB-BE-01) |
 | Line unit price (variant `price_override` or product price) | `backend/app/services/variants.py` (`variant_price`, shared by `POST /stock/check` and checkout — AB-BE-02) |
 | Coupon lookup / normalisation / limits | `backend/app/services/coupons.py` |

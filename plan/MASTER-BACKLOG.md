@@ -190,6 +190,11 @@ executed as:
 * **Real external provider activation happens later**, when real
   credentials/configuration are available — tracked as `B2.1a`.
 
+**B2.5 addition (2026-09-23):** the abandoned-payment reminder (`payment_reminder`,
+sent once per order still pending + unpaid after 60 min) joins the transactional
+list — it concerns the customer's own order and B2.5 requires it; it is not a
+marketing message.
+
 **Unblocks:** `B2.1`, `F2.3`, `B2.5`, `B4.13`. (`B2.1` is DONE — see its section.)
 
 ---
@@ -507,7 +512,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "B2.5",
+    "agent_start_task": "B6.15",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -833,13 +838,16 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "B2.5",
       "title": "Webhooks + background jobs",
       "priority": "P2",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "backend",
       "depends_on": ["B2.1"],
       "blocks": [],
       "batch": "F",
       "source": "backend-tasks.md",
-      "scope": "Add order events, background jobs, abandoned-payment reminders, notification integration, idempotency, and retry behavior."
+      "scope": "Add order events, background jobs, abandoned-payment reminders, notification integration, idempotency, and retry behavior.",
+      "audit": "plan/audit/2026-09-23-b25-background-jobs.md",
+      "verification_level": "clean-environment tested",
+      "completed": "2026-09-23"
     },
     {
       "id": "B2.3",
@@ -1324,6 +1332,20 @@ changes to the file shipped in sequence; the collision is closed.
       "discovered_as": "NEW-ABBE01-2",
       "discovered_during": "AB-BE-01",
       "scope": "Show the stock ledger (GET /admin/inventory/logs: reason, change, product/variant, order number, who, when) on /admin/inventory with AdminDataTable filters (reason, product) and a per-product history link; catalog staff only (the API already 403s others)."
+    },
+    {
+      "id": "B2.5a",
+      "title": "Outbound order webhooks (needs a product decision)",
+      "priority": "P3",
+      "status": "TODO",
+      "layer": "backend",
+      "depends_on": ["B2.5"],
+      "blocks": [],
+      "batch": "F",
+      "source": "backend-tasks.md",
+      "discovered_as": "NEW-B25-1",
+      "discovered_during": "B2.5",
+      "scope": "Send order lifecycle events to external systems. Needs a decision first: consumers, payload, HMAC signing secret (env only), retry policy and replay protection. Then: an outbox table like notification_deliveries, a sweeper job in services/jobs.py, signed POSTs, tests. Do not build without the decision."
     }
   ],
   "excluded": [
@@ -1344,13 +1366,13 @@ changes to the file shipped in sequence; the collision is closed.
     }
   ],
   "counts": {
-    "total_executable": 54,
-    "done": 36,
+    "total_executable": 55,
+    "done": 37,
     "open": 18,
     "P0": 0,
     "P1": 0,
-    "P2": 1,
-    "P3": 17,
+    "P2": 0,
+    "P3": 18,
     "blocked": 0,
     "dropped": 2,
     "obsolete": 1,
@@ -2263,7 +2285,10 @@ the UI updates.
 ## B2.5 — Webhooks + background jobs
 
 * **Layer:** Backend
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-b25-background-jobs.md`](audit/2026-09-23-b25-background-jobs.md)
+* **Verification level:** clean-environment tested
+* **Delivered:** Background worker (`python -m app.worker`, compose `worker`): advisory-locked idempotent jobs — the outbox sweeper (crash-stale `pending` sent, `failed` retried with backoff up to a cap) and abandoned-payment reminders (`payment_reminder`, once per pending+unpaid order after 60 min, via `notify_order_event`). 12 tests + 3 mutation controls; pytest 267, smoke 245/0; clean env with a live reminder, duplicate pass and worker restart. Outbound webhooks need a decision → B2.5a. Clean-environment tested.
 * **Dependencies:** B2.1 notification infrastructure (DONE)
 * **B2.1 hand-off:** add the sweeper for `notification_deliveries` — re-dispatch
   rows left `pending` by a crash and retry `failed` ones with a cap, by calling
@@ -3268,6 +3293,40 @@ support cannot reach it.
 
 ---
 
+## B2.5a — Outbound order webhooks (needs a product decision)
+
+* **Layer:** Backend
+* **Status:** TODO — **needs a product decision before any code**
+* **Priority:** P3
+* **Batch:** F
+* **Dependencies:** `B2.5` (DONE)
+* **Discovered as:** `NEW-B25-1` during `B2.5` — legacy discovery ID only; `B2.5a` is
+  the executable ID.
+* **Source:** `backend-tasks.md` B2.5a
+
+### Problem
+
+B2.5 asked for "webhooks + background jobs". The jobs and the inbound Zarinpal
+callback exist, but nothing sends order events *to* other systems. No consumer,
+payload, signing scheme or retry contract has been decided. Building one would be
+invented architecture.
+
+### Decision needed
+
+- **Consumers:** which systems (ERP, courier, accounting?) and which events.
+- **Payload and versioning.**
+- **Signing:** an HMAC secret (env only) and a timestamp to stop replays.
+- **Retries:** policy and a dead-letter state.
+
+### Then implement
+
+- an outbox table like `notification_deliveries`;
+- a sweeper job in `services/jobs.py` (advisory-locked, as in B2.5);
+- signed POSTs;
+- tests for duplicates, retries and the signature.
+
+---
+
 ## B2.1a — Activate the real SMS/email providers
 
 * **Layer:** Backend / infra configuration
@@ -3560,7 +3619,8 @@ These are no longer blocked, but some have task dependencies:
 B3.11  (DONE 2026-09-22)
 B2.1   (DONE 2026-09-22)
 F2.3   (DONE 2026-09-23)
-B2.5
+B2.5  (DONE 2026-09-23)
+B2.5a  (needs a product decision)
 B2.2a
 B4.13
 B2.1a  (needs real credentials)
@@ -3599,8 +3659,8 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**18** open · **36** DONE · 54 executable in total.
-27 units were added by discovery during earlier tasks (see
+**18** open · **37** DONE · 55 executable in total.
+28 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
@@ -3642,8 +3702,8 @@ D1–D9 are resolved.
 | --------- | --------: |
 | P0        |         0 |
 | P1        |         0 |
-| P2        |         1 |
-| P3        |        17 |
+| P2        |         0 |
+| P3        |        18 |
 | **Total** |    **18** |
 
 Generated from the JSON index on 2026-09-23.
@@ -3760,11 +3820,11 @@ were freshly executed.
 ## START HERE
 
 ```text
-B2.5
+B6.15
 ```
 
-36 of 54 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. last P2 — webhooks + background jobs (incl. the pending/failed notification delivery sweeper)
+37 of 55 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. first P3 (all P0–P2 done) — POST /coupons accepts both discount kinds or neither
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -3868,11 +3928,11 @@ Reconciliation date:
 Current state:
 
 ```text
-18 remaining implementation units (B2.1a, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B6.15, B5.1e, F5.17, B6.18, F5.19)
-36 completed implementation units
+18 remaining implementation units (B2.1a, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B6.15, B5.1e, F5.17, B6.18, F5.19, B2.5a)
+37 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = B2.5
+NEXT = B6.15
 ```
