@@ -507,7 +507,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "F5.7",
+    "agent_start_task": "AB-FE-01",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -737,13 +737,16 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "F5.7",
       "title": "Admin chart bundle split",
       "priority": "P2",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "frontend",
       "depends_on": [],
       "blocks": [],
       "batch": "D",
       "source": "frontend-tasks.md",
-      "scope": "Measure the actual production bundle first, then apply evidence-based chart route/code splitting and re-measure."
+      "scope": "Measure the actual production bundle first, then apply evidence-based chart route/code splitting and re-measure.",
+      "audit": "plan/audit/2026-09-23-f57-admin-chart-bundle-measurement.md",
+      "verification_level": "measured on the production build — no code change needed",
+      "completed": "2026-09-23"
     },
     {
       "id": "F4.3",
@@ -1231,11 +1234,11 @@ changes to the file shipped in sequence; the collision is closed.
   ],
   "counts": {
     "total_executable": 48,
-    "done": 26,
-    "open": 22,
+    "done": 27,
+    "open": 21,
     "P0": 0,
     "P1": 0,
-    "P2": 8,
+    "P2": 7,
     "P3": 14,
     "blocked": 0,
     "dropped": 2,
@@ -1944,7 +1947,10 @@ Network inspection + typecheck/lint/build.
 ## F5.7 — Admin chart bundle split
 
 * **Layer:** Frontend
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-f57-admin-chart-bundle-measurement.md`](audit/2026-09-23-f57-admin-chart-bundle-measurement.md)
+* **Verification level:** measured on the production build — no code change needed
+* **Delivered:** Measured, no code change: recharts and lodash (transitive, via recharts) live only in the dashboard's route chunk (`admin.index-*.js`, 405.7 kB / 106.3 kB gzip), preloaded only for `/admin`; `/`, `/shop`, `/admin/orders`, `/admin/products` load no chart code. An in-route lazy split was built and measured on the production build (throttled): KPIs 3616→4432 ms, charts 3713→4756 ms, so it was reverted. Level: measured (production build).
 * **Dependencies:** measurement first
 
 ### Required workflow
@@ -3155,7 +3161,7 @@ B6.15
 
 ```text
 F5.8  (DONE 2026-09-23)
-F5.7
+F5.7  (DONE 2026-09-23)
 AB-FE-01
 AB-FE-04
 F3.5b  (DONE 2026-09-23)
@@ -3230,13 +3236,13 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**22** open · **26** DONE · 48 executable in total.
+**21** open · **27** DONE · 48 executable in total.
 21 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
 
-**22** (`B2.1a` additionally needs real provider credentials from the user)
+**21** (`B2.1a` additionally needs real provider credentials from the user)
 
 ### Blocked
 
@@ -3273,9 +3279,9 @@ D1–D9 are resolved.
 | --------- | --------: |
 | P0        |         0 |
 | P1        |         0 |
-| P2        |         8 |
+| P2        |         7 |
 | P3        |        14 |
-| **Total** |    **22** |
+| **Total** |    **21** |
 
 Generated from the JSON index on 2026-09-23.
 
@@ -3391,11 +3397,11 @@ were freshly executed.
 ## START HERE
 
 ```text
-F5.7
+AB-FE-01
 ```
 
-26 of 48 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. next P2 in Batch D — recharts/lodash are in the shared bundle for the admin dashboard alone
+27 of 48 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. next P2 in Batch D — admin topbar completion
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -3499,11 +3505,11 @@ Reconciliation date:
 Current state:
 
 ```text
-22 remaining implementation units (B2.1a, AB-BE-01, AB-BE-02, F5.7, F4.3, AB-FE-01, AB-FE-03, AB-FE-04, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B6.15, B5.1e)
-26 completed implementation units
+21 remaining implementation units (B2.1a, AB-BE-01, AB-BE-02, F4.3, AB-FE-01, AB-FE-03, AB-FE-04, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B6.15, B5.1e)
+27 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = F5.7
+NEXT = AB-FE-01
 ```

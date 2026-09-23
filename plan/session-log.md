@@ -2474,3 +2474,23 @@ those controls and fixed.
 
 Not done: `/checkout` pre-submit availability. Level: *browser tested*.
 → audit: [2026-09-23-f35b-cart-stock-recheck-on-focus.md](audit/2026-09-23-f35b-cart-stock-recheck-on-focus.md)
+
+## 2026-09-23 — F5.7 admin chart bundle: measured, no split needed
+
+The workflow the task asked for was followed. Production build:
+
+- recharts, and the lodash it pulls in (not a direct dependency), sit only in the
+  dashboard route chunk, 405.7 kB (106.3 kB gzip);
+- the SSR manifest preloads that chunk only for `/admin`;
+- the shared entry (394 kB) has no chart code, and other pages load none.
+
+So the task's premise (a shared bundle) no longer holds; TanStack's automatic route
+splitting already does it. The one further split — lazy charts inside the dashboard —
+was built and measured on the production build, served from Node and throttled
+(1.6 Mbps / 150 ms, median of 5). It was slower: KPIs 3616 → 4432 ms, charts
+3713 → 4756 ms. The route chunk had been modulepreloaded off the critical path; the
+lazy chunk competed with the KPI requests. It was reverted, and the final build is
+byte-identical to the baseline.
+
+Level: *measured on the production build, no code change*.
+→ audit: [2026-09-23-f57-admin-chart-bundle-measurement.md](audit/2026-09-23-f57-admin-chart-bundle-measurement.md)

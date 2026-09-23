@@ -377,8 +377,10 @@ conflict (DESIGN_SYSTEM.md §5).
   `order_manager` / `support`, then review the +/− diff and type the user's email
   to confirm. Legacy roles are read-only. `api.adminSetUserRoles()`. Browser tested.
   → audit: [2026-09-22-f56-role-management-ui.md](audit/2026-09-22-f56-role-management-ui.md)
-- [ ] **F5.7 Split the admin chart bundle** — recharts (~553 kB raw) and lodash
+- [x] **F5.7 Split the admin chart bundle** — recharts (~553 kB raw) and lodash
   (~164 kB) are pulled into the shared bundle for the dashboard alone.
+  Done (2026-09-23): Measured, no code change: recharts and lodash (transitive, via recharts) live only in the dashboard's route chunk (`admin.index-*.js`, 405.7 kB / 106.3 kB gzip), preloaded only for `/admin`; `/`, `/shop`, `/admin/orders`, `/admin/products` load no chart code. An in-route lazy split was built and measured on the production build (throttled): KPIs 3616→4432 ms, charts 3713→4756 ms, so it was reverted. Level: measured (production build).
+  → audit: [2026-09-23-f57-admin-chart-bundle-measurement.md](audit/2026-09-23-f57-admin-chart-bundle-measurement.md)
 - [x] **F5.8 `/shop` fetches the catalog twice** — `catalogQuery`
   (`?include_inactive=true`) and the filtered list query both run on every visit.
   Done (2026-09-23): `/shop` builds its filter options from the new public `GET /products/facets` (sizes, colours, tags, price range of the active catalogue) instead of downloading every product; normal/filtered visits = facets + one page request, search = `/search` only. 5 backend tests (mutation controls), smoke 231/0, 23 browser checks (negative control: 6 fail on the old code). Browser tested.
