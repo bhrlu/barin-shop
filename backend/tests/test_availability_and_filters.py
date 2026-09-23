@@ -7,7 +7,6 @@ and/or comma-separated facet query params.
 
 import os
 
-os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://u:p@localhost:5432/db")
 os.environ.setdefault("JWT_SECRET", "test-secret")
 
 from app.services.availability import availability_issue  # noqa: E402

@@ -361,7 +361,7 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   discovered during F2.3) — JWTs are stateless for 7 days, so a token stolen before
   a reset keeps working. Add `users.password_changed_at` (or a token version) set
   on reset and reject older `iat` in `get_current_user` / `get_optional_user`.
-- [ ] **B6.13 The documented `pytest -q` silently skips every DB test**
+- [x] **B6.13 The documented `pytest -q` silently skips every DB test**
   (`NEW-B21-3`, discovered during B2.1) — `test_addresses.py` (collected first) and
   three other modules `os.environ.setdefault("DATABASE_URL", "…u:p@…/db")` at
   import, `app.config.settings` is cached from that, and every live-DB module then
@@ -369,6 +369,9 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   instead of 137 passed. Use one `conftest.py` default (the compose URL) or make
   the dummy-URL modules not import `app.config` first; AGENTS.md's verification
   command must actually run the integration tests.
+  Done (2026-09-23): `tests/conftest.py` holds the one default (compose URL); the
+  four dummy URLs are gone. Documented command: 79 passed / 72 skipped → 151 passed.
+  → audit: [2026-09-23-b613-pytest-runs-db-tests.md](audit/2026-09-23-b613-pytest-runs-db-tests.md)
 - [ ] **B6.10 Pagination for `GET /products` and `GET /admin/orders`** — both
   return the entire table; the spec's `[FE-02]` grid assumes server-side paging.
 - [x] **AB-BE-03 Coupon max discount cap** (`[BE-02]`) — additive nullable

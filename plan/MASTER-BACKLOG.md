@@ -507,7 +507,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "B6.13",
+    "agent_start_task": "B5.1d",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -1036,7 +1036,7 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "B6.13",
       "title": "Documented pytest -q silently skips every live-DB test",
       "priority": "P2",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "backend_tests",
       "depends_on": [],
       "blocks": [],
@@ -1044,7 +1044,10 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "backend-tasks.md",
       "discovered_as": "NEW-B21-3",
       "discovered_during": "B2.1",
-      "scope": "test_addresses.py and three other modules set a dummy DATABASE_URL at import; app.config.settings caches it, so every live-DB module skips (77 passed / 60 skipped instead of 137 passed). One conftest default (compose URL) or no app.config import before it; the AGENTS.md verification command must run the integration tests."
+      "scope": "test_addresses.py and three other modules set a dummy DATABASE_URL at import; app.config.settings caches it, so every live-DB module skips (77 passed / 60 skipped instead of 137 passed). One conftest default (compose URL) or no app.config import before it; the AGENTS.md verification command must run the integration tests.",
+      "audit": "plan/audit/2026-09-23-b613-pytest-runs-db-tests.md",
+      "verification_level": "locally tested",
+      "completed": "2026-09-23"
     },
     {
       "id": "F5.13",
@@ -1142,11 +1145,11 @@ changes to the file shipped in sequence; the collision is closed.
   ],
   "counts": {
     "total_executable": 45,
-    "done": 12,
-    "open": 33,
+    "done": 13,
+    "open": 32,
     "P0": 0,
     "P1": 0,
-    "P2": 20,
+    "P2": 19,
     "P3": 13,
     "blocked": 0,
     "dropped": 2,
@@ -2219,7 +2222,11 @@ login still works. Smoke + clean environment (DDL).
 ## B6.13 — Documented `pytest -q` silently skips every live-DB test
 
 * **Layer:** Backend tests
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-b613-pytest-runs-db-tests.md`](audit/2026-09-23-b613-pytest-runs-db-tests.md)
+* **Verification level:** locally tested — the documented command went from
+  79 passed / 72 skipped to **151 passed / 0 skipped**; with no database it still
+  skips cleanly. One `tests/conftest.py` default; the four dummy URLs removed.
 * **Priority:** P2
 * **Batch:** C
 * **Dependencies:** none
@@ -2842,7 +2849,7 @@ B5.4a
 B2.2b
 B5.4b
 B5.1d
-B6.13
+B6.13  (DONE 2026-09-23)
 B6.14
 ```
 
@@ -2927,14 +2934,14 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**33** (12 completed: B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02, AB-FE-05, B3.11,
-B2.1, F5.14, F2.3, F5.15; 18 added by discovery: NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a,
+**32** (13 completed: B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02, AB-FE-05, B3.11,
+B2.1, F5.14, F2.3, F5.15, B6.13; 18 added by discovery: NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a,
 F5.10, B2.2b, B5.4b, F5.11, F5.12, B2.1a, B5.1d, B6.13, F5.13, F5.14, F5.15, F5.16,
 B6.14)
 
 ### Ready for execution
 
-**33** (`B2.1a` additionally needs real provider credentials from the user)
+**32** (`B2.1a` additionally needs real provider credentials from the user)
 
 ### Blocked
 
@@ -2971,11 +2978,11 @@ D1–D9 are resolved.
 | --------- | --------: |
 | P0        |         0 |
 | P1        |         0 |
-| P2        |        20 |
+| P2        |        19 |
 | P3        |        13 |
-| **Total** |    **33** |
+| **Total** |    **32** |
 
-Recomputed from the JSON index on 2026-09-23 (F5.15).
+Recomputed from the JSON index on 2026-09-23 (B6.13).
 
 Priority is execution guidance, not permission to rewrite requirements.
 
@@ -3089,7 +3096,7 @@ were freshly executed.
 ## START HERE
 
 ```text
-B6.13
+B5.1d
 ```
 
 Batch A (`B6.8`, `B6.9`, `AB-BE-03`) is complete — audits
@@ -3111,9 +3118,11 @@ product adjustment: in-app notifications live, SMS/email built but unconfigured.
 
 `F5.15` is DONE ([audit](audit/2026-09-23-f515-auth-refresh-keeps-session.md)).
 
-The user asked for this run back to back: `F5.15` (DONE) → `B6.13` → `B5.1d` →
-`B2.1a` → `F5.13`. **`B6.13`** (the documented `pytest -q` skips every live-DB
-test; P2, Batch C) is next. `B2.1a` will hit its stop condition (no real credentials) —
+`B6.13` is DONE ([audit](audit/2026-09-23-b613-pytest-runs-db-tests.md)) — `pytest -q` now runs the live-DB tests.
+
+The user asked for this run back to back: `F5.15` (DONE) → `B6.13` (DONE) →
+`B5.1d` → `B2.1a` → `F5.13`. **`B5.1d`** (`record_audit` rolls back the mutation it
+audits; P2, Batch C) is next. `B2.1a` will hit its stop condition (no real credentials) —
 report it, do not fake it.
 
 After each task: update this pointer, the task status, the audit link and the
@@ -3215,18 +3224,18 @@ Reconciliation date:
 Current state:
 
 ```text
-33 remaining implementation units
+32 remaining implementation units
   (17 of the original 27, plus NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10,
-   B2.2b, B5.4b, F5.11, F5.12, B2.1a, B5.1d, B6.13, F5.13, F5.16 and B6.14 —
-   the last fourteen discovered as NEW-ABBE03-1, NEW-F55-1, NEW-F56-1,
+   B2.2b, B5.4b, F5.11, F5.12, B2.1a, B5.1d, F5.13, F5.16 and B6.14 —
+   the last thirteen discovered as NEW-ABBE03-1, NEW-F55-1, NEW-F56-1,
    NEW-F56-2, NEW-ABFE02-1, NEW-ABFE05-1/2/3, NEW-B21-1…4/6, NEW-F514-1 and
    NEW-F23-1 — found during them)
-12 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02,
-  AB-FE-05, B3.11, B2.1, F5.14, F2.3, F5.15 — F5.14 and F5.15 themselves
-  discovered as NEW-B21-5 and NEW-B21-6)
+13 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02,
+  AB-FE-05, B3.11, B2.1, F5.14, F2.3, F5.15, B6.13 — F5.14, F5.15 and B6.13
+  themselves discovered as NEW-B21-5, NEW-B21-6 and NEW-B21-3)
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = B6.13
+NEXT = B5.1d
 ```

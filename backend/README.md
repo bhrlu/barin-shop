@@ -296,10 +296,10 @@ every visitor shares one throttle bucket. Throttle knobs: `CONTACT_RATE_LIMIT`
 ## Tests
 
 ```bash
-./.venv/bin/python -m pytest -q            # unit tests (no DB needed)
-# the DB integration tests skip unless DATABASE_URL is exported (B6.13):
-DATABASE_URL=postgresql+asyncpg://sande:sande@localhost:5432/postgres \
-  JWT_SECRET=test-secret ./.venv/bin/python -m pytest -q
+./.venv/bin/python -m pytest -q            # unit + live-DB integration tests
+# tests/conftest.py defaults DATABASE_URL to the compose Postgres (B6.13); the
+# integration tests skip cleanly when nothing answers there. Export DATABASE_URL
+# to point them at another database.
 ./.venv/bin/python -m ruff check app tests
 ./.venv/bin/python tests/api_smoke.py      # live end-to-end; needs a running API
 ```

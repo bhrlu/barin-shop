@@ -10,7 +10,6 @@ import os
 from datetime import UTC, datetime
 from uuid import uuid4
 
-os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://u:p@localhost:5432/db")
 os.environ.setdefault("JWT_SECRET", "test-secret")
 
 from app.routers.addresses import _row_to_out  # noqa: E402

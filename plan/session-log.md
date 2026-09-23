@@ -2224,3 +2224,20 @@ to `/auth` on a transient failure (it recovers through the retry).
 → audit: [2026-09-23-f515-auth-refresh-keeps-session.md](audit/2026-09-23-f515-auth-refresh-keeps-session.md)
 
 **Next backlog pointer** — `B6.13`.
+
+## 2026-09-23 — B6.13 `pytest -q` runs the live-DB tests again (task 4)
+
+**What was done** — new `backend/tests/conftest.py` with the one test-session default
+(compose `DATABASE_URL`, `JWT_SECRET`, both `setdefault`); the four dummy `u:p@…/db`
+URLs removed from the unit-test modules. `backend/README.md` corrected.
+
+**Verification** — documented command, no env vars: 79 passed / 72 skipped (before,
+measured on the same tree) → 151 passed / 0 skipped; database unreachable → clean
+skips; ruff clean. Level: *locally tested*.
+
+**Not done** — the now-redundant compose-URL `setdefault` lines in the live-DB
+modules were left (no-ops, minimal diff).
+
+→ audit: [2026-09-23-b613-pytest-runs-db-tests.md](audit/2026-09-23-b613-pytest-runs-db-tests.md)
+
+**Next backlog pointer** — `B5.1d`.

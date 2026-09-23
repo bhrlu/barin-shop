@@ -70,7 +70,8 @@ plan/
     ├── 2026-09-22-b21-notification-infrastructure.md
     ├── 2026-09-22-f514-coupon-json-body.md
     ├── 2026-09-23-f23-forgot-password.md
-    └── 2026-09-23-f515-auth-refresh-keeps-session.md
+    ├── 2026-09-23-f515-auth-refresh-keeps-session.md
+    └── 2026-09-23-b613-pytest-runs-db-tests.md
 ```
 
 The two `ADMIN-*.md` files hold the back-office task split (epics [BE-01]… and

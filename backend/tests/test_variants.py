@@ -6,7 +6,6 @@ aggregate stock is used. Deactivated variants make the combination unavailable.
 
 import os
 
-os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://u:p@localhost:5432/db")
 os.environ.setdefault("JWT_SECRET", "test-secret")
 
 from app.services.variants import variant_stock  # noqa: E402
