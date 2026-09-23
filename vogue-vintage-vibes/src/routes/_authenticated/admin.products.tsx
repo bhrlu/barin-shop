@@ -3,16 +3,14 @@ import { useEffect, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Layers, Pencil, Plus, Trash2 } from "lucide-react";
-import { api, toPage, type Availability, type ProductBadge } from "@/lib/api";
+import { api, toPage, type Availability } from "@/lib/api";
 import { toProducts, type AdminProduct } from "@/lib/catalog";
 import { categories, categoryTitle, type CategoryId } from "@/data/products";
 import { formatFaDate, formatToman, toFa } from "@/lib/format";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { ProductImageManager } from "@/components/admin/ProductImageManager";
+import { ProductEditor } from "@/components/admin/ProductEditor";
 import { VariantEditor } from "@/components/admin/VariantEditor";
+import { AVAILABILITIES, BADGES } from "@/lib/product-form";
 import { ProductsExportButtons } from "@/components/admin/ExportControls";
 import { Pager } from "@/components/Pager";
 
@@ -55,136 +53,12 @@ export const Route = createFileRoute("/_authenticated/admin/products")({
   component: AdminProducts,
 });
 
-const BADGES: { value: ProductBadge | ""; label: string }[] = [
-  { value: "", label: "بدون نشان" },
-  { value: "sale", label: "حراج" },
-  { value: "new", label: "جدید" },
-  { value: "exclusive", label: "ویژه" },
-  { value: "coming_soon", label: "به‌زودی" },
-  { value: "preorder", label: "پیش‌خرید" },
-];
-
-const AVAILABILITIES: { value: Availability; label: string }[] = [
-  { value: "in_stock", label: "موجود" },
-  { value: "coming_soon", label: "به‌زودی" },
-  { value: "preorder", label: "پیش‌خرید" },
-];
-
-type FormState = {
-  id?: string;
-  name: string;
-  category: string;
-  price: string;
-  old_price: string;
-  sizes: string;
-  colors: string;
-  images: string[];
-  material: string;
-  description: string;
-  stock: string;
-  is_new: boolean;
-  active: boolean;
-  tags: string;
-  badge: ProductBadge | "";
-  availability: Availability;
-  available_at: string;
-  low_stock_threshold: string;
-};
-
-const emptyForm: FormState = {
-  name: "",
-  category: "tshirt",
-  price: "",
-  old_price: "",
-  sizes: "S, M, L",
-  colors: "کرم #f0ebe3, تِراکوتا #b5654a",
-  images: ["cat-tshirt"],
-  material: "",
-  description: "",
-  stock: "25",
-  is_new: true,
-  active: true,
-  tags: "",
-  badge: "",
-  availability: "in_stock",
-  available_at: "",
-  low_stock_threshold: "5",
-};
-
-/** `available_at` is a date input value (`YYYY-MM-DD`); the API takes ISO strings. */
-function toDateInput(iso: string | null): string {
-  if (!iso) return "";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 10);
-}
-
-function toForm(product: AdminProduct): FormState {
-  return {
-    id: product.id,
-    name: product.name,
-    category: product.category,
-    price: String(product.price),
-    old_price: product.oldPrice ? String(product.oldPrice) : "",
-    sizes: product.sizes.join(", "),
-    colors: product.colors.map((c) => `${c.name} ${c.hex}`).join(", "),
-    images: product.rawImages,
-    material: product.material,
-    description: product.description,
-    stock: String(product.stock),
-    is_new: product.isNew ?? true,
-    active: product.active ?? true,
-    tags: product.tags.join(", "),
-    badge: product.badge ?? "",
-    availability: product.availability ?? "in_stock",
-    available_at: toDateInput(product.availableAt),
-    low_stock_threshold: String(product.lowStockThreshold ?? 5),
-  };
-}
-
-function parsePayload(form: FormState) {
-  return {
-    name: form.name,
-    category: form.category,
-    price: Number(form.price),
-    old_price: form.old_price ? Number(form.old_price) : null,
-    sizes: form.sizes
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean),
-    colors: form.colors
-      .split(",")
-      .map((chunk) => chunk.trim())
-      .filter(Boolean)
-      .map((chunk) => {
-        const parts = chunk.split(/\s+/);
-        const hex = parts.pop() ?? "#cccccc";
-        return { name: parts.join(" ") || "رنگ", hex };
-      }),
-    images: form.images,
-    material: form.material,
-    description: form.description,
-    stock: Number(form.stock),
-    is_new: form.is_new,
-    active: form.active,
-    tags: form.tags
-      .split(",")
-      .map((tag) => tag.trim())
-      .filter(Boolean),
-    badge: form.badge === "" ? null : form.badge,
-    availability: form.availability,
-    // only meaningful for coming_soon / preorder; cleared otherwise
-    available_at: form.availability === "in_stock" || !form.available_at ? null : form.available_at,
-    low_stock_threshold: Number(form.low_stock_threshold) || 0,
-  };
-}
-
 function AdminProducts() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<FormState | null>(null);
-  const [imagesBusy, setImagesBusy] = useState(false);
+  // the product being edited (`product: null` = a new one), or nothing open
+  const [editing, setEditing] = useState<{ product: AdminProduct | null } | null>(null);
   const [variantsFor, setVariantsFor] = useState<string | null>(null);
   const page = search.page ?? 1;
   const filters = {
@@ -228,23 +102,6 @@ function AdminProducts() {
     void queryClient.invalidateQueries({ queryKey: ["catalog"] });
   };
 
-  const save = useMutation({
-    mutationFn: async (state: FormState) => {
-      const payload = parsePayload(state);
-      if (state.id) {
-        await api.updateProduct(state.id, payload);
-      } else {
-        await api.createProduct(payload);
-      }
-    },
-    onSuccess: () => {
-      invalidate();
-      setForm(null);
-      toast.success("محصول ذخیره شد");
-    },
-    onError: (error) => toast.error(error instanceof Error ? error.message : "ذخیره نشد"),
-  });
-
   const remove = useMutation({
     mutationFn: (id: string) => api.deleteProduct(id),
     onSuccess: () => {
@@ -262,204 +119,18 @@ function AdminProducts() {
         </h2>
         <div className="flex flex-wrap items-start gap-2">
           <ProductsExportButtons />
-          <Button onClick={() => setForm(emptyForm)} className="gap-2">
+          <Button onClick={() => setEditing({ product: null })} className="gap-2">
             <Plus className="size-4" /> محصول جدید
           </Button>
         </div>
       </div>
 
-      {form && (
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            save.mutate(form);
-          }}
-          className="grid gap-4 rounded-3xl bg-sand p-6 md:grid-cols-2"
-        >
-          <div className="md:col-span-2 flex items-center justify-between">
-            <h3 className="text-lg">{form.id ? "ویرایش محصول" : "افزودن محصول"}</h3>
-            <button
-              type="button"
-              onClick={() => setForm(null)}
-              className="text-xs text-muted-foreground"
-            >
-              بستن
-            </button>
-          </div>
-          <div>
-            <Label>نام</Label>
-            <Input
-              required
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="mt-2 bg-background"
-            />
-          </div>
-          <div>
-            <Label>دسته‌بندی</Label>
-            <select
-              value={form.category}
-              onChange={(e) => setForm({ ...form, category: e.target.value })}
-              className="mt-2 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-            >
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.title}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <Label>قیمت (تومان)</Label>
-            <Input
-              required
-              dir="ltr"
-              value={form.price}
-              onChange={(e) => setForm({ ...form, price: e.target.value })}
-              className="mt-2 bg-background"
-            />
-          </div>
-          <div>
-            <Label>قیمت قبل از تخفیف</Label>
-            <Input
-              dir="ltr"
-              value={form.old_price}
-              onChange={(e) => setForm({ ...form, old_price: e.target.value })}
-              className="mt-2 bg-background"
-            />
-          </div>
-          <div>
-            <Label>سایزها (با کاما)</Label>
-            <Input
-              value={form.sizes}
-              onChange={(e) => setForm({ ...form, sizes: e.target.value })}
-              className="mt-2 bg-background"
-            />
-          </div>
-          <div>
-            <Label>موجودی</Label>
-            <Input
-              dir="ltr"
-              value={form.stock}
-              onChange={(e) => setForm({ ...form, stock: e.target.value })}
-              className="mt-2 bg-background"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <Label>رنگ‌ها (نام و کد رنگ، جدا شده با کاما)</Label>
-            <Input
-              value={form.colors}
-              onChange={(e) => setForm({ ...form, colors: e.target.value })}
-              className="mt-2 bg-background"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <Label>گالری تصاویر</Label>
-            <div className="mt-3">
-              <ProductImageManager
-                value={form.images}
-                // functional: an upload completes after later edits to other fields
-                onChange={(images) => setForm((current) => current && { ...current, images })}
-                onBusyChange={setImagesBusy}
-              />
-            </div>
-          </div>
-          <div>
-            <Label>برچسب‌ها (با کاما)</Label>
-            <Input
-              value={form.tags}
-              onChange={(e) => setForm({ ...form, tags: e.target.value })}
-              placeholder="کتان, تابستانی"
-              className="mt-2 bg-background"
-            />
-          </div>
-          <div>
-            <Label>نشان محصول</Label>
-            <select
-              value={form.badge}
-              onChange={(e) => setForm({ ...form, badge: e.target.value as FormState["badge"] })}
-              className="mt-2 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-            >
-              {BADGES.map((badge) => (
-                <option key={badge.value} value={badge.value}>
-                  {badge.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <Label>وضعیت عرضه</Label>
-            <select
-              value={form.availability}
-              onChange={(e) => setForm({ ...form, availability: e.target.value as Availability })}
-              className="mt-2 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-            >
-              {AVAILABILITIES.map((availability) => (
-                <option key={availability.value} value={availability.value}>
-                  {availability.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <Label>تاریخ عرضه (برای به‌زودی / پیش‌خرید)</Label>
-            <Input
-              type="date"
-              dir="ltr"
-              disabled={form.availability === "in_stock"}
-              value={form.available_at}
-              onChange={(e) => setForm({ ...form, available_at: e.target.value })}
-              className="mt-2 bg-background disabled:opacity-50"
-            />
-          </div>
-          <div>
-            <Label>آستانه هشدار موجودی کم</Label>
-            <Input
-              dir="ltr"
-              inputMode="numeric"
-              value={form.low_stock_threshold}
-              onChange={(e) => setForm({ ...form, low_stock_threshold: e.target.value })}
-              className="mt-2 bg-background"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <Label>جنس</Label>
-            <Input
-              value={form.material}
-              onChange={(e) => setForm({ ...form, material: e.target.value })}
-              className="mt-2 bg-background"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <Label>توضیحات</Label>
-            <Textarea
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              className="mt-2 bg-background"
-            />
-          </div>
-          <div className="flex items-center gap-6 md:col-span-2">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={form.is_new}
-                onChange={(e) => setForm({ ...form, is_new: e.target.checked })}
-              />
-              محصول جدید
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={form.active}
-                onChange={(e) => setForm({ ...form, active: e.target.checked })}
-              />
-              نمایش در فروشگاه
-            </label>
-          </div>
-          <Button type="submit" disabled={save.isPending || imagesBusy} className="md:col-span-2">
-            {imagesBusy ? "در انتظار پایان آپلود تصاویر…" : "ذخیره محصول"}
-          </Button>
-        </form>
+      {editing && (
+        <ProductEditor
+          key={editing.product?.id ?? "new"}
+          product={editing.product}
+          onClose={() => setEditing(null)}
+        />
       )}
 
       <div className="flex flex-wrap items-end gap-3">
@@ -578,7 +249,7 @@ function AdminProducts() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setForm(toForm(product))}
+                    onClick={() => setEditing({ product })}
                     aria-label="ویرایش"
                     className="text-muted-foreground hover:text-terracotta"
                   >

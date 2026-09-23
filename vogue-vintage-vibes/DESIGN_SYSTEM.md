@@ -34,7 +34,7 @@ tokens, component inventory, and the conventions to follow.
 | Carousel | `embla-carousel-react` → `ui/carousel.tsx` | repo |
 | Package manager | **Bun** (`bun.lock`, `bunfig.toml`) | repo |
 | `@tanstack/react-table` v8 | **not installed** — target for the admin data grid ([FE-02]) | spec |
-| `react-hook-form` + `zod` | installed; only the unused shadcn `ui/form.tsx` wrapper imports RHF, nothing imports `zod` — target | spec |
+| `react-hook-form` + `zod` | **used** (AB-FE-03): the product editor (`admin/ProductEditor.tsx`) via the shadcn `ui/form.tsx` wrapper (whose `FormField` now passes RHF's transformed-values generic); schemas in `src/lib/product-form.ts` | spec |
 | `recharts` | used by the admin dashboard since F2.6 (area + donut, token-coloured) | repo |
 | Supabase / Lovable Cloud / `createServerFn` | **not part of this project** | spec-only, see §5 |
 
@@ -183,7 +183,8 @@ Per the comment at the top of `styles.css`:
 | `NotificationBell.tsx` | B2.1. `NotificationBell` sits in `SiteHeader` (rendered by `__root.tsx` on **every** route, admin included — never add a second bell to a nested shell). Signed-in only: `bg-primary` count badge (Persian digits, `۹۹+` cap, count in the `aria-label`), a Radix popover (`w-[min(22rem,calc(100vw-2rem))]`, `rounded-2xl`, `shadow-lg`) with the latest 6, «خواندن همه», clay skeleton / error + retry / `BellOff` empty state, and a footer link to `/account/notifications`. `NotificationRow` (exported, reused by that page): terracotta unread dot + semibold title + `bg-terracotta/5` tint while unread, `sr-only` «(خوانده‌نشده)», Jalali date-time; a row about an order is a `Link` to `/account/order/$orderId`, and opening it marks it read. Data via `@/lib/notifications`. |
 | `admin/ProductImageManager.tsx` | Gallery (AB-FE-04): drop/pick files → one-at-a-time upload with a local preview and `role="progressbar"` (`api.uploadImage(file, onProgress)`), error tile with «تلاش دوباره» / «کنار گذاشتن», drag tiles or arrows to reorder, ★ makes an image primary (`value[0]`, «اصلی» badge), delete, URL entry; signed URLs cached per ref (no re-sign on reorder); `onBusyChange` lets the form block «ذخیره محصول» while uploading. |
 | `admin/ExportControls.tsx` | AB-FE-02: `OrdersExportPanel` (local date range + status → CSV/Excel, Jalali range preview, collapsible sales report) and `ProductsExportButtons`. Downloads go through `api.adminExport*` → `requestFile()` (bearer token, RFC-6266 filename, ZWNJ → space for Chromium); one download at a time, Persian inline errors. |
-| `admin/VariantEditor.tsx` | Per-product size × colour stock CRUD (`/products/{id}/variants`, `/variants/{id}`): datalist-backed size/colour inputs, per-row save (never on-blur) and delete; invalidates the admin list, the storefront variant query, the catalog and the inventory queries. |
+| `admin/ProductEditor.tsx` | Product create/edit (AB-FE-03): RHF + `productSchema` (Zod, mirrors `ProductBase`; Persian per-field messages under each field via `FormMessage`; validates on submit, then on change — never on blur, which would move the save button mid-click); two columns from `md` (wide: name, category, description, material, sizes, tags, colours, gallery; narrow: price, old price, stock, threshold, availability + date, badge, switches, save), stacked below; renders `VariantEditor` when editing. |
+| `admin/VariantEditor.tsx` | Size × colour matrix (`/products/{id}/variants`, `/variants/{id}`): size, colour + round swatch (native colour picker → `color_hex`; a known product colour pre-fills it), SKU (mono), stock, price override (placeholder = product price), active; `variantSchema` (Zod) with inline Persian errors; per-row save (never on-blur) sends every field, `""`/`0` clear; invalidates the admin list, the storefront variant query, the catalog and the inventory queries. |
 | `product/VariantPicker.tsx` | Size × colour selection with per-combination availability (disabled sold-out/deactivated combos, disabled colours) and an `aria-live` stock line. Uses `@/lib/variants` — never re-implement the rule. |
 | `product/ReviewsSection.tsx` | Rating summary + 1–5 distribution, review list (seller replies, Jalali dates), star-input write/edit form; one review per customer per product (backend upserts). |
 | `product/ProductRail.tsx` | RTL embla carousel rail (`ui/carousel`, `direction: "rtl"`) with header arrow buttons tracking `canScrollPrev/Next`; used for related, recommended and recently-viewed products. |
@@ -223,7 +224,7 @@ Mapping:
 | [FE-01] `admin/AdminLayout.tsx` | `w-64` right sidebar, 18px lucide icons, terracotta active edge, topbar with `Cmd+K` search + avatar/role/logout | **exists** (`admin.tsx`, F4.2): sticky topbar (h-16, blur) with quick search → `/shop?q=`, role badge («مدیر ارشد» / «مدیر» / «مدیر سفارش‌ها» / «پشتیبانی») + logout; right sidebar in a rounded card (desktop) / right-side Sheet (mobile); 18px lucide icons, active `bg-terracotta/10`, per-tab badges fed by `/admin/kpis`; navigation is **role-gated** per `ROLE_TAB_KEYS` (mirrors backend `ROLE_CAPABILITIES`, B5.4). **AB-FE-01:** breadcrumbs «پنل مدیریت › section» (one `aria-current` crumb; root crumb hidden on phones), initials avatar with a profile `DropdownMenu dir="rtl"` (name, email, role; «حساب کاربری من», «اعلان‌ها»), storefront preview in a new tab (icon-only below `md`), and a working Ctrl/⌘+K (`event.code === "KeyK"`, so it works on the Persian layout) that focuses the visible quick-search box |
 | [FE-02] `admin/AdminDataTable.tsx` | `@tanstack/react-table` v8, server-side pagination/sort/filter, bulk-action bar, CSV/Excel export | **missing** (no react-table installed, no pagination — F2.5) |
 | [FE-03] `admin.index.tsx` | 4 KPI cards with MoM deltas, weekly sales area chart, order-status donut, urgent-actions callout | **exists** (F2.6 + B5.2): 4 KPI cards with period-over-period delta badges, terracotta revenue area chart, status donut with legend, amber urgent-actions callout, range selector (امروز/۷/۳۰/همه); latest orders kept via `adminStats` |
-| [FE-04] `admin.products.tsx` | Stock colour alerts (>10 / 1–9 / 0), `is_active` toggle with optimistic update, size×colour matrix generator, image manager | product CRUD + merchandising fields + `VariantEditor` (F3.6); no optimistic toggle, no dedicated editor route |
+| [FE-04] `admin.products.tsx` | Stock colour alerts (>10 / 1–9 / 0), `is_active` toggle with optimistic update, size×colour matrix generator, image manager | product CRUD + merchandising fields; **two-column RHF/Zod `ProductEditor` with the size × colour matrix (SKU, swatch, stock, price override) — AB-FE-03**; no optimistic toggle, no dedicated editor route |
 | [FE-05] `admin.orders.tsx` + `OrderDetailSheet.tsx` | `Sheet side="left"` detail, 4-step stepper, postal tracking input, **print stylesheet invoice**, copy-address | **exists** (`admin.orders.tsx` + `components/admin/OrderDetailDrawer.tsx`, F4.4): per-row «مشاهده و پردازش» opens the left Sheet with the 4-step stepper (terracotta circles + advance button), receiver box with copy + method, itemised breakdown with signed thumbnails + totals, tracking input, cancel action, and «چاپ فاکتور رسمی» → portalled A4 invoice via the global print block; the list keeps selects + tracking (F2.8) |
 | [FE-06] `admin.refunds.tsx` + `RefundActionDialog.tsx` | Tabs (pending/settled/all), claim cards with Sheba + copy, approve/reject dialog with bank tracking code | **exists** (`admin.refunds.tsx`, F2.4 + B5.3): the three tabs, terracotta-edge quote cards with claimant info, approve/reject/settle dialog where settlement requires the Paya/Satna bank code (backend-enforced); settled cards show the code + date. No Sheba column exists |
 | [FE-07] `admin.coupons.tsx` | Ticket-styled coupon cards, usage progress bar, Jalali date pickers | **missing** — coupon CRUD exists in the API |
@@ -325,9 +326,10 @@ Merged from the repo and spec B1 (global invariants); both are binding.
   (`sandeh-compare-v1`, cap 4) are localStorage providers in `@/lib` wrapped around
   the app in `__root.tsx`; use their hooks (`useCart`, `useCompare`) rather than
   reading storage directly.
-- **Forms:** plain controlled state + `useMutation` today (RHF/zod installed but
-  unused). **Target (spec [FE-04]):** RHF + zod validation on admin forms; adopt it
-  per-form, don't half-migrate an existing one.
+- **Forms:** RHF + Zod on the product editor (AB-FE-03; `src/lib/product-form.ts`:
+  schemas mirror the backend, numbers typed as text accept Persian digits); other
+  forms are still plain controlled state + `useMutation`. Adopt RHF per form, don't
+  half-migrate one; validate on submit then on change (not on blur).
 - **Feedback:** `toast.success` / `toast.error` from `sonner` (top-center, §2.7).
 - **Every content route defines its own `head()`** with a unique Persian title,
   description and `og:*`; private screens add `robots: noindex`.
@@ -483,7 +485,8 @@ if (!data?.length) {
 5. **The spec's admin surface is mostly built** — sidebar shell (F4.2), order
    drawer + invoice printing (F4.4), refunds centre (F2.4/B5.3) exist; still
    missing: the data grid (`@tanstack/react-table`, F4.3), coupons manager (F4.5)
-   and CRM 360 (F4.8/F4.6). `recharts` is now used (F2.6); RHF/zod remain unused.
+   and CRM 360 (F4.8/F4.6). `recharts` is now used (F2.6); RHF/zod are used by the
+   product editor (AB-FE-03).
 6. **Leftover dependency.** `@supabase/supabase-js` remains in `package.json`
    (no imports) — kept only to avoid lockfile churn.
 7. **Error/404 copy is English** (`__root.tsx`) despite the Persian UI.

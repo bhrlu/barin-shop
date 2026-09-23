@@ -507,7 +507,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "AB-FE-03",
+    "agent_start_task": "F4.3",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -782,13 +782,16 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "AB-FE-03",
       "title": "Two-column product editor + RHF/Zod + swatches",
       "priority": "P2",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "frontend",
       "depends_on": ["AB-BE-02", "F5.18"],
       "blocks": [],
       "batch": "E",
       "source": "ADMIN-FRONTEND_TASKS.md:FE-04",
-      "scope": "Implement two-column product editor, React Hook Form, Zod, variant matrix, SKU, swatches, size, quantity, and price override."
+      "scope": "Implement two-column product editor, React Hook Form, Zod, variant matrix, SKU, swatches, size, quantity, and price override.",
+      "audit": "plan/audit/2026-09-23-abfe03-product-editor-rhf-zod.md",
+      "verification_level": "browser tested",
+      "completed": "2026-09-23"
     },
     {
       "id": "AB-FE-04",
@@ -1305,11 +1308,11 @@ changes to the file shipped in sequence; the collision is closed.
   ],
   "counts": {
     "total_executable": 52,
-    "done": 32,
-    "open": 20,
+    "done": 33,
+    "open": 19,
     "P0": 0,
     "P1": 0,
-    "P2": 4,
+    "P2": 3,
     "P3": 16,
     "blocked": 0,
     "dropped": 2,
@@ -2114,7 +2117,10 @@ Desktop + mobile + multiple role scenarios.
 ## AB-FE-03 — Two-column product editor + RHF/Zod + swatches
 
 * **Layer:** Frontend
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-abfe03-product-editor-rhf-zod.md`](audit/2026-09-23-abfe03-product-editor-rhf-zod.md)
+* **Verification level:** browser tested
+* **Delivered:** Product editor rebuilt as `ProductEditor` (React Hook Form + Zod schema mirroring `ProductBase`, Persian per-field messages, Persian digits accepted, two columns from md, payload unchanged) with the size × colour matrix (SKU, colour swatch picker, stock, price override; `variantSchema`, inline errors, `""`/`0` clears). 29 browser checks incl. persisted values and payload keys; mutation controls (no resolver → 12 fail; null clear → 2 fail); AB-FE-04 25/25 and B6.17 5/5 inside the new form. Browser tested.
 * **Dependencies:** AB-BE-02 (DONE), F5.18 (added by AB-BE-02: do not expose
   `price_override` in the editor before the storefront shows overrides)
 
@@ -3422,7 +3428,7 @@ These can mostly run in parallel because they touch different concerns.
 ## Batch E — Product editor
 
 ```text
-AB-FE-03
+AB-FE-03  (DONE 2026-09-23)
 B6.9a  (DONE 2026-09-23)
 ```
 
@@ -3477,13 +3483,13 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**20** open · **32** DONE · 52 executable in total.
+**19** open · **33** DONE · 52 executable in total.
 25 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
 
-**20** (`B2.1a` additionally needs real provider credentials from the user)
+**19** (`B2.1a` additionally needs real provider credentials from the user)
 
 ### Blocked
 
@@ -3520,9 +3526,9 @@ D1–D9 are resolved.
 | --------- | --------: |
 | P0        |         0 |
 | P1        |         0 |
-| P2        |         4 |
+| P2        |         3 |
 | P3        |        16 |
-| **Total** |    **20** |
+| **Total** |    **19** |
 
 Generated from the JSON index on 2026-09-23.
 
@@ -3638,11 +3644,11 @@ were freshly executed.
 ## START HERE
 
 ```text
-AB-FE-03
+F4.3
 ```
 
-32 of 52 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. P2, now unblocked (AB-BE-02 + F5.18 done) — two-column product editor + RHF/Zod + swatches
+33 of 52 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. next P2 — reusable AdminDataTable
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -3746,11 +3752,11 @@ Reconciliation date:
 Current state:
 
 ```text
-20 remaining implementation units (B2.1a, AB-BE-01, F4.3, AB-FE-03, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B6.15, B5.1e, F5.17, B6.18)
-32 completed implementation units
+19 remaining implementation units (B2.1a, AB-BE-01, F4.3, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B6.15, B5.1e, F5.17, B6.18)
+33 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = AB-FE-03
+NEXT = F4.3
 ```

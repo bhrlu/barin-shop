@@ -2632,3 +2632,33 @@ file was rebuilt, and everything was re-run.
 
 Level: *browser tested*.
 → audit: [2026-09-23-f518-storefront-variant-prices.md](audit/2026-09-23-f518-storefront-variant-prices.md)
+
+## 2026-09-23 — AB-FE-03 two-column product editor (RHF + Zod) + variant matrix
+
+The inline product form in `admin.products.tsx` (~350 lines of hand-rolled state)
+moved to `components/admin/ProductEditor.tsx`:
+
+- React Hook Form + `productSchema` (Zod, in `lib/product-form.ts`). It mirrors
+  `ProductBase`, invents no rules, reads Persian digits, and transforms to the
+  unchanged `ProductWrite`.
+- Persian per-field messages linked through `aria-describedby`.
+- Two columns from `md`, stacked below.
+- The gallery as an RHF field, with save blocked while it uploads.
+
+`VariantEditor` gains SKU, a colour swatch picker (a product colour pre-fills its
+hex), stock and price override, with `variantSchema` inline errors and `""`/`0`
+clears. `ui/form.tsx`'s `FormField` passes RHF's transformed-values generic, as
+upstream shadcn does.
+
+The browser test caught an `onTouched` flaw: a message appearing on blur moved the
+save button mid-click. Validation now runs on submit, then on change.
+
+Verification:
+
+- 29 browser checks: create/edit/clear persisted, payload keys equal the old form's,
+  matrix create/validate/409/clear.
+- Mutation controls: no resolver → 12 fail; clear sent as `null` → 2 fail.
+- AB-FE-04 (25/25) and B6.17 (5/5) re-run inside the new form.
+
+Level: *browser tested*.
+→ audit: [2026-09-23-abfe03-product-editor-rhf-zod.md](audit/2026-09-23-abfe03-product-editor-rhf-zod.md)
