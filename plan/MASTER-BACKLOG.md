@@ -512,7 +512,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "B6.15",
+    "agent_start_task": "B5.1c",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -1199,7 +1199,7 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "B6.15",
       "title": "POST /coupons accepts both discount kinds or neither",
       "priority": "P3",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "backend",
       "depends_on": [],
       "blocks": [],
@@ -1207,7 +1207,10 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "backend-tasks.md",
       "discovered_as": "NEW-F516-1",
       "discovered_during": "F5.16",
-      "scope": "CouponCreate._not_both is a no-op stub, so the API stores a coupon with both percent_off and amount_off (compute_discount then ignores the amount) or with neither (discount 0). Validate exactly one kind on create (422, Persian message); pytest; the admin dialog already blocks it."
+      "scope": "CouponCreate._not_both is a no-op stub, so the API stores a coupon with both percent_off and amount_off (compute_discount then ignores the amount) or with neither (discount 0). Validate exactly one kind on create (422, Persian message); pytest; the admin dialog already blocks it.",
+      "audit": "plan/audit/2026-09-23-b615-coupon-create-one-kind.md",
+      "verification_level": "integration tested",
+      "completed": "2026-09-23"
     },
     {
       "id": "B6.16",
@@ -1367,12 +1370,12 @@ changes to the file shipped in sequence; the collision is closed.
   ],
   "counts": {
     "total_executable": 55,
-    "done": 37,
-    "open": 18,
+    "done": 38,
+    "open": 17,
     "P0": 0,
     "P1": 0,
     "P2": 0,
-    "P3": 18,
+    "P3": 17,
     "blocked": 0,
     "dropped": 2,
     "obsolete": 1,
@@ -2425,7 +2428,10 @@ kind.
 ## B6.15 — `POST /coupons` accepts both discount kinds or neither
 
 * **Layer:** Backend
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-b615-coupon-create-one-kind.md`](audit/2026-09-23-b615-coupon-create-one-kind.md)
+* **Verification level:** integration tested
+* **Delivered:** `POST /coupons` requires exactly one of `percent_off` / `amount_off` (both or neither → 422 in Persian, as PATCH); the no-op `_not_both` validator is gone. 4 tests (negative control: 2 fail), pytest 271, smoke 247/0. Integration tested.
 * **Priority:** P3
 * **Batch:** C
 * **Dependencies:** none
@@ -3566,7 +3572,7 @@ B5.4b  (DONE 2026-09-23)
 B5.1d  (DONE 2026-09-23)
 B6.13  (DONE 2026-09-23)
 B6.14  (DONE 2026-09-23)
-B6.15
+B6.15  (DONE 2026-09-23)
 B6.17  (DONE 2026-09-23)
 B6.18
 B6.19  (DONE 2026-09-23)
@@ -3659,13 +3665,13 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**18** open · **37** DONE · 55 executable in total.
+**17** open · **38** DONE · 55 executable in total.
 28 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
 
-**18** (`B2.1a` additionally needs real provider credentials from the user)
+**17** (`B2.1a` additionally needs real provider credentials from the user)
 
 ### Blocked
 
@@ -3703,8 +3709,8 @@ D1–D9 are resolved.
 | P0        |         0 |
 | P1        |         0 |
 | P2        |         0 |
-| P3        |        18 |
-| **Total** |    **18** |
+| P3        |        17 |
+| **Total** |    **17** |
 
 Generated from the JSON index on 2026-09-23.
 
@@ -3820,11 +3826,11 @@ were freshly executed.
 ## START HERE
 
 ```text
-B6.15
+B5.1c
 ```
 
-37 of 55 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. first P3 (all P0–P2 done) — POST /coupons accepts both discount kinds or neither
+38 of 55 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. next P3 in Batch C — malformed admin_id on GET /admin/audit-logs is a 500
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -3928,11 +3934,11 @@ Reconciliation date:
 Current state:
 
 ```text
-18 remaining implementation units (B2.1a, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B6.15, B5.1e, F5.17, B6.18, F5.19, B2.5a)
-37 completed implementation units
+17 remaining implementation units (B2.1a, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B5.1e, F5.17, B6.18, F5.19, B2.5a)
+38 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = B6.15
+NEXT = B5.1c
 ```

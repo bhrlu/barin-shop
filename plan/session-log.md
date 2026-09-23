@@ -2783,3 +2783,14 @@ which needs a product decision.
 
 Level: *clean-environment tested*.
 → audit: [2026-09-23-b25-background-jobs.md](audit/2026-09-23-b25-background-jobs.md)
+
+## 2026-09-23 — B6.15 POST /coupons needs exactly one discount kind
+
+`create_coupon` now refuses both kinds (the PATCH message) and neither with a 422.
+Before, a both-kinds coupon silently ignored its amount and a no-kind coupon gave 0.
+The no-op `_not_both` schema validator was removed.
+
+Verification: 4 tests (the old router fails 2), pytest 271, smoke 247/0 (+1).
+Existing rows are not migrated (API-only history; PATCH fixes one on edit).
+Level: *integration tested*.
+→ audit: [2026-09-23-b615-coupon-create-one-kind.md](audit/2026-09-23-b615-coupon-create-one-kind.md)

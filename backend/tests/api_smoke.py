@@ -125,6 +125,14 @@ def main() -> int:
                 for u in staff["items"]),
         f"total={staff.get('total') if isinstance(staff, dict) else '?'}",
     )
+    both_kinds = call(
+        "POST", "/coupons", admin, json={"code": "SMOKEBOTH", "percent_off": 10, "amount_off": 1000}
+    )
+    check(
+        "POST /coupons with both discount kinds → 422 (B6.15)",
+        both_kinds is not None and both_kinds.status_code == 422,
+        f"{both_kinds.status_code if both_kinds is not None else 0}",
+    )
     bad = call("GET", "/admin/orders?page=1&status=lost", admin)
     check("GET /admin/orders?status=lost → 422", bad is not None and bad.status_code == 422,
           f"{bad.status_code if bad is not None else 0}")

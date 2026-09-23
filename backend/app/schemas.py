@@ -116,11 +116,6 @@ class CouponCreate(BaseModel):
     def _empty_to_none(cls, v: Any) -> Any:
         return None if v in ("", None) else v
 
-    @field_validator("percent_off", "amount_off")
-    @classmethod
-    def _not_both(cls, v: Any, info: Any) -> Any:
-        return v
-
 
 class CouponUpdate(BaseModel):
     """Partial update: an omitted/null field is left unchanged (F5.16 clear rules).

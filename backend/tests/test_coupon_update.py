@@ -181,3 +181,33 @@ async def test_the_switch_is_audited_with_old_and_new_values(db, admin):
     ).mappings().first()
     assert entry["old_values"] == {"percent_off": 10, "amount_off": None}
     assert entry["new_values"] == {"percent_off": None, "amount_off": 50_000}
+
+
+# --- B6.15: POST /coupons takes exactly one discount kind ------------------------------
+
+
+@pytest.mark.parametrize(
+    ("fields", "message"),
+    [
+        ({"percent_off": 10, "amount_off": 5_000}, "فقط یکی را بفرستید"),
+        ({}, "درصد تخفیف یا مبلغ ثابت را بفرستید"),
+    ],
+)
+async def test_create_needs_exactly_one_kind(db, admin, fields, message):
+    code = f"B615{uuid4().hex[:6].upper()}"
+    admin["codes"].append(code)
+    res = await _call("POST", "/coupons", admin["token"], json={"code": code, **fields})
+    assert res.status_code == 422
+    assert message in res.json()["detail"]
+    assert (
+        await db.execute(text("SELECT 1 FROM public.coupons WHERE code = :c"), {"c": code})
+    ).first() is None
+
+
+@pytest.mark.parametrize("fields", [{"percent_off": 10}, {"amount_off": 5_000}])
+async def test_create_with_one_kind_still_works(db, admin, fields):
+    code, _ = await _create(admin, **fields)
+    row = await _row(db, code)
+    kind = next(iter(fields))
+    other = "amount_off" if kind == "percent_off" else "percent_off"
+    assert row[kind] == fields[kind] and row[other] is None

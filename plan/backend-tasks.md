@@ -394,9 +394,11 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   Run only missing DDL (catalog check), advisory lock + `lock_timeout`; Rule 14.
   Done (2026-09-23): catalog-guarded startup DDL (runs only missing objects), advisory-lock serialization and a 10 s lock_timeout; the steady-state boot takes no table lock. Reproduction probe: deadlock → 300 requests / 12 reloads / 0 failures; clean env with an identical schema.
   → audit: [2026-09-23-b616-lock-free-startup-ddl.md](audit/2026-09-23-b616-lock-free-startup-ddl.md)
-- [ ] **B6.15 `POST /coupons` accepts both discount kinds or neither** (`NEW-F516-1`,
+- [x] **B6.15 `POST /coupons` accepts both discount kinds or neither** (`NEW-F516-1`,
   discovered during F5.16) — `CouponCreate._not_both` is a no-op stub; validate
   exactly one kind on create (422). The admin dialog already blocks both cases.
+  Done (2026-09-23): `POST /coupons` requires exactly one of `percent_off` / `amount_off` (both or neither → 422 in Persian, as PATCH); the no-op `_not_both` validator is gone. 4 tests (negative control: 2 fail), pytest 271, smoke 247/0. Integration tested.
+  → audit: [2026-09-23-b615-coupon-create-one-kind.md](audit/2026-09-23-b615-coupon-create-one-kind.md)
 - [x] **B6.19 Concurrent cancellation restores stock twice** (`NEW-ABBE01-1`, P1,
   discovered during AB-BE-01) — `cancel_order_tx` trusted a status read without a
   lock; a customer POST /cancel racing a staff PATCH restored the stock twice (5 of 6

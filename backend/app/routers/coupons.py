@@ -66,6 +66,18 @@ async def validate(
 
 @router.post("", response_model=CouponOut, status_code=status.HTTP_201_CREATED)
 async def create_coupon(body: CouponCreate, admin: StaffCoupons, session: DbSession) -> CouponOut:
+    # B6.15: exactly one discount kind, like PATCH (F5.16). Both used to be stored with
+    # the amount silently ignored by compute_discount; neither gave a 0 discount.
+    if body.percent_off is not None and body.amount_off is not None:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "کد تخفیف یا درصدی است یا مبلغ ثابت؛ فقط یکی را بفرستید",
+        )
+    if body.percent_off is None and body.amount_off is None:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "درصد تخفیف یا مبلغ ثابت را بفرستید؛ کد بدون تخفیف معنا ندارد",
+        )
     code = body.code.strip().upper()
     exists = (
         await session.execute(

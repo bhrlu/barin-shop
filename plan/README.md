@@ -95,7 +95,8 @@ plan/
     ├── 2026-09-23-f43-admin-data-table.md
     ├── 2026-09-23-b619-cancel-restores-stock-once.md
     ├── 2026-09-23-abbe01-inventory-ledger.md
-    └── 2026-09-23-b25-background-jobs.md
+    ├── 2026-09-23-b25-background-jobs.md
+    └── 2026-09-23-b615-coupon-create-one-kind.md
 ```
 
 The two `ADMIN-*.md` files hold the back-office task split (epics [BE-01]… and
