@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Minus, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -81,6 +81,18 @@ function CartPage() {
         })),
       ),
   });
+  // F3.5b: React Query re-checks when the tab becomes visible again, but coming back to
+  // the window (alt-tab, side-by-side windows) only fires `focus` — re-check there too.
+  // `cancelRefetch: false` joins a check already in flight (a tab switch fires both).
+  // The guard matters: `refetch()` ignores `enabled`, and an empty cart has nothing to check.
+  const recheckStock = stock.refetch;
+  const hasLines = lines.length > 0;
+  useEffect(() => {
+    if (!hasLines) return;
+    const onFocus = () => void recheckStock({ cancelRefetch: false });
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [recheckStock, hasLines]);
   const issues = issuesForLines(lines, stock.data?.issues ?? []);
   const blocked = stock.data ? !stock.data.ok : false;
 

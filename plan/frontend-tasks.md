@@ -272,8 +272,10 @@ needs new backend work except where explicitly noted.
   backend expects (the old `{lines:…}` body was a dormant 422), the query is keyed
   on the full cart signature so every edit re-validates, and checkout is blocked
   while `ok: false`. Add-to-cart keeps the variant-aware local rule (F3.2).
-- [ ] **F3.5b Re-check on focus** — a cart left open keeps its last result until an
+- [x] **F3.5b Re-check on focus** — a cart left open keeps its last result until an
   edit (checkout still re-validates server-side, so this is stale UI only)
+  Done (2026-09-23): The cart page re-runs `POST /stock/check` on window `focus` (React Query already covered tab switches via `visibilitychange`); `cancelRefetch: false` keeps a tab switch at one request and an empty cart never posts. 15 browser checks; negative controls: old file 4 fail, no dedupe 1 fails, no guard 1 fails. Browser tested.
+  → audit: [2026-09-23-f35b-cart-stock-recheck-on-focus.md](audit/2026-09-23-f35b-cart-stock-recheck-on-focus.md)
 
 ### F3.6 Admin — DONE
 

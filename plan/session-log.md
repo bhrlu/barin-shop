@@ -2456,3 +2456,21 @@ Verification:
 Decided: staff no longer see tags that exist only on inactive products (active only,
 whoever asks). Level: *browser tested*.
 → audit: [2026-09-23-f58-shop-facets-endpoint.md](audit/2026-09-23-f58-shop-facets-endpoint.md)
+
+## 2026-09-23 — F3.5b cart re-checks stock on window focus
+
+Measured first: React Query v5 already refetched the cart's stock check on
+`visibilitychange` (tab switch), but not on `window` `focus` (alt-tab or side-by-side
+windows), which kept a stale "ok" and an enabled checkout. `routes/cart.tsx` now
+listens to `focus` while the cart has lines and calls
+`refetch({cancelRefetch: false})`. The option joins React Query's own refetch, so a
+tab switch stays one request; the has-lines guard matters because `refetch()` ignores
+`enabled`.
+
+Verification: 15 browser checks. Negative controls: the old file → 4 fail; without
+the dedupe → 2 requests on a tab switch; without the guard → the empty cart posts.
+Two gaps in the first test (non-bubbling event, pre-hydration dispatch) were found by
+those controls and fixed.
+
+Not done: `/checkout` pre-submit availability. Level: *browser tested*.
+→ audit: [2026-09-23-f35b-cart-stock-recheck-on-focus.md](audit/2026-09-23-f35b-cart-stock-recheck-on-focus.md)

@@ -507,7 +507,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "F3.5b",
+    "agent_start_task": "F5.7",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -797,13 +797,16 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "F3.5b",
       "title": "Re-check cart stock on window focus",
       "priority": "P2",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "frontend",
       "depends_on": [],
       "blocks": [],
       "batch": "D",
       "source": "frontend-tasks.md",
-      "scope": "Re-run server stock validation when an open cart window regains focus while preserving checkout as final authority."
+      "scope": "Re-run server stock validation when an open cart window regains focus while preserving checkout as final authority.",
+      "audit": "plan/audit/2026-09-23-f35b-cart-stock-recheck-on-focus.md",
+      "verification_level": "browser tested",
+      "completed": "2026-09-23"
     },
     {
       "id": "B2.5",
@@ -1228,11 +1231,11 @@ changes to the file shipped in sequence; the collision is closed.
   ],
   "counts": {
     "total_executable": 48,
-    "done": 25,
-    "open": 23,
+    "done": 26,
+    "open": 22,
     "P0": 0,
     "P1": 0,
-    "P2": 9,
+    "P2": 8,
     "P3": 14,
     "blocked": 0,
     "dropped": 2,
@@ -2094,7 +2097,10 @@ Real upload/reorder/delete flow on local Docker stack.
 ## F3.5b — Re-check cart stock on window focus
 
 * **Layer:** Frontend
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-f35b-cart-stock-recheck-on-focus.md`](audit/2026-09-23-f35b-cart-stock-recheck-on-focus.md)
+* **Verification level:** browser tested
+* **Delivered:** The cart page re-runs `POST /stock/check` on window `focus` (React Query already covered tab switches via `visibilitychange`); `cancelRefetch: false` keeps a tab switch at one request and an empty cart never posts. 15 browser checks; negative controls: old file 4 fail, no dedupe 1 fails, no guard 1 fails. Browser tested.
 * **Dependencies:** none
 
 ### Required implementation
@@ -3152,7 +3158,7 @@ F5.8  (DONE 2026-09-23)
 F5.7
 AB-FE-01
 AB-FE-04
-F3.5b
+F3.5b  (DONE 2026-09-23)
 F5.10
 F5.11
 F5.12  (DONE 2026-09-23)
@@ -3224,13 +3230,13 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**23** open · **25** DONE · 48 executable in total.
+**22** open · **26** DONE · 48 executable in total.
 21 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
 
-**23** (`B2.1a` additionally needs real provider credentials from the user)
+**22** (`B2.1a` additionally needs real provider credentials from the user)
 
 ### Blocked
 
@@ -3267,9 +3273,9 @@ D1–D9 are resolved.
 | --------- | --------: |
 | P0        |         0 |
 | P1        |         0 |
-| P2        |         9 |
+| P2        |         8 |
 | P3        |        14 |
-| **Total** |    **23** |
+| **Total** |    **22** |
 
 Generated from the JSON index on 2026-09-23.
 
@@ -3385,11 +3391,11 @@ were freshly executed.
 ## START HERE
 
 ```text
-F3.5b
+F5.7
 ```
 
-25 of 48 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. next P2 in Batch D — the cart page does not re-check stock when the tab regains focus
+26 of 48 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. next P2 in Batch D — recharts/lodash are in the shared bundle for the admin dashboard alone
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -3493,11 +3499,11 @@ Reconciliation date:
 Current state:
 
 ```text
-23 remaining implementation units (B2.1a, AB-BE-01, AB-BE-02, F5.7, F4.3, AB-FE-01, AB-FE-03, AB-FE-04, F3.5b, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B6.15, B5.1e)
-25 completed implementation units
+22 remaining implementation units (B2.1a, AB-BE-01, AB-BE-02, F5.7, F4.3, AB-FE-01, AB-FE-03, AB-FE-04, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B6.15, B5.1e)
+26 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = F3.5b
+NEXT = F5.7
 ```

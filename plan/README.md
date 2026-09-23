@@ -83,7 +83,8 @@ plan/
     ├── 2026-09-23-b69a-narrow-catalog-storage-handlers.md
     ├── 2026-09-23-b51b-audit-log-append-only.md
     ├── 2026-09-23-f512-cart-provider-no-catalog.md
-    └── 2026-09-23-f58-shop-facets-endpoint.md
+    ├── 2026-09-23-f58-shop-facets-endpoint.md
+    └── 2026-09-23-f35b-cart-stock-recheck-on-focus.md
 ```
 
 The two `ADMIN-*.md` files hold the back-office task split (epics [BE-01]… and
