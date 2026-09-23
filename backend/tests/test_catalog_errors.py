@@ -15,7 +15,7 @@ import pytest
 from minio.error import MinioException
 from sqlalchemy import text
 
-from app.db import SessionLocal, engine, startup_ddl
+from app.db import MigratorSessionLocal, SessionLocal, engine, startup_ddl
 from app.main import app
 from app.routers import storage
 from app.security import create_access_token
@@ -62,36 +62,42 @@ async def admin(db):
 
 @pytest.fixture
 async def faults(db):
-    """Triggers: marker names / sizes raise the named SQLSTATE."""
+    """Triggers: marker names / sizes raise the named SQLSTATE.
+
+    DDL runs on the migrator connection (B5.1e): the app role has none, which is
+    exactly why the injected fault can only come from the schema owner.
+    """
     fn = f"b69a_{uuid4().hex[:8]}"
-    await db.execute(
-        text(
-            f"CREATE FUNCTION public.{fn}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN "
-            "IF TG_TABLE_NAME = 'products' THEN "
-            "  IF NEW.name LIKE 'B69A-UNIQUE%' THEN RAISE EXCEPTION 'x' USING ERRCODE = "
-            "'unique_violation'; END IF; "
-            "  IF NEW.name LIKE 'B69A-CHECK%' THEN RAISE EXCEPTION 'x' USING ERRCODE = "
-            "'check_violation'; END IF; "
-            "  IF NEW.name LIKE 'B69A-OTHER%' THEN RAISE EXCEPTION 'x'; END IF; "
-            "ELSE "
-            "  IF NEW.size = 'B69A-CHECK' THEN RAISE EXCEPTION 'x' USING ERRCODE = "
-            "'check_violation'; END IF; "
-            "END IF; RETURN NEW; END $$"
-        )
-    )
-    for table in ("products", "product_variants"):
-        await db.execute(
+    async with MigratorSessionLocal() as mig:
+        await mig.execute(
             text(
-                f"CREATE TRIGGER {fn}_{table} BEFORE INSERT OR UPDATE ON public.{table} "
-                f"FOR EACH ROW EXECUTE FUNCTION public.{fn}()"
+                f"CREATE FUNCTION public.{fn}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN "
+                "IF TG_TABLE_NAME = 'products' THEN "
+                "  IF NEW.name LIKE 'B69A-UNIQUE%' THEN RAISE EXCEPTION 'x' USING ERRCODE = "
+                "'unique_violation'; END IF; "
+                "  IF NEW.name LIKE 'B69A-CHECK%' THEN RAISE EXCEPTION 'x' USING ERRCODE = "
+                "'check_violation'; END IF; "
+                "  IF NEW.name LIKE 'B69A-OTHER%' THEN RAISE EXCEPTION 'x'; END IF; "
+                "ELSE "
+                "  IF NEW.size = 'B69A-CHECK' THEN RAISE EXCEPTION 'x' USING ERRCODE = "
+                "'check_violation'; END IF; "
+                "END IF; RETURN NEW; END $$"
             )
         )
-    await db.commit()
+        for table in ("products", "product_variants"):
+            await mig.execute(
+                text(
+                    f"CREATE TRIGGER {fn}_{table} BEFORE INSERT OR UPDATE ON public.{table} "
+                    f"FOR EACH ROW EXECUTE FUNCTION public.{fn}()"
+                )
+            )
+        await mig.commit()
     yield
-    for table in ("products", "product_variants"):
-        await db.execute(text(f"DROP TRIGGER IF EXISTS {fn}_{table} ON public.{table}"))
-    await db.execute(text(f"DROP FUNCTION IF EXISTS public.{fn}()"))
-    await db.commit()
+    async with MigratorSessionLocal() as mig:
+        for table in ("products", "product_variants"):
+            await mig.execute(text(f"DROP TRIGGER IF EXISTS {fn}_{table} ON public.{table}"))
+        await mig.execute(text(f"DROP FUNCTION IF EXISTS public.{fn}()"))
+        await mig.commit()
 
 
 async def _call(method: str, path: str, token: str, **kw) -> httpx.Response:

@@ -7,6 +7,32 @@
 
 name: sandeh
 
+# Shared backend environment. B5.1e: `DATABASE_URL` is the **DML-only application
+# role** the API and the worker connect with — no DDL, no ownership, not a
+# superuser. The one-shot `db-init` job overrides it with `DATABASE_MIGRATOR_URL`
+# (the schema owner) and also creates/refreshes that app role.
+x-backend-env: &backend_env
+  DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${DATABASE_APP_USER:-sande_app}:${DATABASE_APP_PASSWORD:-sande-app}@postgres:5432/${POSTGRES_DB:-postgres}}
+  JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in infra/.env}
+  MINIO_ENDPOINT: minio:9000
+  MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-sande}
+  MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-sande-secret}
+  # Host the browser uses; presigned URLs are signed for this host, so it must
+  # be reachable from the browser (not the in-cluster `minio:9000`).
+  MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-localhost:${MINIO_PORT:-9000}}
+  ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@sande.local}
+  ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin1234}
+
+# Migration / maintenance environment (B5.1e): the schema owner. Used by the one-shot
+# `db-init` job and by `tools` for ad-hoc DDL and the optional seeds. The API and the
+# worker never see these credentials.
+x-migrator-env: &migrator_env
+  <<: *backend_env
+  DATABASE_URL: ${DATABASE_MIGRATOR_URL:-postgresql+asyncpg://${POSTGRES_USER:-sande}:${POSTGRES_PASSWORD:-sande}@postgres:5432/${POSTGRES_DB:-postgres}}
+  DATABASE_MIGRATOR_URL: ${DATABASE_MIGRATOR_URL:-postgresql+asyncpg://${POSTGRES_USER:-sande}:${POSTGRES_PASSWORD:-sande}@postgres:5432/${POSTGRES_DB:-postgres}}
+  DATABASE_APP_USER: ${DATABASE_APP_USER:-sande_app}
+  DATABASE_APP_PASSWORD: ${DATABASE_APP_PASSWORD:-sande-app}
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -72,23 +98,32 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    environment: &backend_env
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-sande}:${POSTGRES_PASSWORD:-sande}@postgres:5432/${POSTGRES_DB:-postgres}}
-      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in infra/.env}
-      MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-sande}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-sande-secret}
-      # Host the browser uses; presigned URLs are signed for this host, so it must
-      # be reachable from the browser (not the in-cluster `minio:9000`).
-      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-localhost:${MINIO_PORT:-9000}}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@sande.local}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin1234}
+    # B5.1e: this one-shot job is the migrator — it runs `startup_ddl()` and the
+    # seeds as the schema owner, and creates the DML-only app role the API uses.
+    environment: *migrator_env
     command: >
       /bin/sh -c "
       python -m app.seed_auth &&
       python -m app.seed_products &&
       python -m app.seed_demo &&
       python -m app.seed_coupons"
+    restart: "no"
+
+  # Maintenance as the schema owner (B5.1e): ad-hoc DDL and the optional seeds.
+  # Nothing starts this on `up` (profile "tools"); target it explicitly:
+  #   docker compose run --rm tools python -m app.seed_mock
+  tools:
+    build:
+      context: ..
+      dockerfile: infra/backend.Dockerfile
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment: *migrator_env
+    volumes:
+      # hot reload: local source shadows the pip-installed copy
+      - ../backend/app:/srv/app
+    profiles: ["tools"]
     restart: "no"
 
   backend:
@@ -101,6 +136,10 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      # B5.1e: the API runs no DDL any more, so the schema (and the app role it
+      # connects with) must exist before it serves a request
+      db-init:
+        condition: service_completed_successfully
     # anchored so the B2.5 worker runs with exactly the same settings
     environment: &backend_runtime_env
       <<: *backend_env

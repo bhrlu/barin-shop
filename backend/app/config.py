@@ -14,6 +14,17 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str
+    # B5.1e — least-privilege database roles. The API's own connection
+    # (`database_url`) is a DML-only application role: no DDL, no ownership, not a
+    # superuser, so a bug or an injected query cannot ALTER/DROP an object or
+    # disable the append-only triggers (B5.1b / AB-BE-01). `startup_ddl()` and the
+    # seeds run as the schema owner named by `database_migrator_url` (the compose
+    # superuser); empty = the owner is the app URL itself. An empty
+    # `database_app_user` turns the whole split off: a single-role database keeps
+    # working exactly as before.
+    database_migrator_url: str = ""
+    database_app_user: str = ""
+    database_app_password: str = ""
 
     # Auth (own JWTs — HS256)
     jwt_secret: str

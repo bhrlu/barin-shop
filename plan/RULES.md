@@ -196,7 +196,8 @@ Canonical implementations in this repo — use these, do not re-derive them:
 | Password reset tokens + reset email | `backend/app/services/password_reset.py` (`request_reset`, `reset_password`); the email goes through `notifications.queue_private_email` |
 | Customer profile validation (national-ID checksum, birth-date bounds, gender set, measurement ranges) | `backend/app/services/profile.py` (shared by `PATCH /auth/me` and `PATCH /auth/me/size-profile` — F5.20) |
 | Customer notifications (in-app + SMS/email outbox), channel switches | `backend/app/services/notifications.py` (`notify_order_event`, `notify_refund_event`, `notify`, `load_switches`); providers only behind it in `notification_providers.py` — never call Kavenegar/SMTP from a router |
-| Startup DDL | `startup_ddl()` in `backend/app/db.py` — each statement must be one of the guarded shapes (`ADD COLUMN IF NOT EXISTS`, `CREATE [UNIQUE] INDEX IF NOT EXISTS`, `CREATE TABLE IF NOT EXISTS public.…`, `ADD VALUE IF NOT EXISTS`) so a steady-state boot takes no table lock; `tests/test_startup_ddl.py` fails otherwise (B6.16) |
+| Startup DDL | `startup_ddl()` in `backend/app/db.py` — runs only as the schema owner (`db-init`/`tools`/tests, never the API: B5.1e) and each statement must be one of the guarded shapes (`ADD COLUMN IF NOT EXISTS`, `CREATE [UNIQUE] INDEX IF NOT EXISTS`, `CREATE TABLE IF NOT EXISTS public.…`, `ADD VALUE IF NOT EXISTS`) so a steady-state run takes no table lock; `tests/test_startup_ddl.py` fails otherwise (B6.16) |
+| Database roles | `backend/app/db.py` — `engine` = the DML-only app role (`DATABASE_URL`) every router/service uses; `migrator_engine` (`DATABASE_MIGRATOR_URL`) only for `startup_ddl()`; the role + grants come from `app_role_ddl()` (B5.1e). Never give the API role DDL, ownership or a superuser. |
 | All frontend HTTP | `vogue-vintage-vibes/src/lib/api.ts` (the `api` object + `request()`) |
 | Frontend auth/session | `src/lib/auth.tsx` (drops the stored token only when `/auth/me` answers 401/403/404; transient failures keep it and retry — F5.15) |
 | Currency/number formatting | `src/lib/format.ts` (`formatPrice`), spec B4.1 |
@@ -345,10 +346,15 @@ docker compose ps                  # postgres + minio healthy
 curl -fsS http://localhost:8000/health
 ```
 
-Note that `db-init` and `backend` start in parallel — `db-init` waits only on
-Postgres — so every seed module must call `startup_ddl()` itself and must not
-rely on the API container having booted first. Seeds must also be idempotent
-(Rule 10): a re-run must not duplicate data.
+Since B5.1e the API runs **no DDL**: the one-shot `db-init` job is the migrator (it
+creates the schema, the DML-only app role and the seed data) and `backend`/`worker`
+wait for it (`service_completed_successfully`). Every seed module still calls
+`startup_ddl()` itself, so a standalone seed run — or `docker compose run --rm tools
+python -m app.seed_mock` — works without the API having booted first. Seeds must also
+be idempotent (Rule 10): a re-run must not duplicate data. When the change touches
+the roles, prove the API's own connection is the restricted one (`SELECT current_user`
++ a refused `ALTER`/`DROP` in the backend container) and that it still performs every
+DML the product needs.
 
 Before diagnosing any runtime or database bug, first ask whether the environment
 is dirty: stale containers, stale volumes, old seed data, DDL that predates the

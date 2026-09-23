@@ -218,7 +218,10 @@ async def test_the_ledger_is_append_only(db, world):
         db, "UPDATE public.inventory_logs SET change_amount = 99 WHERE product_id = :p", p=pid)
     assert "append-only" in await _refused(
         db, "DELETE FROM public.inventory_logs WHERE product_id = :p", p=pid)
-    assert "append-only" in await _refused(db, "TRUNCATE public.inventory_logs")
+    # B5.1e: TRUNCATE is not granted to the app role at all, so the ACL refuses
+    # it before the append-only trigger is reached
+    truncate_msg = await _refused(db, "TRUNCATE public.inventory_logs")
+    assert "append-only" in truncate_msg or "permission denied" in truncate_msg
     assert "check" in (await _refused(
         db, "INSERT INTO public.inventory_logs (product_id, change_amount, reason) "
             "VALUES (:p, 1, 'theft')", p=pid)).lower()

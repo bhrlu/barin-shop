@@ -15,7 +15,7 @@ import httpx
 import pytest
 from sqlalchemy import text
 
-from app.db import SessionLocal, engine, startup_ddl
+from app.db import MigratorSessionLocal, SessionLocal, engine, startup_ddl
 from app.main import app
 from app.security import create_access_token
 from app.services import notifications
@@ -105,31 +105,37 @@ async def world(db):
 
 @pytest.fixture
 async def break_audit(db):
-    """Make every audit insert for the given entity id fail (DB-level trigger)."""
+    """Make every audit insert for the given entity id fail (DB-level trigger).
+
+    The trigger is created on the migrator connection (B5.1e): the API's own role
+    cannot create or drop one, which is the point of the split.
+    """
     names: list[str] = []
 
     async def _break(entity_id: str) -> None:
         name = f"b51d_{uuid4().hex[:10]}"
         names.append(name)
-        await db.execute(
-            text(
-                f"CREATE FUNCTION public.{name}() RETURNS trigger LANGUAGE plpgsql AS "
-                "$$ BEGIN RAISE EXCEPTION 'forced audit failure (B5.1d test)'; END $$"
+        async with MigratorSessionLocal() as mig:
+            await mig.execute(
+                text(
+                    f"CREATE FUNCTION public.{name}() RETURNS trigger LANGUAGE plpgsql AS "
+                    "$$ BEGIN RAISE EXCEPTION 'forced audit failure (B5.1d test)'; END $$"
+                )
             )
-        )
-        await db.execute(
-            text(
-                f"CREATE TRIGGER {name} BEFORE INSERT ON public.audit_logs FOR EACH ROW "
-                f"WHEN (NEW.entity_id = '{entity_id}') EXECUTE FUNCTION public.{name}()"
+            await mig.execute(
+                text(
+                    f"CREATE TRIGGER {name} BEFORE INSERT ON public.audit_logs FOR EACH ROW "
+                    f"WHEN (NEW.entity_id = '{entity_id}') EXECUTE FUNCTION public.{name}()"
+                )
             )
-        )
-        await db.commit()
+            await mig.commit()
 
     yield _break
-    for name in names:
-        await db.execute(text(f"DROP TRIGGER IF EXISTS {name} ON public.audit_logs"))
-        await db.execute(text(f"DROP FUNCTION IF EXISTS public.{name}()"))
-    await db.commit()
+    async with MigratorSessionLocal() as mig:
+        for name in names:
+            await mig.execute(text(f"DROP TRIGGER IF EXISTS {name} ON public.audit_logs"))
+            await mig.execute(text(f"DROP FUNCTION IF EXISTS public.{name}()"))
+        await mig.commit()
 
 
 async def _call(method: str, path: str, token: str, **kw) -> httpx.Response:

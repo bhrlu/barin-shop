@@ -17,7 +17,7 @@ import httpx
 import pytest
 from sqlalchemy import text
 
-from app.db import SessionLocal, engine, startup_ddl
+from app.db import MigratorSessionLocal, SessionLocal, engine, startup_ddl
 from app.main import app
 from app.security import create_access_token
 
@@ -239,28 +239,34 @@ async def test_coupon_discount_uses_the_overridden_subtotal(ctx, db):
 
 async def test_old_blank_and_duplicate_skus_cannot_block_the_index(ctx, db):
     """The migration path: rows written before the index existed. Replays the real
-    CATALOG_DDL statements inside a transaction that is rolled back."""
+    CATALOG_DDL statements inside a transaction that is rolled back.
+
+    Dropping and rebuilding the index is DDL, so it runs on the migrator connection
+    (B5.1e) — the API's own role could not replay its own migration.
+    """
     from app import db as dbmod
 
     stmts = [s for s in dbmod.CATALOG_DDL if "product_variants" in s and (
         s.startswith("UPDATE") or "product_variants_sku_key" in s)]
     assert len(stmts) == 3
     tag = ctx["tag"]
-    try:
-        await db.execute(text("DROP INDEX public.product_variants_sku_key"))
-        for size, sku in (("S", f"OLD-{tag}"), ("M", f"OLD-{tag}"), ("L", "  ")):
-            await db.execute(text(
-                "INSERT INTO public.product_variants (product_id, size, color, sku, created_at) "
-                "VALUES (:p, :s, 'کرم', :k, now() + make_interval(secs => :o))"),
-                {"p": ctx["p1"], "s": size, "k": sku, "o": {"S": 0, "M": 1, "L": 2}[size]})
-        for stmt in stmts:
-            await db.execute(text(stmt))
-        rows = dict((await db.execute(text(
-            "SELECT size, sku FROM public.product_variants WHERE product_id = :p"),
-            {"p": ctx["p1"]})).all())
-        assert rows == {"S": f"OLD-{tag}", "M": None, "L": None}  # earliest keeps it
-    finally:
-        await db.rollback()
+    async with MigratorSessionLocal() as mig:
+        try:
+            await mig.execute(text("DROP INDEX public.product_variants_sku_key"))
+            for size, sku in (("S", f"OLD-{tag}"), ("M", f"OLD-{tag}"), ("L", "  ")):
+                await mig.execute(text(
+                    "INSERT INTO public.product_variants "
+                    "(product_id, size, color, sku, created_at) "
+                    "VALUES (:p, :s, 'کرم', :k, now() + make_interval(secs => :o))"),
+                    {"p": ctx["p1"], "s": size, "k": sku, "o": {"S": 0, "M": 1, "L": 2}[size]})
+            for stmt in stmts:
+                await mig.execute(text(stmt))
+            rows = dict((await mig.execute(text(
+                "SELECT size, sku FROM public.product_variants WHERE product_id = :p"),
+                {"p": ctx["p1"]})).all())
+            assert rows == {"S": f"OLD-{tag}", "M": None, "L": None}  # earliest keeps it
+        finally:
+            await mig.rollback()
 
 
 async def test_stock_check_returns_each_lines_server_unit_price(ctx):

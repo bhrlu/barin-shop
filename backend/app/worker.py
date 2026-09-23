@@ -1,7 +1,8 @@
 """Background worker (B2.5): `python -m app.worker` runs the jobs in
 `app/services/jobs.py` every `JOBS_INTERVAL_SECONDS`; `--once` runs a single pass and
 exits (a cron-style trigger or a manual run). SIGTERM / SIGINT stop it between passes.
-It runs no DDL — the backend's startup does.
+It runs no DDL and connects with the DML-only role (B5.1e) — the one-shot `db-init`
+job owns the schema.
 """
 
 import argparse

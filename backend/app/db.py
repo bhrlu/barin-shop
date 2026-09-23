@@ -1,11 +1,17 @@
 """Async SQLAlchemy engine/session and the idempotent startup DDL.
 
-The app connects straight to the Postgres instance described by `DATABASE_URL`
-with a role that owns the schema (there is no Supabase and no RLS any more).
+Two roles (B5.1e, no Supabase and no RLS anywhere):
+
+* the **application** role — `DATABASE_URL`, the `engine`/`SessionLocal` every
+  router and service uses. DML only: it cannot create/alter/drop an object, own
+  one, or disable the append-only triggers (B5.1b / AB-BE-01);
+* the **migrator** role — `DATABASE_MIGRATOR_URL` (the compose superuser, i.e. the
+  schema owner) — used by `startup_ddl()` and the seed jobs only.
+
 Base tables (products, orders, ...) come from `infra/initdb/`; this module owns
 only the **additive** tables and columns the API needs on top of them, created
-idempotently on startup so a fresh database and an already-seeded one converge
-with no manual migration step.
+idempotently by `startup_ddl()` so a fresh database and an already-seeded one
+converge with no manual migration step.
 """
 
 import re
@@ -13,6 +19,7 @@ from collections.abc import AsyncIterator
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.config import settings
 
@@ -22,15 +29,34 @@ def co_purchase_ddl() -> str:
 
     return _ddl()
 
-engine = create_async_engine(
-    settings.database_url,
-    echo=False,
-    pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=5,
+def _make_engine(url: str, *, pooled: bool = True):
+    if not pooled:
+        # one-shot work (a migration / seed job): a fresh connection per call, so
+        # nothing is left holding an event loop that has since closed
+        return create_async_engine(url, echo=False, poolclass=NullPool)
+    return create_async_engine(
+        url,
+        echo=False,
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=5,
+    )
+
+
+# the API's connection: DML-only (B5.1e)
+engine = _make_engine(settings.database_url)
+# DDL/seeds only. The same engine when no separate owner URL is configured, so a
+# single-role database behaves exactly as it did before the split.
+migrator_engine = (
+    _make_engine(settings.database_migrator_url, pooled=False)
+    if settings.database_migrator_url and settings.database_migrator_url != settings.database_url
+    else engine
 )
 
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
+MigratorSessionLocal = async_sessionmaker(
+    migrator_engine, expire_on_commit=False, autoflush=False
+)
 
 
 # --- Coupon tables DDL (idempotent) -----------------------------------------
@@ -325,11 +351,12 @@ AUDIT_DDL = [
         "CREATE INDEX IF NOT EXISTS audit_logs_entity_idx "
         "ON public.audit_logs(entity_type, entity_id)"
     ),
-    # B5.1b: append-only. The app's DB role owns the table (and is a superuser in
-    # the compose stack), so REVOKE cannot enforce it — triggers do. The one change
-    # allowed is the FK's ON DELETE SET NULL when a user is deleted: attribution is
-    # lost, nothing else may move. (A superuser can still disable triggers — full
-    # proof needs a least-privilege app role, B5.1e.)
+    # B5.1b: append-only. When the table was created the app's own DB role owned it
+    # (and was a superuser in the compose stack), so REVOKE had nothing to enforce —
+    # triggers do. The one change allowed is the FK's ON DELETE SET NULL when a user
+    # is deleted: attribution is lost, nothing else may move. Since B5.1e the API
+    # connects with a DML-only role that owns nothing and cannot disable or drop
+    # these triggers; only the migrator (which never serves a request) still could.
     """
     CREATE OR REPLACE FUNCTION public.audit_logs_append_only() RETURNS trigger
     LANGUAGE plpgsql AS $$
@@ -601,6 +628,57 @@ _DDL_GUARDS = [
 ]
 
 
+# --- Least-privilege application role (B5.1e) --------------------------------
+# The API's own connection must not be able to change the schema or the rules the
+# data is held to. `startup_ddl()` therefore creates (or refreshes) a DML-only
+# role and grants it exactly rows access, plus `ALTER DEFAULT PRIVILEGES` so the
+# objects the migrator creates later are covered as well. It runs as the schema
+# owner, and only when `DATABASE_APP_USER` is set: a single-role database has no
+# split to maintain.
+#
+# Deliberately NOT granted: CREATE on the schema, TRUNCATE, ownership, superuser.
+# `session_replication_role` (which would let a role bypass the append-only
+# triggers) requires superuser, so the app role cannot reach it either.
+_ROLE_NAME_RE = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
+
+
+def app_role_ddl(role: str, password: str) -> list[str]:
+    """Statements that create/refresh the DML-only application role (B5.1e).
+
+    A role name and a password cannot be bind parameters, so both are validated
+    here — callers pass configuration values only. Idempotent, and safe to run on
+    every `startup_ddl()`.
+    """
+    if not _ROLE_NAME_RE.match(role):
+        raise ValueError(f"invalid database application role name: {role!r}")
+    quoted_pw = password.replace("'", "''")
+    return [
+        # CREATE ROLE has no IF NOT EXISTS, hence the catalog check; the ALTER
+        # below converges a role that already exists (e.g. a rotated password)
+        (
+            f"DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{role}') "
+            f"THEN CREATE ROLE {role} LOGIN PASSWORD '{quoted_pw}' "
+            "NOSUPERUSER NOCREATEDB NOCREATEROLE; END IF; END $$"
+        ),
+        (
+            f"ALTER ROLE {role} WITH LOGIN PASSWORD '{quoted_pw}' "
+            "NOSUPERUSER NOCREATEDB NOCREATEROLE"
+        ),
+        f"GRANT USAGE ON SCHEMA public TO {role}",
+        f"REVOKE CREATE ON SCHEMA public FROM {role}",
+        f"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {role}",
+        f"GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO {role}",
+        (
+            "ALTER DEFAULT PRIVILEGES IN SCHEMA public "
+            f"GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {role}"
+        ),
+        (
+            "ALTER DEFAULT PRIVILEGES IN SCHEMA public "
+            f"GRANT USAGE, SELECT ON SEQUENCES TO {role}"
+        ),
+    ]
+
+
 async def ddl_needed(conn, stmt: str) -> bool:
     """False when the object a guarded DDL statement would create already exists."""
     for pattern, check in _DDL_GUARDS:
@@ -614,9 +692,15 @@ async def ddl_needed(conn, stmt: str) -> bool:
 
 
 async def startup_ddl() -> None:
+    """Bring any database up to the current schema (B5.1e: as the migrator role).
+
+    Runs in the one-shot `db-init` job and in the tests — never in the API process,
+    whose role has no DDL at all. Every statement is idempotent, so a fresh database
+    and an already-seeded one converge, and running it twice changes nothing.
+    """
     # enum extension first, on its own autocommit connection (ADD VALUE and
     # older Postgres transactions do not mix)
-    conn = await engine.connect()
+    conn = await migrator_engine.connect()
     try:
         await conn.execution_options(isolation_level="AUTOCOMMIT")
         for stmt in ROLE_DDL:
@@ -625,9 +709,9 @@ async def startup_ddl() -> None:
     finally:
         await conn.close()
 
-    async with engine.begin() as conn:
-        # one process at a time (backend boot, the seed jobs, tests) — taken before
-        # the timeout below, so waiting for another boot's DDL is not bounded
+    async with migrator_engine.begin() as conn:
+        # one process at a time (the seed jobs, tests) — taken before the timeout
+        # below, so waiting for another migration is not bounded
         await conn.execute(text("SELECT pg_advisory_xact_lock(hashtextextended('ddl', 0))"))
         # a DDL that is really needed waits at most this long for its table lock
         # instead of queueing every request behind it
@@ -648,11 +732,17 @@ async def startup_ddl() -> None:
             for stmt in statements:
                 if await ddl_needed(conn, stmt):
                     await conn.execute(text(stmt))
+        # after the tables, so the grants cover everything just created (B5.1e)
+        if settings.database_app_user:
+            for stmt in app_role_ddl(
+                settings.database_app_user, settings.database_app_password
+            ):
+                await conn.execute(text(stmt))
 
     # first co-purchase refresh so /recommendations has data on fresh stacks
     from app.services.recommendations import refresh_co_purchases
 
-    async with SessionLocal() as session:
+    async with MigratorSessionLocal() as session:
         try:
             await refresh_co_purchases(session)
             await session.commit()

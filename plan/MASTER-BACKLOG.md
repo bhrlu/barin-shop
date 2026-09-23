@@ -512,7 +512,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "B5.1e",
+    "agent_start_task": "F5.19",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -696,7 +696,7 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "backend-tasks.md",
       "scope": "Make audit_logs append-only for the application role with positive INSERT/SELECT and negative UPDATE/DELETE verification.",
       "audit": "plan/audit/2026-09-23-b51b-audit-log-append-only.md",
-      "verification_level": "fully verified (tamper resistance against the app / non-superusers; a superuser can still disable triggers — B5.1e)",
+      "verification_level": "fully verified (tamper resistance against the app / non-superusers; the migrator could still disable triggers — closed for the app role by B5.1e, DONE 2026-09-24)",
       "completed": "2026-09-23"
     },
     {
@@ -1248,7 +1248,7 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "B5.1e",
       "title": "Run the backend as a least-privilege database role",
       "priority": "P3",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "infra_db",
       "depends_on": [],
       "blocks": [],
@@ -1256,7 +1256,10 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "backend-tasks.md",
       "discovered_as": "NEW-B51B-1",
       "discovered_during": "B5.1b",
-      "scope": "The backend connects as the schema owner and (compose) a superuser, so any path can drop tables, disable triggers or rewrite the audit trail. Split a migrator role (owns schema, runs startup_ddl/seeds) from a DML-only app role the backend uses; clean-env proof that the app role cannot ALTER/DROP/disable triggers."
+      "scope": "The backend connects as the schema owner and (compose) a superuser, so any path can drop tables, disable triggers or rewrite the audit trail. Split a migrator role (owns schema, runs startup_ddl/seeds) from a DML-only app role the backend uses; clean-env proof that the app role cannot ALTER/DROP/disable triggers.",
+      "audit": "plan/audit/2026-09-24-b51e-least-privilege-db-role.md",
+      "verification_level": "fully verified (clean environment + live role proof in the running container + negative control as the owner + the full suite and smoke as the app role)",
+      "completed": "2026-09-24"
     },
     {
       "id": "F5.17",
@@ -2021,7 +2024,7 @@ Browser: create, edit and toggle a coupon → 200 and the UI reflects it;
 * **Layer:** Infra/DB
 * **Status:** DONE (2026-09-23)
 * **Audit:** [`plan/audit/2026-09-23-b51b-audit-log-append-only.md`](audit/2026-09-23-b51b-audit-log-append-only.md)
-* **Verification level:** fully verified (tamper resistance against the app / non-superusers; a superuser can still disable triggers — B5.1e)
+* **Verification level:** fully verified (tamper resistance against the app / non-superusers; the migrator could still disable triggers — closed for the app role by B5.1e, DONE 2026-09-24)
 * **Delivered:** triggers make `audit_logs` append-only (UPDATE/DELETE/TRUNCATE refused; only the FK `admin_id → NULL` cascade allowed) — REVOKE cannot, the app role owns the table and is a superuser. New guard shapes keep the boot lock-free. 6 tests + negative control; clean env.
 * **Dependencies:** none
 
@@ -3068,7 +3071,11 @@ Also test cancellation/refund behavior.
 ## B5.1e — Run the backend as a least-privilege database role
 
 * **Layer:** Infra/DB
-* **Status:** TODO
+* **Status:** DONE (2026-09-24)
+* **Audit:** [`plan/audit/2026-09-24-b51e-least-privilege-db-role.md`](audit/2026-09-24-b51e-least-privilege-db-role.md)
+* **Verification level:** fully verified (clean environment + live role proof in the running container + negative control as the owner + the full suite and smoke as the app role)
+* **Delivered:** the API connects as `sande_app` — DML only (`SELECT/INSERT/UPDATE/DELETE`, sequences), no `CREATE` on `public`, no DDL, owns nothing, not a superuser; the role and its grants are created idempotently by `app_role_ddl()` from `startup_ddl()`, which now runs as the schema owner (`DATABASE_MIGRATOR_URL`, NullPool). The API runs no DDL at all and its container holds no owner credential; compose's `db-init` job owns DDL + seeds, `backend`/`worker` wait for it (`service_completed_successfully`), and a `tools` service (profile `tools`) covers ad-hoc owner-side work. The whole pytest suite (353) and smoke (257) now run as the app role; live: `rolsuper=false`, 0 owned relations, and ALTER/DROP/CREATE/TRUNCATE/DISABLE TRIGGER/DROP TRIGGER/`session_replication_role` all refused (all seven succeed as the owner).
+* **Open residual:** `audit_logs`/`inventory_logs` keep table-level UPDATE/DELETE — append-only stays trigger-enforced, but the app role can no longer disable or drop those triggers.
 * **Priority:** P3
 * **Batch:** C
 * **Dependencies:** none
@@ -3766,8 +3773,11 @@ B6.18  (DONE 2026-09-24)
 B6.18a
 B6.19  (DONE 2026-09-23)
 B6.20  (DONE 2026-09-23)
-B5.1e
+B5.1e  (DONE 2026-09-24)
 ```
+
+Batch C is complete. `B6.18a` is open in it but gated on a trigger (see its
+section) — execution moves to Batch D.
 
 `AB-BE-01` begins after `B6.8`.
 
@@ -4018,16 +4028,16 @@ were freshly executed.
 ## START HERE
 
 ```text
-B5.1e
+F5.19
 ```
 
-47 of 58 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. next P3 (Batch C) — run the backend as a least-privilege database role
+48 of 58 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. next P3 (Batch D) — admin inventory ledger viewer
 
-(`F5.20` was executed out of order as a user-directed P1 on 2026-09-24, and
-`B6.18` followed it; the pointer moves to the last remaining Batch C item,
-`B5.1e`. `B6.18a` is also open in Batch C but is gated on a trigger — see its
-section.)
+(`F5.20` was executed out of order as a user-directed P1 on 2026-09-24; `B6.18`
+and `B5.1e` then closed Batch C, so the pointer moves to the last remaining
+Batch D item, `F5.19`. `B6.18a` is open in Batch C but gated on a trigger — see
+its section.)
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -4131,11 +4141,11 @@ Reconciliation date:
 Current state:
 
 ```text
-11 remaining implementation units (B2.1a, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B5.1e, B6.18a, F5.19, B2.5a)
-47 completed implementation units
+10 remaining implementation units (B2.1a, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.18a, F5.19, B2.5a)
+48 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = B5.1e
+NEXT = F5.19
 ```

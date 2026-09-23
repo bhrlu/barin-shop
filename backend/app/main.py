@@ -5,7 +5,6 @@ payments, storage (MinIO), admin.
 """
 
 import logging
-from contextlib import asynccontextmanager
 from urllib.parse import parse_qs, urlparse
 
 from fastapi import FastAPI, Request
@@ -13,7 +12,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 from app.config import settings
-from app.db import startup_ddl
 from app.routers import (
     addresses,
     admin,
@@ -39,13 +37,10 @@ from app.services.client_ip import resolve_client_ip
 
 logging.basicConfig(level=logging.INFO)
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await startup_ddl()
-    yield
-
-
+# B5.1e: the API runs no DDL and owns no object. Its connection is the DML-only
+# role in `DATABASE_URL`; the schema comes from the one-shot `db-init` job, which
+# runs `startup_ddl()` (and the seeds) as the schema owner. The compose `backend`
+# service therefore starts after `db-init` has exited 0 — see infra/docker-compose.yml.
 app = FastAPI(
     title="SÂNDÉ Backend",
     description=(
@@ -53,7 +48,6 @@ app = FastAPI(
         "Notifications"
     ),
     version="0.3.0",
-    lifespan=lifespan,
 )
 
 # The frontend dev server and production origin both need to call this API.

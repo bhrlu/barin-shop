@@ -271,10 +271,22 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   the request answers 500 and nothing is persisted. 6 tests with a real
   trigger-forced failure; the old code fails 5 of them.
   → audit: [2026-09-23-b51d-audit-atomicity.md](audit/2026-09-23-b51d-audit-atomicity.md)
-- [ ] **B5.1e Run the backend as a least-privilege database role** (`NEW-B51B-1`,
+- [x] **B5.1e Run the backend as a least-privilege database role** (`NEW-B51B-1`,
   discovered during B5.1b) — the app connects as the schema owner and a superuser, so
   it can drop tables or disable the audit triggers. Split a migrator role (DDL, seeds)
   from a DML-only app role; clean-env proof.
+  Done (2026-09-24): the API connects as `sande_app` (DML only — no `CREATE` on the
+  schema, no DDL, no ownership, not a superuser; created/granted by `app_role_ddl()`
+  in `startup_ddl()`, which now runs as the owner via `DATABASE_MIGRATOR_URL`). The
+  API runs no DDL at all and its container holds no owner credential; the compose
+  `db-init` job owns DDL + seeds and `backend`/`worker` wait for it, with a `tools`
+  service (profile) for ad-hoc owner-side work. Live: `current_user=sande_app`,
+  `rolsuper=false`, 0 owned relations, DML allowed, and ALTER/DROP/CREATE/TRUNCATE/
+  DISABLE TRIGGER/DROP TRIGGER/`session_replication_role` all refused — the same seven
+  statements succeed as the owner (negative control). pytest 353 (5 new, the whole
+  suite now runs as the app role), smoke 257/0, clean `down -v && up --build` with
+  `db-init` exit 0 + four seed stages. Fully verified.
+  → audit: [2026-09-24-b51e-least-privilege-db-role.md](audit/2026-09-24-b51e-least-privilege-db-role.md)
 - [x] **B5.1c `GET /admin/audit-logs` 500s on a malformed `admin_id`**
   (`NEW-F55-1`, discovered during F5.5) — `?admin_id=foo` reaches
   `CAST(:admin_id AS uuid)` and Postgres raises, so the admin caller gets a 500

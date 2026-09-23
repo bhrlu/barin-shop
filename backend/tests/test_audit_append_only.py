@@ -1,9 +1,12 @@
 """`audit_logs` is append-only at the database level (B5.1b).
 
-The app's DB role owns the table (and is a superuser in the compose stack), so REVOKE
-cannot enforce it; triggers refuse UPDATE, DELETE and TRUNCATE. The one change allowed
-is the FK's `ON DELETE SET NULL` when a user is deleted — `admin_id` becomes NULL and
-nothing else may move. Rows written here stay (that is the point).
+When the table was created the app's DB role owned it (and was a superuser in the
+compose stack), so REVOKE could not enforce anything; triggers refuse UPDATE, DELETE
+and TRUNCATE. Since B5.1e the app connects with a DML-only role that owns nothing and
+cannot disable or drop those triggers — TRUNCATE is refused by the missing privilege
+before the trigger is even reached. The one change allowed is the FK's
+`ON DELETE SET NULL` when a user is deleted — `admin_id` becomes NULL and nothing else
+may move. Rows written here stay (that is the point).
 """
 
 from uuid import uuid4
@@ -99,7 +102,9 @@ async def test_delete_is_refused(db, entry):
 
 async def test_truncate_is_refused(db, entry):
     msg = await _refused(db, "TRUNCATE public.audit_logs")
-    assert "append-only" in msg
+    # B5.1e: the app role has no TRUNCATE privilege at all, so the ACL refuses
+    # before the trigger is reached; a superuser would see the trigger's message
+    assert "append-only" in msg or "permission denied" in msg
     assert await _row(db, entry["marker"]) is not None
 
 

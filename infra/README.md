@@ -19,15 +19,17 @@ infra/
 | `postgres` | postgres:16-alpine | 5432 | The backend's database (`public.users` is a real table with bcrypt hashes) |
 | `minio` | quay.io/minio/minio | 9000 (API) / 9001 (console) | S3-compatible object storage |
 | `minio-init` | quay.io/minio/minio | – | One-shot: creates the public-read `product-images` bucket |
-| `db-init` | backend image | – | One-shot: `seed_auth → seed_products → seed_demo → seed_coupons` |
-
-> Want the admin screens populated? After the stack is up, run the optional demo
-> dataset: `docker compose -f infra/docker-compose.yml exec backend python -m
-> app.seed_mock` (8 customers, 31 backdated orders, refund claims in every state,
-> reviews, inbox, variants). Idempotent — safe to re-run.
-| `backend` | FastAPI | 8000 | The sole backend — docs at `/docs` |
+| `db-init` | backend image | – | One-shot **migrator** (B5.1e): runs `startup_ddl()` (schema + the DML-only app role), then `seed_auth → seed_products → seed_demo → seed_coupons` |
+| `backend` | FastAPI | 8000 | The sole backend — docs at `/docs`. Runs no DDL; connects as the DML-only app role |
 | `frontend` | Vite dev server (Bun) | 5173 | The store UI with hot reload |
 | `worker` | backend image | – | B2.5 background jobs (`python -m app.worker`): outbox sweeper + abandoned-payment reminders every `JOBS_INTERVAL_SECONDS`. No hot reload — `docker compose restart worker` after changing `app/services/jobs.py`; one manual pass: `docker compose exec worker python -m app.worker --once` |
+| `tools` | backend image | – | Profile `tools`, never started by `up`: ad-hoc DDL / extra seeds **as the schema owner** — `docker compose run --rm tools python -m app.seed_mock` |
+
+> Want the admin screens populated? After the stack is up, run the optional demo
+> dataset through the owner-side `tools` service: `docker compose -f
+> infra/docker-compose.yml run --rm tools python -m app.seed_mock` (8 customers, 31
+> backdated orders, refund claims in every state, reviews, inbox, variants).
+> Idempotent — safe to re-run.
 
 ## No Supabase
 
@@ -63,9 +65,23 @@ regresses to a private tarball URL, the build fails loudly at `bun install`.
 - **First run only:** `initdb/*.sql` runs when the `pgdata` volume is empty.
   Re-apply from scratch with `docker compose -f infra/docker-compose.yml down -v`
   (⚠ wipes local DB data).
-- **Schema:** base tables come from `infra/initdb/`. The backend adds the coupon
-  and catalog tables/columns **idempotently at startup** (`app/db.py`), so no
-  migration step is needed on an existing volume.
+- **Schema:** base tables come from `infra/initdb/`. Everything the API owns on top
+  of them (coupons, catalog, notifications, profile, the audit/inventory triggers …)
+  is created **idempotently by the `db-init` job** via `startup_ddl()` (`app/db.py`),
+  so no manual migration step is needed on an existing volume — `docker compose up -d
+  --build db-init` re-converges one (the job uses the image's copy of `app/`, so a
+  local `db.py` change needs the rebuild). There is no migration framework by design.
+- **Database roles (B5.1e).** Two roles: the **migrator** (`POSTGRES_USER`, the
+  schema owner and image superuser) runs `db-init`/`tools`; the **application role**
+  (`DATABASE_APP_USER`, default `sande_app`) is what `backend` and `worker` connect
+  with — rows access only, no DDL, owns nothing, and it cannot disable the
+  append-only triggers. `db-init` creates and grants it, and `backend` waits for that
+  job (`service_completed_successfully`) because the API no longer creates its own
+  schema. The backend container never receives the owner credentials, so ad-hoc DDL
+  goes through `tools` (`docker compose run --rm tools …`). Check it from the
+  outside: `docker exec -e PGPASSWORD=sande-app sandeh-postgres-1 psql -U sande_app
+  -d postgres -c 'SELECT current_user, rolsuper FROM pg_roles WHERE rolname =
+  current_user'` → `sande_app | f`.
 - **MinIO image comes from `quay.io`** — MinIO stopped publishing free images on
   Docker Hub in Oct 2025. `minio-init` reuses the server image's bundled `mc`
   (the standalone `minio/mc` image is also gone).

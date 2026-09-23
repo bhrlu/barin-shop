@@ -10,11 +10,13 @@ Supabase**.
 ```
 backend/
 ├── pyproject.toml         # deps: fastapi, sqlalchemy, asyncpg, python-jose, minio …
-├── .env.example           # DATABASE_URL, JWT_SECRET, MINIO_*, ZARINPAL_*, URLs
+├── .env.example           # DATABASE_URL (+ DATABASE_MIGRATOR_URL, DATABASE_APP_*),
+│                          # JWT_SECRET, MINIO_*, ZARINPAL_*, URLs
 ├── app/
 │   ├── main.py            # FastAPI app + CORS + Zarinpal Status mapping
 │   ├── config.py          # pydantic-settings
-│   ├── db.py              # async engine + idempotent coupon, catalog & profile DDL
+│   ├── db.py              # app (DML-only) + migrator engines, the app-role bootstrap
+│   │                      # (B5.1e) and the idempotent startup DDL
 │   ├── models.py          # SQLAlchemy models (mirrors the Postgres schema)
 │   ├── security.py        # HS256 JWT + bcrypt password hashing
 │   ├── auth.py            # CurrentUser / AdminUser / OptionalUser dependencies
@@ -52,15 +54,27 @@ uvicorn app.main:app --reload --port 8000
 
 Docs at http://localhost:8000/docs.
 
-> `app.seed_mock` is **optional** and not part of the compose `db-init` chain — run
-> it by hand when you want a populated dashboard (`docker compose exec backend
-> python -m app.seed_mock`). It is idempotent and deterministic: a second run is a
-> no-op, and every fresh database produces the same figures. Its customers sign in
-> with `customer1234`.
+> `app.seed_mock` is **optional** and not part of the compose `db-init` chain. Run it
+> by hand when you want a populated dashboard — through the compose `tools` service,
+> which is the schema owner (`docker compose run --rm tools python -m app.seed_mock`;
+> `exec backend …` no longer works, because the API's role has no DDL). It is
+> idempotent and deterministic: a second run is a no-op, and every fresh database
+> produces the same figures. Its customers sign in with `customer1234`.
 
 > `DATABASE_URL` must use the **asyncpg** driver
 > (`postgresql+asyncpg://…`) — bare `postgresql://` fails (`psycopg2` not installed).
 > The compose stack in `infra/` is the easiest way to get a database + MinIO.
+
+> **Database roles (B5.1e).** The API connects as a **DML-only role**
+> (`DATABASE_APP_USER`, default `sande_app`): it can read and write rows, and
+> nothing else — no `CREATE`/`ALTER`/`DROP`/`TRUNCATE`, it owns no object, it is not
+> a superuser, and it cannot disable the append-only triggers with
+> `session_replication_role`. DDL and the seeds run as the **schema owner**
+> (`DATABASE_MIGRATOR_URL`) from the one-shot `db-init` job (or `docker compose run
+> --rm tools …`), which also creates/grants the app role. An empty
+> `DATABASE_APP_USER` turns the split off, so a single-role database behaves exactly
+> as before. `startup_ddl()` is the only thing that writes DDL, and the API process
+> never calls it.
 
 ## Auth model
 
@@ -132,7 +146,7 @@ Admin:
 
 **Co-purchase recommendations (B2.4):** every multi-item order votes on each
 product pair it contains (`public.co_purchases`, refreshed in the checkout
-transaction and at startup). `GET /products/{id}/recommendations` blends
+transaction and by every `startup_ddl()` run — i.e. the `db-init` job). `GET /products/{id}/recommendations` blends
 votes ×3 with the category/popularity heuristic; the payload shape is
 unchanged. `GET /products/{id}/related` stays purely same-category.
 

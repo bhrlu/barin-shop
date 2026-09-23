@@ -3026,3 +3026,62 @@ labelled `image/png`; only worth fixing if the upload surface opens beyond
 least-privilege database role) — the last un-gated Batch C item.
 
 → audit: [2026-09-24-b618-upload-policy-limits.md](audit/2026-09-24-b618-upload-policy-limits.md)
+
+## 2026-09-24 — B5.1e the backend runs as a DML-only database role
+
+**Task** — `B5.1e` (P3, Batch C, the execution pointer), discovered during B5.1b
+(`NEW-B51B-1`). The backend connected as the schema owner and, in compose, the
+superuser `sande`: any path (or an injected query) could `ALTER`/`DROP`, disable
+the append-only triggers with `session_replication_role`, or rewrite the audit
+trail.
+
+**What was done** —
+
+- `app/db.py`: `engine` is now a **DML-only role** (`SELECT/INSERT/UPDATE/DELETE`,
+sequences) that owns nothing and cannot DDL; a separate `migrator_engine`
+(`DATABASE_MIGRATOR_URL`, NullPool) runs `startup_ddl()`/seeds. New
+`app_role_ddl()` creates/refreshes the role and its grants idempotently
+(`ALTER DEFAULT PRIVILEGES` covers objects created later), from `startup_ddl()`,
+only when `DATABASE_APP_USER` is set.
+- `app/main.py`: the API no longer runs DDL at boot.
+- `infra/docker-compose.yml`: the shared env is the app-role URL; a migrator anchor
+feeds `db-init` (DDL + seeds) and a new `tools` service (profile `tools`, never
+started by `up`) for ad-hoc owner-side work; `backend` now waits for `db-init`
+(`service_completed_successfully`). The API container holds **no** owner credential.
+- `tests/conftest.py`: the suite runs exactly like the stack (app role + owner URL),
+with a collection-time role bootstrap that prints one line instead of silently
+skipping if there is no database.
+- New `tests/test_db_least_privilege.py` (5 tests); three modules that create/drop
+objects now use the migrator connection; the two `TRUNCATE` assertions accept the
+ACL's refusal (the app role has no `TRUNCATE` at all).
+
+**Verification** — pytest **353** (5 new; the whole suite now runs as the app role),
+ruff clean, smoke **257/0** as the app role. Clean environment (`down -v && up -d
+--build`): `db-init` exit 0 with all four seed stages, postgres/minio healthy,
+`/health` ok, worker passes clean. Live in the backend container:
+`current_user=sande_app`, `rolsuper=false`, 0 owned relations, DML allowed, and
+ALTER / DROP / CREATE / TRUNCATE / DISABLE TRIGGER / DROP TRIGGER /
+`session_replication_role` all refused. Negative control: the same seven statements
+succeed as the owner (`docker compose run --rm tools …`, rolled back). Level:
+*fully verified*.
+
+**Decisions** — the migrator is the existing owner/superuser (`POSTGRES_USER`), so
+no second role had to be created; the app role is created by `startup_ddl()` rather
+than `infra/initdb/` so existing volumes converge; the API container deliberately
+keeps no owner credential, which is why `tools` exists for the documented
+`seed_mock` workflow; `audit_logs`/`inventory_logs` keep table-level UPDATE/DELETE
+because the FK's `ON DELETE SET NULL` needs `UPDATE (admin_id)` — append-only stays
+trigger-enforced, now with a role that cannot disable the trigger.
+
+**What was explicitly NOT done** — no column-level ACL on the two append-only
+tables (see above); no separate non-superuser migrator role (it would require
+re-owning every object for no extra protection); no frontend change (the API
+contract is identical), so `frontend-tasks.md`, `FEATURES.md`,
+`DESIGN_SYSTEM.md` and `feature-roadmap.md` are untouched.
+
+**Discovered follow-ups** — none new.
+
+**Next backlog pointer** — `F5.19` (P3, Batch D: admin inventory ledger viewer);
+Batch C is complete apart from `B6.18a`, which is gated on a trigger.
+
+→ audit: [2026-09-24-b51e-least-privilege-db-role.md](audit/2026-09-24-b51e-least-privilege-db-role.md)
