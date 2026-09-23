@@ -2383,3 +2383,14 @@ EXISTS` takes ACCESS EXCLUSIVE locks on every boot and deadlocks with in-flight
 queries → recorded as **B6.16** (P2). The F5.16 audit's "unexplained" error now points
 to it.
 → audit: [2026-09-23-b54b-include-inactive-catalog.md](audit/2026-09-23-b54b-include-inactive-catalog.md)
+
+## 2026-09-23 — B6.16 lock-free startup DDL (taken ahead of B6.9a)
+
+Every backend edit reloads the dev container, and the reload's `startup_ddl()` took
+ACCESS EXCLUSIVE locks and deadlocked in-flight queries — so it went first. Each DDL is
+now checked against the catalog and runs only when missing; boots/seeds serialize on an
+advisory lock; needed migrations wait at most 10 s. 4 tests (mutation control: guards
+off → 2 fail); reproduction probe 300 requests / 12 reloads / 0 failures (was a
+deadlock within ~80); pytest 190; smoke 229/0; clean environment with a schema
+identical to the pre-change snapshot. Level: *fully verified*.
+→ audit: [2026-09-23-b616-lock-free-startup-ddl.md](audit/2026-09-23-b616-lock-free-startup-ddl.md)

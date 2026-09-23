@@ -192,7 +192,7 @@ Canonical implementations in this repo — use these, do not re-derive them:
 | Contact-form abuse guard | `backend/app/services/contact_guard.py` (`record_attempt`) |
 | Password reset tokens + reset email | `backend/app/services/password_reset.py` (`request_reset`, `reset_password`); the email goes through `notifications.queue_private_email` |
 | Customer notifications (in-app + SMS/email outbox), channel switches | `backend/app/services/notifications.py` (`notify_order_event`, `notify_refund_event`, `notify`, `load_switches`); providers only behind it in `notification_providers.py` — never call Kavenegar/SMTP from a router |
-| Startup DDL | `startup_ddl()` in `backend/app/db.py` |
+| Startup DDL | `startup_ddl()` in `backend/app/db.py` — each statement must be one of the guarded shapes (`ADD COLUMN IF NOT EXISTS`, `CREATE [UNIQUE] INDEX IF NOT EXISTS`, `CREATE TABLE IF NOT EXISTS public.…`, `ADD VALUE IF NOT EXISTS`) so a steady-state boot takes no table lock; `tests/test_startup_ddl.py` fails otherwise (B6.16) |
 | All frontend HTTP | `vogue-vintage-vibes/src/lib/api.ts` (the `api` object + `request()`) |
 | Frontend auth/session | `src/lib/auth.tsx` (drops the stored token only when `/auth/me` answers 401/403/404; transient failures keep it and retry — F5.15) |
 | Currency/number formatting | `src/lib/format.ts` (`formatPrice`), spec B4.1 |

@@ -8,6 +8,7 @@ idempotently on startup so a fresh database and an already-seeded one converge
 with no manual migration step.
 """
 
+import re
 from collections.abc import AsyncIterator
 
 from sqlalchemy import text
@@ -399,6 +400,54 @@ PASSWORD_RESET_DDL = [
 ]
 
 
+# --- Lock-free steady-state boot (B6.16) --------------------------------------
+# `IF NOT EXISTS` does not make DDL cheap: `ALTER TABLE … ADD COLUMN IF NOT EXISTS`
+# takes an ACCESS EXCLUSIVE lock on the table even when the column is there, and
+# `CREATE INDEX IF NOT EXISTS` a SHARE lock. Run on every boot (and by every seed
+# job), that blocked — and could deadlock with — requests in flight during a
+# restart. Each guarded statement is now checked against the catalog first and
+# only runs when its object is missing; statements this cannot recognise (the
+# backfill UPDATEs, the settings-row INSERT — row locks only) still always run.
+_DDL_GUARDS = [
+    (
+        re.compile(
+            r"ALTER\s+TABLE\s+public\.(\w+)\s+ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+(\w+)",
+            re.I,
+        ),
+        "SELECT NOT EXISTS (SELECT 1 FROM information_schema.columns "
+        "WHERE table_schema = 'public' AND table_name = :a AND column_name = :b)",
+    ),
+    (
+        re.compile(r"CREATE\s+(?:UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS\s+(\w+)", re.I),
+        "SELECT to_regclass('public.' || :a) IS NULL",
+    ),
+    (
+        re.compile(r"CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+public\.(\w+)", re.I),
+        "SELECT to_regclass('public.' || :a) IS NULL",
+    ),
+    (
+        re.compile(
+            r"ALTER\s+TYPE\s+public\.(\w+)\s+ADD\s+VALUE\s+IF\s+NOT\s+EXISTS\s+'([^']+)'",
+            re.I,
+        ),
+        "SELECT NOT EXISTS (SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid "
+        "WHERE t.typname = :a AND e.enumlabel = :b)",
+    ),
+]
+
+
+async def ddl_needed(conn, stmt: str) -> bool:
+    """False when the object a guarded DDL statement would create already exists."""
+    for pattern, check in _DDL_GUARDS:
+        match = pattern.match(stmt.strip())
+        if match:
+            params = {"a": match.group(1)}
+            if match.lastindex and match.lastindex >= 2:
+                params["b"] = match.group(2)
+            return bool((await conn.execute(text(check), params)).scalar())
+    return True
+
+
 async def startup_ddl() -> None:
     # enum extension first, on its own autocommit connection (ADD VALUE and
     # older Postgres transactions do not mix)
@@ -406,11 +455,18 @@ async def startup_ddl() -> None:
     try:
         await conn.execution_options(isolation_level="AUTOCOMMIT")
         for stmt in ROLE_DDL:
-            await conn.execute(text(stmt))
+            if await ddl_needed(conn, stmt):
+                await conn.execute(text(stmt))
     finally:
         await conn.close()
 
     async with engine.begin() as conn:
+        # one process at a time (backend boot, the seed jobs, tests) — taken before
+        # the timeout below, so waiting for another boot's DDL is not bounded
+        await conn.execute(text("SELECT pg_advisory_xact_lock(hashtextextended('ddl', 0))"))
+        # a DDL that is really needed waits at most this long for its table lock
+        # instead of queueing every request behind it
+        await conn.execute(text("SET LOCAL lock_timeout = '10s'"))
         for statements in (
             COUPON_DDL,
             CATALOG_DDL,
@@ -424,7 +480,8 @@ async def startup_ddl() -> None:
             [co_purchase_ddl()],
         ):
             for stmt in statements:
-                await conn.execute(text(stmt))
+                if await ddl_needed(conn, stmt):
+                    await conn.execute(text(stmt))
 
     # first co-purchase refresh so /recommendations has data on fresh stacks
     from app.services.recommendations import refresh_co_purchases

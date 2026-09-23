@@ -286,6 +286,12 @@ columns (including `payments.authority` and `order_items.variant_id`) and the
 `recently_viewed`, `contact_messages`, `contact_attempts`, `notifications`,
 `notification_deliveries` and `notification_settings` (single row) tables.
 
+**Lock-free boot (B6.16).** Each DDL statement is checked against the catalog first and
+only runs when its column / index / table / enum label is missing, the DDL of
+concurrent processes (backend boot, seed jobs) is serialized by an advisory lock, and a
+needed migration waits at most `lock_timeout = 10s` for its table lock — a restart no
+longer blocks or deadlocks requests in flight.
+
 **Client IP (B5.1a audit + B3.11 throttle).** `app/services/client_ip.py` is the
 single resolver: the socket peer, or the `X-Forwarded-For` chain walked right to
 left **only when the peer is listed in `TRUSTED_PROXIES`** (empty by default —

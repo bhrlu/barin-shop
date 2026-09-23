@@ -1169,7 +1169,7 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "B6.16",
       "title": "Startup DDL deadlocks with in-flight requests on every restart",
       "priority": "P2",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "backend_db",
       "depends_on": [],
       "blocks": [],
@@ -1177,7 +1177,10 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "backend-tasks.md",
       "discovered_as": "NEW-B54B-1",
       "discovered_during": "B5.4b",
-      "scope": "startup_ddl() runs ALTER TABLE ... ADD COLUMN IF NOT EXISTS (ACCESS EXCLUSIVE even when the column exists), CREATE INDEX IF NOT EXISTS and backfill UPDATEs on hot tables at every boot and in every seed job; a restart under traffic blocks and can deadlock in-flight queries (reproduced: DeadlockDetectedError -> 500 on GET /products). Check the catalog and run only missing DDL, serialize with an advisory lock, bound with lock_timeout; keep idempotent; Rule 14 clean-env proof."
+      "scope": "startup_ddl() runs ALTER TABLE ... ADD COLUMN IF NOT EXISTS (ACCESS EXCLUSIVE even when the column exists), CREATE INDEX IF NOT EXISTS and backfill UPDATEs on hot tables at every boot and in every seed job; a restart under traffic blocks and can deadlock in-flight queries (reproduced: DeadlockDetectedError -> 500 on GET /products). Check the catalog and run only missing DDL, serialize with an advisory lock, bound with lock_timeout; keep idempotent; Rule 14 clean-env proof.",
+      "audit": "plan/audit/2026-09-23-b616-lock-free-startup-ddl.md",
+      "verification_level": "fully verified",
+      "completed": "2026-09-23"
     }
   ],
   "excluded": [
@@ -1199,11 +1202,11 @@ changes to the file shipped in sequence; the collision is closed.
   ],
   "counts": {
     "total_executable": 47,
-    "done": 20,
-    "open": 27,
+    "done": 21,
+    "open": 26,
     "P0": 0,
     "P1": 0,
-    "P2": 14,
+    "P2": 13,
     "P3": 13,
     "blocked": 0,
     "dropped": 2,
@@ -2326,7 +2329,10 @@ login still works. Smoke + clean environment (DDL).
 ## B6.16 — Startup DDL deadlocks with in-flight requests on every restart
 
 * **Layer:** Backend (DB / startup)
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-b616-lock-free-startup-ddl.md`](audit/2026-09-23-b616-lock-free-startup-ddl.md)
+* **Verification level:** fully verified
+* **Delivered:** catalog-guarded startup DDL (runs only missing objects), advisory-lock serialization and a 10 s lock_timeout; the steady-state boot takes no table lock. Reproduction probe: deadlock → 300 requests / 12 reloads / 0 failures; clean env with an identical schema.
 * **Priority:** P2
 * **Batch:** C
 * **Dependencies:** none
@@ -3150,13 +3156,13 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**27** open · **20** DONE · 47 executable in total.
+**26** open · **21** DONE · 47 executable in total.
 20 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
 
-**27** (`B2.1a` additionally needs real provider credentials from the user)
+**26** (`B2.1a` additionally needs real provider credentials from the user)
 
 ### Blocked
 
@@ -3193,9 +3199,9 @@ D1–D9 are resolved.
 | --------- | --------: |
 | P0        |         0 |
 | P1        |         0 |
-| P2        |        14 |
+| P2        |        13 |
 | P3        |        13 |
-| **Total** |    **27** |
+| **Total** |    **26** |
 
 Generated from the JSON index on 2026-09-23.
 
@@ -3314,7 +3320,7 @@ were freshly executed.
 B6.9a
 ```
 
-20 of 47 executable units are DONE — each links its audit
+21 of 47 executable units are DONE — each links its audit
 and verification level in the JSON index and in its own section. **`B6.9a`** (narrow the remaining bare `except Exception` → 409 handlers; P2, Batch E) is next.
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
@@ -3419,8 +3425,8 @@ Reconciliation date:
 Current state:
 
 ```text
-27 remaining implementation units (B2.1a, B5.1b, AB-BE-01, AB-BE-02, F5.8, F5.7, F4.3, AB-FE-01, AB-FE-03, AB-FE-04, F3.5b, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B6.9a, B5.1c, F5.10, B2.2b, F5.11, F5.12, B6.15, B6.16)
-20 completed implementation units
+26 remaining implementation units (B2.1a, B5.1b, AB-BE-01, AB-BE-02, F5.8, F5.7, F4.3, AB-FE-01, AB-FE-03, AB-FE-04, F3.5b, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B6.9a, B5.1c, F5.10, B2.2b, F5.11, F5.12, B6.15)
+21 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete

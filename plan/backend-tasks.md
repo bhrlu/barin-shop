@@ -374,11 +374,13 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   Done (2026-09-23): `users.password_changed_at` + `_session_revoked()` in
   `app/auth.py` (whole-second cutoff). 6 tests, two-browser check, clean env.
   → audit: [2026-09-23-b614-reset-ends-sessions.md](audit/2026-09-23-b614-reset-ends-sessions.md)
-- [ ] **B6.16 Startup DDL deadlocks with in-flight requests on every restart**
+- [x] **B6.16 Startup DDL deadlocks with in-flight requests on every restart**
   (`NEW-B54B-1`, discovered during B5.4b) — `startup_ddl()`'s `ALTER TABLE … ADD
   COLUMN IF NOT EXISTS` takes ACCESS EXCLUSIVE locks on hot tables at every boot and
   in every seed job; reproduced a `DeadlockDetectedError` → 500 on `GET /products`.
   Run only missing DDL (catalog check), advisory lock + `lock_timeout`; Rule 14.
+  Done (2026-09-23): catalog-guarded startup DDL (runs only missing objects), advisory-lock serialization and a 10 s lock_timeout; the steady-state boot takes no table lock. Reproduction probe: deadlock → 300 requests / 12 reloads / 0 failures; clean env with an identical schema.
+  → audit: [2026-09-23-b616-lock-free-startup-ddl.md](audit/2026-09-23-b616-lock-free-startup-ddl.md)
 - [ ] **B6.15 `POST /coupons` accepts both discount kinds or neither** (`NEW-F516-1`,
   discovered during F5.16) — `CouponCreate._not_both` is a no-op stub; validate
   exactly one kind on create (422). The admin dialog already blocks both cases.
