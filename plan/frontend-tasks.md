@@ -377,8 +377,10 @@ conflict (DESIGN_SYSTEM.md §5).
   → audit: [2026-09-22-f56-role-management-ui.md](audit/2026-09-22-f56-role-management-ui.md)
 - [ ] **F5.7 Split the admin chart bundle** — recharts (~553 kB raw) and lodash
   (~164 kB) are pulled into the shared bundle for the dashboard alone.
-- [ ] **F5.8 `/shop` fetches the catalog twice** — `catalogQuery`
+- [x] **F5.8 `/shop` fetches the catalog twice** — `catalogQuery`
   (`?include_inactive=true`) and the filtered list query both run on every visit.
+  Done (2026-09-23): `/shop` builds its filter options from the new public `GET /products/facets` (sizes, colours, tags, price range of the active catalogue) instead of downloading every product; normal/filtered visits = facets + one page request, search = `/search` only. 5 backend tests (mutation controls), smoke 231/0, 23 browser checks (negative control: 6 fail on the old code). Browser tested.
+  → audit: [2026-09-23-f58-shop-facets-endpoint.md](audit/2026-09-23-f58-shop-facets-endpoint.md)
 - [x] **F5.9 Coupon discount-cap field in the admin dialog** (`NEW-ABBE03-1`,
   discovered during AB-BE-03) — the backend now stores and enforces
   `coupons.max_discount_cap`, but `admin.coupons.tsx` and the `AdminCoupon` /

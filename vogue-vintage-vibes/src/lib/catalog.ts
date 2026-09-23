@@ -124,6 +124,24 @@ export const catalogQuery = queryOptions({
   },
 });
 
+/**
+ * `/shop` filter options (sizes, colours, tags, price range) from `GET /products/facets`,
+ * so the page no longer downloads the whole catalogue to build them (F5.8). The key
+ * sits under `["catalog"]`, so the admin's catalogue invalidations refresh it too.
+ */
+export const facetsQuery = queryOptions({
+  queryKey: ["catalog", "facets"],
+  queryFn: async () => {
+    const facets = await api.productFacets();
+    return {
+      sizes: facets.sizes,
+      colors: facets.colors,
+      tags: [...facets.tags].sort((a, b) => a.localeCompare(b, "fa")),
+      priceBounds: { min: facets.price_min ?? 0, max: facets.price_max ?? 2000000 },
+    };
+  },
+});
+
 // --- single product, its variants, reviews and discovery rails ------------------
 
 export const productQuery = (id: string) =>
@@ -170,23 +188,11 @@ export const recentlyViewedQuery = (limit = 8) =>
 export function useCatalog() {
   const query = useQuery(catalogQuery);
   const all = query.data ?? [];
-  const products = all.filter((p) => p.active);
-  const sizes = Array.from(new Set(products.flatMap((p) => p.sizes)));
-  const colors = Array.from(
-    new Map(products.flatMap((p) => p.colors).map((c) => [c.name, c])).values(),
-  );
-  const prices = products.map((p) => p.price);
   return {
     ...query,
     all,
-    products,
+    products: all.filter((p) => p.active),
     byId: (id: string) => all.find((p) => p.id === id),
-    allSizes: sizes,
-    allColors: colors,
-    priceBounds: {
-      min: prices.length ? Math.min(...prices) : 0,
-      max: prices.length ? Math.max(...prices) : 2000000,
-    },
   };
 }
 

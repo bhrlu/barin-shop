@@ -288,6 +288,16 @@ class ProductOut(ProductBase):
     review_count: int = 0
 
 
+class ProductFacets(BaseModel):
+    """Storefront filter options over the active catalogue (F5.8)."""
+
+    sizes: list[str]
+    colors: list[ProductColor]
+    tags: list[str]
+    price_min: int | None = None  # None when no product is active
+    price_max: int | None = None
+
+
 # --- product variants --------------------------------------------------------------
 
 

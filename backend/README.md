@@ -84,6 +84,7 @@ Public / customer:
 | POST | `/auth/password/forgot` | – | `{email}` → **202** with the same message for every address (never reveals an account); emails a one-time link if the account exists (F2.3) |
 | POST | `/auth/password/reset` | – | `{token, password}` → 200; 400 for an unknown / used / superseded / expired link |
 | GET | `/products` | optional | catalog list — filters `category, tag, badge, availability, on_sale, size, color, min_price, max_price` + `sort`. `size`/`color` are **multi-value** (repeatable and/or comma-separated) |
+| GET | `/products/facets` | – | `/shop` filter options — sizes, colours, tags and `price_min`/`price_max` of the **active** catalogue (F5.8) |
 | GET | `/products/compare?ids=` | – | side-by-side comparison |
 | GET | `/products/{id}` | – | one product (with `avg_rating`, `review_count`) |
 | GET | `/products/{id}/related` · `/recommendations` | – | discovery |

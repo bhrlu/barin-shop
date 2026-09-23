@@ -82,6 +82,17 @@ def main() -> int:
     )
     bare = call("GET", "/products").json()
     check("GET /products (no page) → bare list", isinstance(bare, list), f"len={len(bare)}")
+    # /shop filter options without the whole catalogue (F5.8)
+    facets = call("GET", "/products/facets").json()
+    check(
+        "GET /products/facets → sizes/colours/tags/price range of the active catalogue",
+        isinstance(facets, dict)
+        and set(facets.get("sizes", [])) == {s for p in bare for s in p["sizes"]}
+        and facets.get("price_min") == min(p["price"] for p in bare)
+        and facets.get("price_max") == max(p["price"] for p in bare),
+        f"sizes={len(facets.get('sizes', []))} "
+        f"range={facets.get('price_min')}–{facets.get('price_max')}",
+    )
     for ep in (
         "/orders?page=1&page_size=5",
         "/admin/orders?page=1&page_size=5",

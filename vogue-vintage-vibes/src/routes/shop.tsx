@@ -7,7 +7,7 @@ import { ProductCard } from "@/components/ProductCard";
 import { RecentlyViewedRail } from "@/components/product/RecentlyViewedRail";
 import { categories, type CategoryId } from "@/data/products";
 import { toPage } from "@/lib/api";
-import { searchQuery, toProducts, useCatalog } from "@/lib/catalog";
+import { facetsQuery, searchQuery, toProducts } from "@/lib/catalog";
 import { Pager } from "@/components/Pager";
 import { formatToman, toFa } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -195,7 +195,12 @@ function clean(next: ShopSearchPatch): ShopSearch {
 
 function CatalogPage({ search }: { search: ShopSearch }) {
   const navigate = useNavigate();
-  const { allSizes, allColors, priceBounds, all, isLoading: catalogLoading } = useCatalog();
+  // filter options only — the product grid below is the paginated, server-filtered query
+  const facets = useQuery(facetsQuery);
+  const allSizes = facets.data?.sizes ?? [];
+  const allColors = facets.data?.colors ?? [];
+  const tags = facets.data?.tags ?? [];
+  const priceBounds = facets.data?.priceBounds ?? { min: 0, max: 2000000 };
   const [maxPriceDraft, setMaxPriceDraft] = useState<number | null>(search.maxPrice ?? null);
   const priceCap = search.maxPrice ?? priceBounds.max;
 
@@ -223,9 +228,6 @@ function CatalogPage({ search }: { search: ShopSearch }) {
   });
   const visible = products.data?.items ?? [];
 
-  const tags = Array.from(new Set(all.flatMap((product) => product.tags ?? []))).sort((a, b) =>
-    a.localeCompare(b, "fa"),
-  );
   const hasFilters = Boolean(
     search.category ||
     search.size?.length ||
@@ -459,7 +461,7 @@ function CatalogPage({ search }: { search: ShopSearch }) {
         </aside>
 
         <div>
-          {products.isLoading || catalogLoading ? (
+          {products.isLoading ? (
             <div className="grid grid-cols-2 gap-x-5 gap-y-10 lg:grid-cols-3">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="aspect-[4/5] animate-pulse rounded-[1.25rem] bg-clay" />

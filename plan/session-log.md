@@ -2430,3 +2430,29 @@ checkout (server total = displayed total, then cancelled) were re-tested: 27 che
 Not done: `/shop`'s double fetch (F5.8, next). Lint +1 warning of the rule already on
 `useCart`. Level: *browser tested*.
 → audit: [2026-09-23-f512-cart-provider-no-catalog.md](audit/2026-09-23-f512-cart-provider-no-catalog.md)
+
+## 2026-09-23 — F5.8 `/shop` filter options without the whole catalogue
+
+`/shop` downloaded every product (and signed every image) only to list sizes,
+colours, tags and the price range. New public `GET /products/facets` returns those
+values for the active catalogue, matching the old client derivation (first-seen order,
+colours deduped by name). `facetsQuery` is keyed under `["catalog"]`, so admin
+invalidations still refresh it. `useCatalog()` lost its now-unused facet fields.
+
+Request paths per state:
+
+- normal / filtered visit: facets + one page request;
+- filter click and pager: the page request only;
+- search: `/search` only.
+
+Verification:
+
+- 5 tests. Mutation controls: without the active filter 2 fail, with the route
+  unregistered 4 fail.
+- pytest 208, smoke 231/0.
+- 23 browser checks for guest and admin. Negative control: 6 fail on the old files;
+  the filter panel is identical.
+
+Decided: staff no longer see tags that exist only on inactive products (active only,
+whoever asks). Level: *browser tested*.
+→ audit: [2026-09-23-f58-shop-facets-endpoint.md](audit/2026-09-23-f58-shop-facets-endpoint.md)

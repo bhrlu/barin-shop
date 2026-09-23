@@ -174,6 +174,15 @@ export type Product = {
   updated_at: string | null;
 };
 
+/** `GET /products/facets` — the `/shop` filter options over the active catalogue (F5.8). */
+export type ProductFacets = {
+  sizes: string[];
+  colors: { name: string; hex: string }[];
+  tags: string[];
+  price_min: number | null;
+  price_max: number | null;
+};
+
 export type ProductListParams = {
   category?: string;
   tag?: string;
@@ -670,6 +679,7 @@ export const api = {
     const suffix = qs.toString() ? `?${qs}` : "";
     return request<Product[] | Page<Product>>(`/products${suffix}`);
   },
+  productFacets: () => request<ProductFacets>("/products/facets"),
   product: (id: string) => request<Product>(`/products/${encodeURIComponent(id)}`),
   relatedProducts: (id: string, limit = 4) =>
     request<Product[]>(`/products/${encodeURIComponent(id)}/related?limit=${limit}`),

@@ -33,6 +33,8 @@ from sqlalchemy.exc import IntegrityError
 
 from app.auth import CurrentUser, DbSession, OptionalUser, StaffCatalog
 from app.schemas import (
+    ProductColor,
+    ProductFacets,
     ProductIn,
     ProductOut,
     ProductUpdateIn,
@@ -207,6 +209,40 @@ async def list_products(
     if page > 0:
         return envelope(items, total, page, page_size)
     return items
+
+
+@router.get("/products/facets", response_model=ProductFacets)
+async def product_facets(session: DbSession) -> ProductFacets:
+    """Filter options for `/shop`: the sizes, colours and tags of the active catalogue
+    (first-seen order over the newest-first list) and its price range (F5.8).
+
+    The storefront used to download every product — and sign every image — to build
+    these. Inactive products never contribute, whoever asks."""
+    rows = (
+        await session.execute(
+            text(
+                "SELECT sizes, colors, tags, price FROM public.products "
+                "WHERE active = true ORDER BY created_at DESC, id"
+            )
+        )
+    ).mappings().all()
+    sizes: dict[str, None] = {}
+    colors: dict[str, ProductColor] = {}  # by name: first position, last hex
+    tags: dict[str, None] = {}
+    for row in rows:
+        sizes.update(dict.fromkeys(row["sizes"] or []))
+        for color in row["colors"] or []:
+            if isinstance(color, dict) and color.get("name"):
+                colors[color["name"]] = ProductColor(name=color["name"], hex=color.get("hex", ""))
+        tags.update(dict.fromkeys(row["tags"] or []))
+    prices = [row["price"] for row in rows]
+    return ProductFacets(
+        sizes=list(sizes),
+        colors=list(colors.values()),
+        tags=list(tags),
+        price_min=min(prices, default=None),
+        price_max=max(prices, default=None),
+    )
 
 
 @router.get("/products/compare", response_model=list[ProductOut])
