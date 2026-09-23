@@ -395,11 +395,13 @@ conflict (DESIGN_SYSTEM.md §5).
   PATCH clears it.
   Done (2026-09-23): cap field in the coupon dialog (percent coupons only; 0 clears on edit), shown on the card; the page now imports the canonical `AdminCoupon` type. Browser 14/14 incl. the real discount via `/coupons/validate`.
   → audit: [2026-09-23-f59-coupon-cap-field.md](audit/2026-09-23-f59-coupon-cap-field.md)
-- [ ] **F5.10 Customers see staff nav tabs in the admin shell** (`NEW-F56-2`,
+- [x] **F5.10 Customers see staff nav tabs in the admin shell** (`NEW-F56-2`,
   discovered during F5.6) — a signed-in customer on `/admin/*` gets the "no admin
   access" notice, but the sidebar still lists داشبورد / پیام‌ها / نظرات because
   `admin.tsx` falls back to `ROLE_TAB_KEYS["support"]` for any unknown role. No
   data leaks (every call is gated), but the nav should be empty for non-staff.
+  Done (2026-09-23): Non-staff accounts get no admin tabs (only the no-access notice); staff tab sets unchanged (support 3, order_manager 7, admin 11). Browser 11/11 desktop + mobile (negative control: the customer's 3 tabs on the old code). Browser tested.
+  → audit: [2026-09-23-f510-no-admin-tabs-for-non-staff.md](audit/2026-09-23-f510-no-admin-tabs-for-non-staff.md)
 - [x] **AB-FE-02 Admin export controls** (`[FE-02]` export + `[BE-08]`, from the
   Master Backlog) — B2.2's exports had no UI. `/admin/orders` now has a panel:
   inclusive local date range + order status → «خروجی CSV» / «خروجی Excel», plus a

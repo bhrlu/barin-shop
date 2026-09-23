@@ -197,8 +197,12 @@ function AdminLayout() {
 
   const role = user?.role ?? "customer";
   const roleLabel = ROLE_LABELS[role] ?? ROLE_LABELS["customer"];
-  // unknown roles degrade to the read-mostly trio; legacy "admin" maps above
-  const allowedKeys = new Set(ROLE_TAB_KEYS[role] ?? ROLE_TAB_KEYS["support"]);
+  // F5.10: a non-staff account (a customer, or still loading) gets no admin tabs — it
+  // only sees the «no admin access» notice. Staff: their role's tabs; legacy "admin"
+  // maps above; an unmapped staff role degrades to the read-mostly trio.
+  const allowedKeys = new Set<TabKey>(
+    isAdmin ? (ROLE_TAB_KEYS[role] ?? ROLE_TAB_KEYS["support"]) : [],
+  );
   const tabs = ALL_TABS.filter((tab) => allowedKeys.has(tab.key));
   // Hiding a tab is not a guard: a staff member who types /admin/users still
   // rendered the page and only saw its empty state when the API answered 403.

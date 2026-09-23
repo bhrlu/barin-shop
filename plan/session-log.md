@@ -2820,3 +2820,13 @@ instead of a silent skip.
 Verification: four back-to-back runs, all 0 failed, with identical check sets; only
 the cleanup call differs. The rate limit is untouched. Level: *locally tested*.
 → audit: [2026-09-23-b620-smoke-contact-inbox-deterministic.md](audit/2026-09-23-b620-smoke-contact-inbox-deterministic.md)
+
+## 2026-09-23 — F5.10 no admin tabs for non-staff
+
+The admin shell's tab set is empty unless `isAdmin`. It used to fall back to the
+support trio for any role, customers included. Staff mappings are unchanged.
+
+Verification: browser 11/11 (customer 0 tabs, support 3, order_manager 7, admin 11,
+desktop and mobile). The old code showed the customer 3 tabs. Level: *browser
+tested*.
+→ audit: [2026-09-23-f510-no-admin-tabs-for-non-staff.md](audit/2026-09-23-f510-no-admin-tabs-for-non-staff.md)

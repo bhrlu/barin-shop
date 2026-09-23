@@ -512,7 +512,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "F5.10",
+    "agent_start_task": "F5.11",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -1007,7 +1007,7 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "F5.10",
       "title": "Hide staff nav tabs from non-staff in the admin shell",
       "priority": "P3",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "frontend",
       "depends_on": [],
       "blocks": [],
@@ -1015,7 +1015,10 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "frontend-tasks.md",
       "discovered_as": "NEW-F56-2",
       "discovered_during": "F5.6",
-      "scope": "admin.tsx falls back to ROLE_TAB_KEYS[\"support\"] for unknown roles, so a customer on /admin/* sees dashboard/messages/reviews tabs next to the no-access notice; render no tabs for non-staff roles."
+      "scope": "admin.tsx falls back to ROLE_TAB_KEYS[\"support\"] for unknown roles, so a customer on /admin/* sees dashboard/messages/reviews tabs next to the no-access notice; render no tabs for non-staff roles.",
+      "audit": "plan/audit/2026-09-23-f510-no-admin-tabs-for-non-staff.md",
+      "verification_level": "browser tested",
+      "completed": "2026-09-23"
     },
     {
       "id": "B2.2b",
@@ -1390,12 +1393,12 @@ changes to the file shipped in sequence; the collision is closed.
   ],
   "counts": {
     "total_executable": 56,
-    "done": 40,
-    "open": 16,
+    "done": 41,
+    "open": 15,
     "P0": 0,
     "P1": 0,
     "P2": 0,
-    "P3": 16,
+    "P3": 15,
     "blocked": 0,
     "dropped": 2,
     "obsolete": 1,
@@ -3082,7 +3085,10 @@ ruff.
 ## F5.10 — Hide staff nav tabs from non-staff in the admin shell
 
 * **Layer:** Frontend
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-f510-no-admin-tabs-for-non-staff.md`](audit/2026-09-23-f510-no-admin-tabs-for-non-staff.md)
+* **Verification level:** browser tested
+* **Delivered:** Non-staff accounts get no admin tabs (only the no-access notice); staff tab sets unchanged (support 3, order_manager 7, admin 11). Browser 11/11 desktop + mobile (negative control: the customer's 3 tabs on the old code). Browser tested.
 * **Priority:** P3
 * **Batch:** D
 * **Dependencies:** none
@@ -3648,7 +3654,7 @@ F5.7  (DONE 2026-09-23)
 AB-FE-01  (DONE 2026-09-23)
 AB-FE-04  (DONE 2026-09-23)
 F3.5b  (DONE 2026-09-23)
-F5.10
+F5.10  (DONE 2026-09-23)
 F5.11
 F5.12  (DONE 2026-09-23)
 F5.13  (DONE 2026-09-23)
@@ -3723,13 +3729,13 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**16** open · **40** DONE · 56 executable in total.
+**15** open · **41** DONE · 56 executable in total.
 29 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
 
-**16** (`B2.1a` additionally needs real provider credentials from the user)
+**15** (`B2.1a` additionally needs real provider credentials from the user)
 
 ### Blocked
 
@@ -3767,8 +3773,8 @@ D1–D9 are resolved.
 | P0        |         0 |
 | P1        |         0 |
 | P2        |         0 |
-| P3        |        16 |
-| **Total** |    **16** |
+| P3        |        15 |
+| **Total** |    **15** |
 
 Generated from the JSON index on 2026-09-23.
 
@@ -3884,11 +3890,11 @@ were freshly executed.
 ## START HERE
 
 ```text
-F5.10
+F5.11
 ```
 
-40 of 56 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. next P3 (Batch D) — staff nav tabs visible to non-staff in the admin shell
+41 of 56 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. next P3 (Batch D) — /shop leaks invalid URL params to the API
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -3992,11 +3998,11 @@ Reconciliation date:
 Current state:
 
 ```text
-16 remaining implementation units (B2.1a, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, F5.10, B2.2b, F5.11, B5.1e, F5.17, B6.18, F5.19, B2.5a)
-40 completed implementation units
+15 remaining implementation units (B2.1a, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B2.2b, F5.11, B5.1e, F5.17, B6.18, F5.19, B2.5a)
+41 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = F5.10
+NEXT = F5.11
 ```
