@@ -2322,3 +2322,26 @@ passed.
 → audit: [2026-09-23-b614-reset-ends-sessions.md](audit/2026-09-23-b614-reset-ends-sessions.md)
 
 **Next backlog pointer** — `F5.16`.
+
+## 2026-09-23 — F5.16 coupon edit can clear fields and switch kind (run: B6.14 → F5.16, done)
+
+**What was done** — `PATCH /coupons/{id}`: `max_uses: 0` = unlimited, a kind switch
+clears the other kind (both → 422), `expires_at: ""` already cleared; the dialog now
+sends those encodings on edit, only the chosen kind, and refuses both kinds filled.
+**Pricing fix:** a 10 % → fixed-amount switch used to keep `percent_off`, which
+`compute_discount` prefers — the new amount never reached checkout.
+
+**Verification** — 7 pytest through `/coupons/validate` (negative control 5 fail);
+pytest 170 (9 consecutive clean runs); smoke 229/0; dialog 15/15; F5.14 suite 14/14
+(its expiry observation now `null`); prettier/tsc/lint/build clean. Level:
+*integration + browser tested*.
+
+**Unexplained** — one full run (right after the negative-control file swaps) reported
+1 error whose text I did not capture; it did not reproduce in 9 further runs, 3 with
+backend reloads forced mid-run. Recorded as unexplained in the audit.
+
+**Discovered** — B6.15 (P3): `POST /coupons` accepts both kinds or neither.
+
+→ audit: [2026-09-23-f516-coupon-edit-clear-and-kind.md](audit/2026-09-23-f516-coupon-edit-clear-and-kind.md)
+
+**Next backlog pointer** — `F5.9` (proposed: same dialog, last open Batch B item).

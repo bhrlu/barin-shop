@@ -507,7 +507,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "F5.16",
+    "agent_start_task": "F5.9",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -1108,7 +1108,7 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "F5.16",
       "title": "Coupon edit dialog cannot clear expiry / total cap / discount kind",
       "priority": "P2",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "fullstack",
       "depends_on": [],
       "blocks": [],
@@ -1116,7 +1116,10 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "frontend-tasks.md",
       "discovered_as": "NEW-F514-1",
       "discovered_during": "F5.14",
-      "scope": "admin.coupons.tsx sends null for an emptied expiry / max_uses / the other discount kind; PATCH /coupons/{id} treats null as unchanged (expires_at clears only on \"\"; max_uses has no clear encoding). Define clear semantics in CouponUpdate, send them from the dialog, add pytest + browser checks."
+      "scope": "admin.coupons.tsx sends null for an emptied expiry / max_uses / the other discount kind; PATCH /coupons/{id} treats null as unchanged (expires_at clears only on \"\"; max_uses has no clear encoding). Define clear semantics in CouponUpdate, send them from the dialog, add pytest + browser checks.",
+      "audit": "plan/audit/2026-09-23-f516-coupon-edit-clear-and-kind.md",
+      "verification_level": "integration tested + browser tested",
+      "completed": "2026-09-23"
     },
     {
       "id": "B6.14",
@@ -1134,6 +1137,20 @@ changes to the file shipped in sequence; the collision is closed.
       "audit": "plan/audit/2026-09-23-b614-reset-ends-sessions.md",
       "verification_level": "fully verified",
       "completed": "2026-09-23"
+    },
+    {
+      "id": "B6.15",
+      "title": "POST /coupons accepts both discount kinds or neither",
+      "priority": "P3",
+      "status": "TODO",
+      "layer": "backend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "C",
+      "source": "backend-tasks.md",
+      "discovered_as": "NEW-F516-1",
+      "discovered_during": "F5.16",
+      "scope": "CouponCreate._not_both is a no-op stub, so the API stores a coupon with both percent_off and amount_off (compute_discount then ignores the amount) or with neither (discount 0). Validate exactly one kind on create (422, Persian message); pytest; the admin dialog already blocks it."
     }
   ],
   "excluded": [
@@ -1154,13 +1171,13 @@ changes to the file shipped in sequence; the collision is closed.
     }
   ],
   "counts": {
-    "total_executable": 45,
-    "done": 16,
+    "total_executable": 46,
+    "done": 17,
     "open": 29,
     "P0": 0,
     "P1": 0,
-    "P2": 17,
-    "P3": 12,
+    "P2": 16,
+    "P3": 13,
     "blocked": 0,
     "dropped": 2,
     "obsolete": 1,
@@ -2138,7 +2155,13 @@ the mutation; full pytest + ruff + `api_smoke.py`.
 ## F5.16 — Coupon edit dialog cannot clear expiry / total cap / discount kind
 
 * **Layer:** Full-stack
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-f516-coupon-edit-clear-and-kind.md`](audit/2026-09-23-f516-coupon-edit-clear-and-kind.md)
+* **Verification level:** integration tested + browser tested — 7 tests through
+  `/coupons/validate` (negative control: 5 fail), pytest 170, smoke 229/0, dialog
+  15/15, F5.14 suite 14/14. Also fixed the pricing side: a kind switch now clears
+  the other kind (the old row kept `percent_off`, so a switch to a fixed amount was
+  ignored at checkout). Found on the way: `B6.15`.
 * **Priority:** P2
 * **Batch:** D
 * **Dependencies:** none (touches the same dialog as `F5.9`)
@@ -2164,6 +2187,35 @@ dialog, and keep create unchanged.
 
 pytest for each clear path + a browser edit that clears expiry, cap and switches
 kind.
+
+---
+
+## B6.15 — `POST /coupons` accepts both discount kinds or neither
+
+* **Layer:** Backend
+* **Status:** TODO
+* **Priority:** P3
+* **Batch:** C
+* **Dependencies:** none
+* **Discovered as:** `NEW-F516-1` during `F5.16` — legacy discovery ID only;
+  `B6.15` is the executable ID.
+* **Source:** `backend-tasks.md` B6.15
+
+### Problem
+
+`CouponCreate._not_both` is a no-op validator, so the API stores a coupon with both
+`percent_off` and `amount_off` (`compute_discount` then silently ignores the
+amount) or with neither (discount 0). The admin dialog blocks both cases since
+F5.16; direct API callers are not blocked.
+
+### Required implementation
+
+Validate exactly one kind on create → 422 with a Persian message (same wording as
+the PATCH rule); keep the payload shape.
+
+### Verification
+
+pytest for both / neither / each single kind; smoke.
 
 ---
 
@@ -2882,6 +2934,7 @@ B5.4b
 B5.1d  (DONE 2026-09-23)
 B6.13  (DONE 2026-09-23)
 B6.14  (DONE 2026-09-23)
+B6.15
 ```
 
 `AB-BE-01` begins after `B6.8`.
@@ -2902,7 +2955,7 @@ F5.12
 F5.13  (DONE 2026-09-23)
 F5.14  (DONE 2026-09-22)
 F5.15  (DONE 2026-09-23)
-F5.16
+F5.16  (DONE 2026-09-23)
 ```
 
 These can mostly run in parallel because they touch different concerns.
@@ -2965,14 +3018,14 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**29** (16 completed: B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02, AB-FE-05, B3.11,
-B2.1, F5.14, F2.3, F5.15, B6.13, B5.1d, F5.13, B6.14; 18 added by discovery: NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a,
-F5.10, B2.2b, B5.4b, F5.11, F5.12, B2.1a, B5.1d, B6.13, F5.13, F5.14, F5.15, F5.16,
-B6.14)
+**29** (17 completed: B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02, AB-FE-05, B3.11,
+B2.1, F5.14, F2.3, F5.15, B6.13, B5.1d, F5.13, B6.14, F5.16; 19 added by discovery:
+NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10, B2.2b, B5.4b, F5.11, F5.12, B2.1a,
+B5.1d, B6.13, F5.13, F5.14, F5.15, F5.16, B6.14, B6.15)
 
 ### Ready for execution
 
-**29** (`B2.1a` also needs real provider credentials) (`B2.1a` additionally needs real provider credentials from the user)
+**29** (`B2.1a` additionally needs real provider credentials from the user)
 
 ### Blocked
 
@@ -3009,11 +3062,11 @@ D1–D9 are resolved.
 | --------- | --------: |
 | P0        |         0 |
 | P1        |         0 |
-| P2        |        17 |
-| P3        |        12 |
+| P2        |        16 |
+| P3        |        13 |
 | **Total** |    **29** |
 
-Recomputed from the JSON index on 2026-09-23 (B6.14).
+Recomputed from the JSON index on 2026-09-23 (F5.16).
 
 Priority is execution guidance, not permission to rewrite requirements.
 
@@ -3127,7 +3180,7 @@ were freshly executed.
 ## START HERE
 
 ```text
-F5.16
+F5.9
 ```
 
 Batch A (`B6.8`, `B6.9`, `AB-BE-03`) is complete — audits
@@ -3157,9 +3210,12 @@ The user asked for this run back to back: `F5.15` (DONE) → `B6.13` (DONE) →
 `B5.1d` (DONE) → `B2.1a` (stopped — no credentials) → `F5.13` (DONE, [audit](audit/2026-09-23-f513-guard-redirect-after-mount.md)). The
 back-to-back run is complete.
 
-`B6.14` is DONE ([audit](audit/2026-09-23-b614-reset-ends-sessions.md)) — a reset now ends older sessions. The user
-asked for `B6.14` then **`F5.16`** (coupon edit dialog cannot clear expiry / total
-cap / discount kind; P2, Batch D) back to back — `F5.16` is next. `B2.1a` resumes when the user supplies real Kavenegar/SMTP credentials. `B2.1a` will hit its stop condition (no real credentials) —
+`B6.14` is DONE ([audit](audit/2026-09-23-b614-reset-ends-sessions.md)) and so is
+`F5.16` ([audit](audit/2026-09-23-f516-coupon-edit-clear-and-kind.md)) — the user's "B6.14 then F5.16" run is complete.
+
+**`F5.9`** (coupon discount-cap field in the admin dialog; P2, Batch B — the last
+open Batch B item) is proposed next: it edits the same dialog F5.16 just reworked,
+and the backend cap (AB-BE-03) has had no UI since it shipped. `B2.1a` resumes when the user supplies real Kavenegar/SMTP credentials. `B2.1a` will hit its stop condition (no real credentials) —
 report it, do not fake it.
 
 After each task: update this pointer, the task status, the audit link and the
@@ -3263,16 +3319,17 @@ Current state:
 ```text
 29 remaining implementation units
   (17 of the original 27, plus NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10,
-   B2.2b, B5.4b, F5.11, F5.12, B2.1a and F5.16 —
+   B2.2b, B5.4b, F5.11, F5.12, B2.1a and B6.15 —
    the last ten discovered as NEW-ABBE03-1, NEW-F55-1, NEW-F56-1,
    NEW-F56-2, NEW-ABFE02-1, NEW-ABFE05-1/2/3, NEW-B21-1…4/6, NEW-F514-1 and
-   NEW-F23-1 (B6.14, since DONE) — found during them)
-16 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02,
-  AB-FE-05, B3.11, B2.1, F5.14, F2.3, F5.15, B6.13, B5.1d, F5.13, B6.14 — the
-  last six but F2.3 themselves discovered as NEW-B21-5/6/3/2/4 and NEW-F23-1)
+   NEW-F23-1 (B6.14, since DONE) and NEW-F516-1 — found during them)
+17 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02,
+  AB-FE-05, B3.11, B2.1, F5.14, F2.3, F5.15, B6.13, B5.1d, F5.13, B6.14, F5.16 —
+  the last seven but F2.3 themselves discovered as NEW-B21-5/6/3/2/4, NEW-F23-1
+  and NEW-F514-1)
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = F5.16
+NEXT = F5.9
 ```

@@ -438,12 +438,16 @@ conflict (DESIGN_SYSTEM.md §5).
   Done (2026-09-22): both methods use `json:`; browser tested 14/14 (create,
   toggle off/on, edit, delete, error paths).
   → audit: [2026-09-22-f514-coupon-json-body.md](audit/2026-09-22-f514-coupon-json-body.md)
-- [ ] **F5.16 Coupon edit dialog cannot clear expiry / total cap / discount kind**
+- [x] **F5.16 Coupon edit dialog cannot clear expiry / total cap / discount kind**
   (`NEW-F514-1`, discovered during F5.14) — the dialog sends `null` for an emptied
   field and `PATCH /coupons/{id}` treats `null` as "unchanged" (observed: clearing
   the expiry keeps the old date; a percent coupon switched to a fixed amount keeps
   `percent_off`; `max_uses` cannot be cleared at all). Define clear semantics in
   `CouponUpdate`, send them from the dialog; pytest + browser.
+  Done (2026-09-23): `expires_at: ""` / `max_uses: 0` clear; a kind switch clears
+  the other kind (both → 422) — the old row kept `percent_off`, so a switch to a
+  fixed amount never reached checkout. 7 pytest + dialog 15/15.
+  → audit: [2026-09-23-f516-coupon-edit-clear-and-kind.md](audit/2026-09-23-f516-coupon-edit-clear-and-kind.md)
 - [x] **F5.15 A failed `/auth/me` signs the user out** (`NEW-B21-6`, discovered
   during B2.1) — `AuthProvider.refresh()` calls `setToken(null)` on *any* error,
   not only a 401: a network error, a backend restart or a full-page navigation

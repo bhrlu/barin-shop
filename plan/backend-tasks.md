@@ -370,6 +370,9 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   Done (2026-09-23): `users.password_changed_at` + `_session_revoked()` in
   `app/auth.py` (whole-second cutoff). 6 tests, two-browser check, clean env.
   → audit: [2026-09-23-b614-reset-ends-sessions.md](audit/2026-09-23-b614-reset-ends-sessions.md)
+- [ ] **B6.15 `POST /coupons` accepts both discount kinds or neither** (`NEW-F516-1`,
+  discovered during F5.16) — `CouponCreate._not_both` is a no-op stub; validate
+  exactly one kind on create (422). The admin dialog already blocks both cases.
 - [x] **B6.13 The documented `pytest -q` silently skips every DB test**
   (`NEW-B21-3`, discovered during B2.1) — `test_addresses.py` (collected first) and
   three other modules `os.environ.setdefault("DATABASE_URL", "…u:p@…/db")` at

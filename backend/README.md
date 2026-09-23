@@ -142,7 +142,7 @@ returning bare arrays.** `/admin/audit-logs` uses `?limit=&offset=` instead
 | PATCH | `/refunds/{id}` | resolve a refund request — settling (`refunded`) **requires** `bank_tracking_code` (Paya/Satna); every resolution records `resolved_by` + `resolved_at` |
 | GET/DELETE | `/admin/contact-messages` | contact inbox (`?status=new`), delete a message |
 | PATCH | `/admin/contact-messages/{id}` | mark a message `answered` (or reopen it as `new`) |
-| POST/GET/PATCH | `/coupons` · `/coupons/{id}` · `/coupons/generate` | coupon CRUD — incl. `max_discount_cap`, the ceiling (in tomans) on a **percent-off** discount; `null` = uncapped, and `PATCH` with `0` clears it |
+| POST/GET/PATCH | `/coupons` · `/coupons/{id}` · `/coupons/generate` | coupon CRUD — incl. `max_discount_cap`, the ceiling (in tomans) on a **percent-off** discount; `null` = uncapped. `PATCH`: omitted/`null` = unchanged; `max_discount_cap: 0` / `max_uses: 0` clear the cap, `expires_at: ""` clears the expiry; sending `percent_off` clears `amount_off` and vice versa (both → 422) — F5.16 |
 | DELETE | `/coupons/{id}` | remove a coupon (audited; past order discounts unaffected) |
 | GET | `/admin/export/orders.{csv\|xlsx}?from=&to=&status=` | order ledger export (B2.2/BE-08): customer, address, item breakdown, subtotal/discount/shipping/total; `from` defaults 30 days back, invalid range → 422 |
 | GET | `/admin/export/products.{csv\|xlsx}` | full catalog with stock/thresholds |

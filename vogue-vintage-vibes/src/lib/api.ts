@@ -865,6 +865,8 @@ export const api = {
     max_uses_per_user: number;
     expires_at: string | null;
   }) => request<CouponValidation>("/coupons", { method: "POST", json: input }),
+  // F5.16: null/omitted = unchanged; `expires_at: ""` clears the expiry, `max_uses: 0`
+  // means unlimited; sending one kind (percent_off | amount_off) clears the other
   adminUpdateCoupon: (
     id: string,
     patch: Partial<{

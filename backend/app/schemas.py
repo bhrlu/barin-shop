@@ -123,6 +123,15 @@ class CouponCreate(BaseModel):
 
 
 class CouponUpdate(BaseModel):
+    """Partial update: an omitted/null field is left unchanged (F5.16 clear rules).
+
+    - `expires_at: ""` clears the expiry; `max_uses: 0` / `max_discount_cap: 0`
+      clear the cap (back to unlimited / uncapped).
+    - A coupon has exactly one kind: setting `percent_off` clears `amount_off`
+      and vice versa (`compute_discount` prefers percent, so leaving both would
+      silently ignore a switch to a fixed amount); sending both is a 422.
+    """
+
     active: bool | None = None
     percent_off: int | None = Field(default=None, ge=1, le=100)
     amount_off: int | None = Field(default=None, gt=0)
@@ -130,7 +139,7 @@ class CouponUpdate(BaseModel):
     # 0 clears the cap (back to uncapped); omitted leaves it unchanged, the same
     # convention `expires_at: ""` already uses on this schema (AB-BE-03)
     max_discount_cap: int | None = Field(default=None, ge=0)
-    max_uses: int | None = Field(default=None, gt=0)
+    max_uses: int | None = Field(default=None, ge=0)
     max_uses_per_user: int | None = Field(default=None, ge=1)
     expires_at: str | None = None
 

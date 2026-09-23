@@ -240,23 +240,40 @@ function CouponDialog({
 
   const save = useMutation({
     mutationFn: async () => {
-      const kind = form.percent_off ? "percent" : form.amount_off ? "amount" : "";
-      if (!kind) throw new Error("یکی از «درصد» یا «مبلغ» را پر کنید");
-      const payload = {
-        code: form.code.trim().toUpperCase(),
-        percent_off: form.percent_off ? Number(form.percent_off) : null,
-        amount_off: form.amount_off ? Number(form.amount_off) : null,
-        min_subtotal: form.min_subtotal ? Number(form.min_subtotal) : 0,
-        max_uses: form.max_uses ? Number(form.max_uses) : null,
-        max_uses_per_user: form.max_uses_per_user ? Number(form.max_uses_per_user) : 1,
-        expires_at: form.expires_at ? new Date(`${form.expires_at}T23:59:59`).toISOString() : null,
-      };
+      const percent = form.percent_off ? Number(form.percent_off) : null;
+      const amount = form.amount_off ? Number(form.amount_off) : null;
+      if (percent === null && amount === null)
+        throw new Error("یکی از «درصد» یا «مبلغ» را پر کنید");
+      // a coupon is one kind: the backend prefers percent, so both would hide the amount
+      if (percent !== null && amount !== null)
+        throw new Error("فقط یکی از «درصد» یا «مبلغ» را پر کنید");
+      const minSubtotal = form.min_subtotal ? Number(form.min_subtotal) : 0;
+      const perUser = form.max_uses_per_user ? Number(form.max_uses_per_user) : 1;
+      const maxUses = form.max_uses ? Number(form.max_uses) : null;
+      const expires = form.expires_at
+        ? new Date(`${form.expires_at}T23:59:59`).toISOString()
+        : null;
       if (editing) {
-        // PUT-like patch: everything except the code
-        const { code: _code, ...patch } = payload;
-        await api.adminUpdateCoupon(editing.id, patch);
+        // F5.16: PATCH treats null as "unchanged", so an emptied field is sent in
+        // its clear encoding (expiry "" → none, total cap 0 → unlimited), and only
+        // the chosen kind is sent — the backend clears the other one
+        await api.adminUpdateCoupon(editing.id, {
+          ...(percent !== null ? { percent_off: percent } : { amount_off: amount }),
+          min_subtotal: minSubtotal,
+          max_uses: maxUses ?? 0,
+          max_uses_per_user: perUser,
+          expires_at: expires ?? "",
+        });
       } else {
-        await api.adminCreateCoupon(payload);
+        await api.adminCreateCoupon({
+          code: form.code.trim().toUpperCase(),
+          percent_off: percent,
+          amount_off: amount,
+          min_subtotal: minSubtotal,
+          max_uses: maxUses,
+          max_uses_per_user: perUser,
+          expires_at: expires,
+        });
       }
     },
     onSuccess: () => {

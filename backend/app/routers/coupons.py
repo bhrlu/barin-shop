@@ -172,13 +172,22 @@ async def update_coupon(
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "کد تخفیف پیدا نشد")
 
+    if body.percent_off is not None and body.amount_off is not None:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "کد تخفیف یا درصدی است یا مبلغ ثابت؛ فقط یکی را بفرستید",
+        )
+
     fields: dict = {}
     if body.active is not None:
         fields["active"] = body.active
+    # exactly one kind (F5.16): switching kind clears the other one
     if body.percent_off is not None:
         fields["percent_off"] = body.percent_off
+        fields["amount_off"] = None
     if body.amount_off is not None:
         fields["amount_off"] = body.amount_off
+        fields["percent_off"] = None
     if body.min_subtotal is not None:
         fields["min_subtotal"] = body.min_subtotal
     if body.max_discount_cap is not None:
@@ -186,7 +195,8 @@ async def update_coupon(
         # CHECK constraint refuses a stored 0 (AB-BE-03)
         fields["max_discount_cap"] = body.max_discount_cap or None
     if body.max_uses is not None:
-        fields["max_uses"] = body.max_uses
+        # 0 means "no total cap" (NULL), like max_discount_cap above (F5.16)
+        fields["max_uses"] = body.max_uses or None
     if body.max_uses_per_user is not None:
         fields["max_uses_per_user"] = body.max_uses_per_user
     if body.expires_at is not None:
