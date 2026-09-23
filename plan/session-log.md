@@ -2518,3 +2518,38 @@ entry chunk.
 
 Level: *browser tested*.
 → audit: [2026-09-23-abfe01-admin-topbar.md](audit/2026-09-23-abfe01-admin-topbar.md)
+
+## 2026-09-23 — AB-FE-04 product image gallery manager
+
+The gallery was rebuilt on the same `{value, onChange}` contract:
+
+- dropped or picked files upload one at a time, with a local preview and an XHR
+  progress bar (`api.uploadImage(file, onProgress)`);
+- a failed upload leaves an error tile with retry and dismiss;
+- tiles reorder by drag or arrows, and ★ makes an image primary; delete stays;
+- signed URLs are cached per ref, so a reorder no longer re-signs or flashes;
+- the form blocks «ذخیره محصول» while an upload is running.
+
+Recon found a real bug in the old uploader. It appended with the `value`/`onChange`
+captured when the upload started, and the parent used a non-functional `setForm`, so
+**any field edited during an upload was reverted**. Mutation C reproduces it. The
+latest-value ref and the functional `setForm` each prevent it on their own.
+
+Verification: 25 browser checks on the Docker stack with real MinIO, including:
+
+- a throttled 3 MB upload with intermediate progress;
+- a forced 503 on the PUT, then retry;
+- a `DataTransfer` drop;
+- drag + ★ + delete + arrow, compared against the exact stored order;
+- per-object byte counts read back from MinIO.
+
+Lint went from 16 to 14 warnings (both were in the old component).
+
+Found:
+
+- **B6.17 (P2):** `upload-url` refuses order_manager (`AdminUser` means
+  admin/super_admin only), even though that role edits the catalog.
+- **B6.18 (P3):** the presigned PUT has no server-side size/type limit.
+
+Level: *browser tested*.
+→ audit: [2026-09-23-abfe04-product-image-gallery.md](audit/2026-09-23-abfe04-product-image-gallery.md)

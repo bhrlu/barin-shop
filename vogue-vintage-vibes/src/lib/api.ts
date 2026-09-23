@@ -910,17 +910,30 @@ export const api = {
       method: "POST",
       json: { paths },
     }),
-  uploadImage: async (file: File) => {
+  /**
+   * Presign, then PUT the file straight to MinIO. The PUT uses XMLHttpRequest because
+   * `fetch` cannot report upload progress; `onProgress` receives 0–1 (AB-FE-04).
+   */
+  uploadImage: async (file: File, onProgress?: (fraction: number) => void) => {
     const presign = await request<{ path: string; upload_url: string }>("/storage/upload-url", {
       method: "POST",
       json: { filename: file.name, content_type: file.type || "image/jpeg" },
     });
-    const res = await fetch(presign.upload_url, {
-      method: "PUT",
-      body: file,
-      headers: { "Content-Type": file.type || "image/jpeg" },
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", presign.upload_url);
+      xhr.setRequestHeader("Content-Type", file.type || "image/jpeg");
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) onProgress?.(event.loaded / event.total);
+      };
+      xhr.onload = () =>
+        xhr.status >= 200 && xhr.status < 300
+          ? resolve()
+          : reject(new ApiError(xhr.status, "آپلود انجام نشد"));
+      xhr.onerror = () => reject(new ApiError(0, "ارتباط با فضای ذخیره‌سازی برقرار نشد"));
+      xhr.send(file);
     });
-    if (!res.ok) throw new ApiError(res.status, "آپلود انجام نشد");
+    onProgress?.(1);
     return presign.path;
   },
 

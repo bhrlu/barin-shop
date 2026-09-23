@@ -184,6 +184,7 @@ function AdminProducts() {
   const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
   const [form, setForm] = useState<FormState | null>(null);
+  const [imagesBusy, setImagesBusy] = useState(false);
   const [variantsFor, setVariantsFor] = useState<string | null>(null);
   const page = search.page ?? 1;
   const filters = {
@@ -357,7 +358,9 @@ function AdminProducts() {
             <div className="mt-3">
               <ProductImageManager
                 value={form.images}
-                onChange={(images) => setForm({ ...form, images })}
+                // functional: an upload completes after later edits to other fields
+                onChange={(images) => setForm((current) => current && { ...current, images })}
+                onBusyChange={setImagesBusy}
               />
             </div>
           </div>
@@ -453,8 +456,8 @@ function AdminProducts() {
               نمایش در فروشگاه
             </label>
           </div>
-          <Button type="submit" disabled={save.isPending} className="md:col-span-2">
-            ذخیره محصول
+          <Button type="submit" disabled={save.isPending || imagesBusy} className="md:col-span-2">
+            {imagesBusy ? "در انتظار پایان آپلود تصاویر…" : "ذخیره محصول"}
           </Button>
         </form>
       )}

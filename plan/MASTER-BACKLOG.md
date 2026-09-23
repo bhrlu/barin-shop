@@ -507,7 +507,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "AB-FE-04",
+    "agent_start_task": "B6.17",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -791,13 +791,16 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "AB-FE-04",
       "title": "Product image gallery manager",
       "priority": "P2",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "frontend",
       "depends_on": [],
       "blocks": [],
       "batch": "D",
       "source": "ADMIN-FRONTEND_TASKS.md:FE-04",
-      "scope": "Implement drag/drop, preview, reorder, primary-image selection, delete, progress, and retry using MinIO APIs."
+      "scope": "Implement drag/drop, preview, reorder, primary-image selection, delete, progress, and retry using MinIO APIs.",
+      "audit": "plan/audit/2026-09-23-abfe04-product-image-gallery.md",
+      "verification_level": "browser tested on the Docker stack (real MinIO)",
+      "completed": "2026-09-23"
     },
     {
       "id": "F3.5b",
@@ -1230,6 +1233,34 @@ changes to the file shipped in sequence; the collision is closed.
       "discovered_as": "NEW-ABFE01-1",
       "discovered_during": "AB-FE-01",
       "scope": "admin.coupons.tsx exports its page component (export function AdminCoupons), which nothing imports; the export stops TanStack's automatic route splitting, so the whole coupons page (list, card, dialog) ships in the shared index-*.js every storefront visitor downloads. Drop the export (or move the component to a non-route file); verify with the production build that the page gets its own chunk and the entry shrinks."
+    },
+    {
+      "id": "B6.17",
+      "title": "Storage upload refuses order_manager (catalog staff)",
+      "priority": "P2",
+      "status": "TODO",
+      "layer": "backend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "C",
+      "source": "backend-tasks.md",
+      "discovered_as": "NEW-ABFE04-1",
+      "discovered_during": "AB-FE-04",
+      "scope": "POST /storage/upload-url uses AdminUser (is_admin = admin/super_admin only), so order_manager — who holds the catalog capability and edits products since B5.4b — gets 403 and cannot add product images (the gallery shows the English 'Admin role required'). Guard it with StaffCatalog; keep /storage/sign as is; fix the misleading require_admin docstring ('any staff role passes'); tests for each role."
+    },
+    {
+      "id": "B6.18",
+      "title": "Presigned image upload has no server-side size/type limit",
+      "priority": "P3",
+      "status": "TODO",
+      "layer": "backend",
+      "depends_on": ["B6.17"],
+      "blocks": [],
+      "batch": "C",
+      "source": "backend-tasks.md",
+      "discovered_as": "NEW-ABFE04-2",
+      "discovered_during": "AB-FE-04",
+      "scope": "The presigned PUT from /storage/upload-url signs no content-type or length: 200 kB of random bytes as text/plain were accepted. The 5 MB / image-type rule is client-side only. Switch to a presigned POST policy (content-length-range <= 5 MB, Content-Type starts-with image/) and move api.uploadImage to a multipart POST (keeping progress), or equivalent server-side enforcement; tests + browser upload."
     }
   ],
   "excluded": [
@@ -1250,13 +1281,13 @@ changes to the file shipped in sequence; the collision is closed.
     }
   ],
   "counts": {
-    "total_executable": 49,
-    "done": 28,
-    "open": 21,
+    "total_executable": 51,
+    "done": 29,
+    "open": 22,
     "P0": 0,
     "P1": 0,
     "P2": 6,
-    "P3": 15,
+    "P3": 16,
     "blocked": 0,
     "dropped": 2,
     "obsolete": 1,
@@ -2093,7 +2124,10 @@ Create/edit + validation + persisted backend values.
 ## AB-FE-04 — Product image gallery manager
 
 * **Layer:** Frontend
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-abfe04-product-image-gallery.md`](audit/2026-09-23-abfe04-product-image-gallery.md)
+* **Verification level:** browser tested on the Docker stack (real MinIO)
+* **Delivered:** Gallery rebuilt: drop/pick files → one-at-a-time upload with local preview and a progress bar (XHR), error tile with retry/dismiss, drag or arrows to reorder, ★ primary, delete; signed URLs cached per ref; save blocked while uploading; fixed the old uploader reverting fields edited during an upload. 25 browser checks on the Docker stack with real MinIO (bytes verified per object); mutation controls. Found: B6.17, B6.18. Browser tested.
 * **Dependencies:** none
 
 ### Required implementation
@@ -2427,6 +2461,76 @@ from the seeds (Rule 14).
 
 A test/probe that runs `startup_ddl()` repeatedly while querying `/products` and sees no
 deadlock / no 500; fresh-DB convergence via `down -v && up -d --build` (Rule 14).
+
+---
+
+## B6.17 — Storage upload refuses order_manager (catalog staff)
+
+* **Layer:** Backend (auth)
+* **Status:** TODO
+* **Priority:** P2
+* **Batch:** C
+* **Dependencies:** none
+* **Discovered as:** `NEW-ABFE04-1` during `AB-FE-04` — legacy discovery ID only;
+  `B6.17` is the executable ID.
+* **Source:** `backend-tasks.md` B6.17
+
+### Problem
+
+`POST /storage/upload-url` depends on `AdminUser`, and `AuthUser.is_admin` is
+`admin`/`super_admin` only. The `require_admin` docstring's "any staff role passes"
+is wrong.
+
+**order_manager** holds the `catalog` capability and has created and edited products
+since B5.4b. It gets **403** there. Measured during AB-FE-04: order_manager
+`upload-url` → 403, while `PATCH /products/{id}` passes auth. So that role can edit a
+product but cannot add an image, and the gallery's error tile shows the backend's
+English «Admin role required».
+
+### Required implementation
+
+Guard `upload-url` with `StaffCatalog`. Leave `/storage/sign` as it is
+(`CurrentUser`). Correct the `require_admin` docstring.
+
+### Verification
+
+Tests for anonymous (401), customer (403), support (403), order_manager (200) and
+admin (200). The gallery upload works in the browser as order_manager.
+
+---
+
+## B6.18 — Presigned image upload has no server-side size/type limit
+
+* **Layer:** Backend (storage) + `src/lib/api.ts`
+* **Status:** TODO
+* **Priority:** P3
+* **Batch:** C
+* **Dependencies:** `B6.17`
+* **Discovered as:** `NEW-ABFE04-2` during `AB-FE-04` — legacy discovery ID only;
+  `B6.18` is the executable ID.
+* **Source:** `backend-tasks.md` B6.18
+
+### Problem
+
+The presigned `PUT` signs neither a content type nor a length. Measured: 200 kB of
+random bytes sent as `text/plain` to an admin's upload URL → 200. The gallery's
+«≤ 5 MB, JPG/PNG/WEBP/GIF/AVIF» rule is client-side only, so anyone holding an
+upload URL can store any object of any size for an hour.
+
+### Required implementation
+
+Enforce the limits in storage. For example:
+
+- use a presigned **POST policy** with `content-length-range` (≤ 5 MB) and a
+  `Content-Type` `starts-with image/` condition;
+- move `api.uploadImage` to the multipart POST, keeping XHR progress.
+
+Or use an equivalent server-side check.
+
+### Verification
+
+Tests: the policy carries the limits. A browser upload still works, and an
+oversized or non-image upload is refused by MinIO.
 
 ---
 
@@ -3208,6 +3312,8 @@ B5.1d  (DONE 2026-09-23)
 B6.13  (DONE 2026-09-23)
 B6.14  (DONE 2026-09-23)
 B6.15
+B6.17
+B6.18
 ```
 
 `AB-BE-01` begins after `B6.8`.
@@ -3220,7 +3326,7 @@ B6.15
 F5.8  (DONE 2026-09-23)
 F5.7  (DONE 2026-09-23)
 AB-FE-01  (DONE 2026-09-23)
-AB-FE-04
+AB-FE-04  (DONE 2026-09-23)
 F3.5b  (DONE 2026-09-23)
 F5.10
 F5.11
@@ -3294,13 +3400,13 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**21** open · **28** DONE · 49 executable in total.
-22 units were added by discovery during earlier tasks (see
+**22** open · **29** DONE · 51 executable in total.
+24 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
 
-**21** (`B2.1a` additionally needs real provider credentials from the user)
+**22** (`B2.1a` additionally needs real provider credentials from the user)
 
 ### Blocked
 
@@ -3338,8 +3444,8 @@ D1–D9 are resolved.
 | P0        |         0 |
 | P1        |         0 |
 | P2        |         6 |
-| P3        |        15 |
-| **Total** |    **21** |
+| P3        |        16 |
+| **Total** |    **22** |
 
 Generated from the JSON index on 2026-09-23.
 
@@ -3455,11 +3561,11 @@ were freshly executed.
 ## START HERE
 
 ```text
-AB-FE-04
+B6.17
 ```
 
-28 of 49 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. next P2 in Batch D — product image gallery manager
+29 of 51 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. P2 bug found in AB-FE-04 — order_manager cannot upload product images (403)
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -3563,11 +3669,11 @@ Reconciliation date:
 Current state:
 
 ```text
-21 remaining implementation units (B2.1a, AB-BE-01, AB-BE-02, F4.3, AB-FE-03, AB-FE-04, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B6.15, B5.1e, F5.17)
-28 completed implementation units
+22 remaining implementation units (B2.1a, AB-BE-01, AB-BE-02, F4.3, AB-FE-03, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B6.15, B5.1e, F5.17, B6.17, B6.18)
+29 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = AB-FE-04
+NEXT = B6.17
 ```

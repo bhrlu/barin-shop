@@ -392,6 +392,16 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
 - [ ] **B6.15 `POST /coupons` accepts both discount kinds or neither** (`NEW-F516-1`,
   discovered during F5.16) — `CouponCreate._not_both` is a no-op stub; validate
   exactly one kind on create (422). The admin dialog already blocks both cases.
+- [ ] **B6.17 Storage upload refuses order_manager** (`NEW-ABFE04-1`, discovered
+  during AB-FE-04) — `POST /storage/upload-url` uses `AdminUser` (`is_admin` =
+  admin/super_admin only), so order_manager, who edits the catalog since B5.4b, gets
+  403 and cannot add product images. Guard with `StaffCatalog`; fix the
+  `require_admin` docstring ("any staff role passes" is wrong); per-role tests.
+- [ ] **B6.18 Presigned image upload has no server-side size/type limit**
+  (`NEW-ABFE04-2`, discovered during AB-FE-04) — the presigned PUT signs no type or
+  length (200 kB of random bytes as `text/plain` accepted); the 5 MB / image rule is
+  client-side only. Presigned POST policy (`content-length-range`, `image/*`) +
+  multipart upload in `api.uploadImage` (keep progress).
 - [x] **B6.13 The documented `pytest -q` silently skips every DB test**
   (`NEW-B21-3`, discovered during B2.1) — `test_addresses.py` (collected first) and
   three other modules `os.environ.setdefault("DATABASE_URL", "…u:p@…/db")` at

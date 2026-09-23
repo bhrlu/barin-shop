@@ -86,7 +86,8 @@ plan/
     ├── 2026-09-23-f58-shop-facets-endpoint.md
     ├── 2026-09-23-f35b-cart-stock-recheck-on-focus.md
     ├── 2026-09-23-f57-admin-chart-bundle-measurement.md
-    └── 2026-09-23-abfe01-admin-topbar.md
+    ├── 2026-09-23-abfe01-admin-topbar.md
+    └── 2026-09-23-abfe04-product-image-gallery.md
 ```
 
 The two `ADMIN-*.md` files hold the back-office task split (epics [BE-01]… and
