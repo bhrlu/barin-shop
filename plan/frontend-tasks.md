@@ -484,12 +484,14 @@ conflict (DESIGN_SYSTEM.md §5).
   once after mount to the URL captured on first render. 7 → 0 hydration failures;
   browser tested (20/20 + 58/58 + 16/16 + 54/54).
   → audit: [2026-09-23-f513-guard-redirect-after-mount.md](audit/2026-09-23-f513-guard-redirect-after-mount.md)
-- [ ] **F5.17 Admin coupons page is not route-split** (`NEW-ABFE01-1`, discovered
+- [x] **F5.17 Admin coupons page is not route-split** (`NEW-ABFE01-1`, discovered
   during AB-FE-01) — `admin.coupons.tsx` exports its page component
   (`export function AdminCoupons`), which nothing imports; the export stops
   TanStack's automatic route splitting, and the production build shows the whole
   coupons page (list, card, dialog) inlined in the shared `index-*.js` every
   storefront visitor downloads. Drop the export; verify the page gets its own chunk.
+  Done (2026-09-23): Dropped the unused `export` on `AdminCoupons`, so TanStack route-splits the coupons page (own 13.24 kB chunk). Production-build page loads: storefront pages −8.2 kB gzip each, /admin/orders −5.6, /admin/coupons +2.1 (its chunk). Coupon suites 14/15/14 green. Measured + browser tested.
+  → audit: [2026-09-23-f517-coupons-route-split.md](audit/2026-09-23-f517-coupons-route-split.md)
 - [x] **F5.18 Storefront shows variant price overrides** (`NEW-ABBE02-1`, discovered
   during AB-BE-02) — the server now prices a line with the variant's
   `price_override`, but the product page shows `products.price` and the cart /

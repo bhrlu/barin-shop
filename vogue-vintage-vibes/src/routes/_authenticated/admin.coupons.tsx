@@ -409,7 +409,7 @@ function CouponDialog({
   );
 }
 
-export function AdminCoupons() {
+function AdminCoupons() {
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["admin-coupons"],

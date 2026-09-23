@@ -2841,3 +2841,20 @@ The router merges validated search over raw search, so omitted keys used to leak
 Verification: browser 8/8 (the old file fails 6), F5.8 suite 23/23. Level:
 *browser tested*.
 → audit: [2026-09-23-f511-shop-invalid-url-params.md](audit/2026-09-23-f511-shop-invalid-url-params.md)
+
+## 2026-09-23 — F5.17 coupons page route-split
+
+`admin.coupons.tsx` exported its page component, which nothing imports; the export
+blocked TanStack's route splitting. It was dropped.
+
+Measured on the production build:
+
+- the page moves to its own 13.24 kB chunk;
+- `/`, `/shop` and `/about` each transfer ~8.2 kB gzip less;
+- `/admin/orders` transfers 5.6 kB less;
+- `/admin/coupons` transfers 2.1 kB more (its own chunk).
+
+The entry itself grew 2.7 kB raw from re-splitting, which is why per-page loads were
+measured rather than chunk sizes. Coupon browser suites: 14/14, 15/15, 14/14.
+Level: *measured + browser tested*.
+→ audit: [2026-09-23-f517-coupons-route-split.md](audit/2026-09-23-f517-coupons-route-split.md)

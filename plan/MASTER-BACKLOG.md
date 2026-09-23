@@ -512,7 +512,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "F5.17",
+    "agent_start_task": "B6.8a",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -1256,7 +1256,7 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "F5.17",
       "title": "Admin coupons page is not route-split (exported component)",
       "priority": "P3",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "frontend",
       "depends_on": [],
       "blocks": [],
@@ -1264,7 +1264,10 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "frontend-tasks.md",
       "discovered_as": "NEW-ABFE01-1",
       "discovered_during": "AB-FE-01",
-      "scope": "admin.coupons.tsx exports its page component (export function AdminCoupons), which nothing imports; the export stops TanStack's automatic route splitting, so the whole coupons page (list, card, dialog) ships in the shared index-*.js every storefront visitor downloads. Drop the export (or move the component to a non-route file); verify with the production build that the page gets its own chunk and the entry shrinks."
+      "scope": "admin.coupons.tsx exports its page component (export function AdminCoupons), which nothing imports; the export stops TanStack's automatic route splitting, so the whole coupons page (list, card, dialog) ships in the shared index-*.js every storefront visitor downloads. Drop the export (or move the component to a non-route file); verify with the production build that the page gets its own chunk and the entry shrinks.",
+      "audit": "plan/audit/2026-09-23-f517-coupons-route-split.md",
+      "verification_level": "measured on the production build + browser tested",
+      "completed": "2026-09-23"
     },
     {
       "id": "B6.17",
@@ -1396,12 +1399,12 @@ changes to the file shipped in sequence; the collision is closed.
   ],
   "counts": {
     "total_executable": 56,
-    "done": 42,
-    "open": 14,
+    "done": 43,
+    "open": 13,
     "P0": 0,
     "P1": 0,
     "P2": 0,
-    "P3": 14,
+    "P3": 13,
     "blocked": 0,
     "dropped": 2,
     "obsolete": 1,
@@ -3253,7 +3256,10 @@ stock-issue flows re-tested.
 ## F5.17 — Admin coupons page is not route-split
 
 * **Layer:** Frontend
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-f517-coupons-route-split.md`](audit/2026-09-23-f517-coupons-route-split.md)
+* **Verification level:** measured on the production build + browser tested
+* **Delivered:** Dropped the unused `export` on `AdminCoupons`, so TanStack route-splits the coupons page (own 13.24 kB chunk). Production-build page loads: storefront pages −8.2 kB gzip each, /admin/orders −5.6, /admin/coupons +2.1 (its chunk). Coupon suites 14/15/14 green. Measured + browser tested.
 * **Priority:** P3
 * **Batch:** D
 * **Dependencies:** none
@@ -3667,7 +3673,7 @@ F5.13  (DONE 2026-09-23)
 F5.14  (DONE 2026-09-22)
 F5.15  (DONE 2026-09-23)
 F5.16  (DONE 2026-09-23)
-F5.17
+F5.17  (DONE 2026-09-23)
 F5.18  (DONE 2026-09-23)
 F5.19
 ```
@@ -3735,13 +3741,13 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**14** open · **42** DONE · 56 executable in total.
+**13** open · **43** DONE · 56 executable in total.
 29 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
 
-**14** (`B2.1a` additionally needs real provider credentials from the user)
+**13** (`B2.1a` additionally needs real provider credentials from the user)
 
 ### Blocked
 
@@ -3779,8 +3785,8 @@ D1–D9 are resolved.
 | P0        |         0 |
 | P1        |         0 |
 | P2        |         0 |
-| P3        |        14 |
-| **Total** |    **14** |
+| P3        |        13 |
+| **Total** |    **13** |
 
 Generated from the JSON index on 2026-09-23.
 
@@ -3896,11 +3902,11 @@ were freshly executed.
 ## START HERE
 
 ```text
-F5.17
+B6.8a
 ```
 
-42 of 56 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. next P3 (Batch D) — admin coupons page is not route-split
+43 of 56 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. next P3 — drop the redundant information_schema probe in restore_stock()
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -4004,11 +4010,11 @@ Reconciliation date:
 Current state:
 
 ```text
-14 remaining implementation units (B2.1a, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B2.2b, B5.1e, F5.17, B6.18, F5.19, B2.5a)
-42 completed implementation units
+13 remaining implementation units (B2.1a, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B2.2b, B5.1e, B6.18, F5.19, B2.5a)
+43 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = F5.17
+NEXT = B6.8a
 ```
