@@ -507,7 +507,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "F5.13",
+    "agent_start_task": "B6.14",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -1057,7 +1057,7 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "F5.13",
       "title": "Guest direct-load of a protected route logs a hydration mismatch",
       "priority": "P3",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "frontend",
       "depends_on": [],
       "blocks": [],
@@ -1065,7 +1065,10 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "frontend-tasks.md",
       "discovered_as": "NEW-B21-4",
       "discovered_during": "B2.1",
-      "scope": "Signed out, opening an ssr:false _authenticated route (e.g. /account/payments) renders it on the server, then the client beforeLoad redirects to /auth and React reports a hydration mismatch page error. Pre-existing (identical without the notification bell). Redirect without a mismatching first render."
+      "scope": "Signed out, opening an ssr:false _authenticated route (e.g. /account/payments) renders it on the server, then the client beforeLoad redirects to /auth and React reports a hydration mismatch page error. Pre-existing (identical without the notification bell). Redirect without a mismatching first render.",
+      "audit": "plan/audit/2026-09-23-f513-guard-redirect-after-mount.md",
+      "verification_level": "browser tested",
+      "completed": "2026-09-23"
     },
     {
       "id": "F5.14",
@@ -1149,12 +1152,12 @@ changes to the file shipped in sequence; the collision is closed.
   ],
   "counts": {
     "total_executable": 45,
-    "done": 14,
-    "open": 31,
+    "done": 15,
+    "open": 30,
     "P0": 0,
     "P1": 0,
     "P2": 18,
-    "P3": 13,
+    "P3": 12,
     "blocked": 0,
     "dropped": 2,
     "obsolete": 1,
@@ -2698,7 +2701,12 @@ affecting the order.
 ## F5.13 — Guest direct-load of a protected route logs a hydration mismatch
 
 * **Layer:** Frontend
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-f513-guard-redirect-after-mount.md`](audit/2026-09-23-f513-guard-redirect-after-mount.md)
+* **Verification level:** browser tested — baseline 7 hydration failures on guest
+  direct loads → 0; 20/20 guard checks, B2.1 suite 58/58, F5.15 suite 16/16,
+  role/route sweep 54/54. The guard resolves `{ user: null }` and the layout
+  redirects once after mount.
 * **Priority:** P3
 * **Batch:** D
 * **Dependencies:** none
@@ -2883,7 +2891,7 @@ F3.5b
 F5.10
 F5.11
 F5.12
-F5.13
+F5.13  (DONE 2026-09-23)
 F5.14  (DONE 2026-09-22)
 F5.15  (DONE 2026-09-23)
 F5.16
@@ -2949,14 +2957,14 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**31** (14 completed: B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02, AB-FE-05, B3.11,
-B2.1, F5.14, F2.3, F5.15, B6.13, B5.1d; 18 added by discovery: NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a,
+**30** (15 completed: B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02, AB-FE-05, B3.11,
+B2.1, F5.14, F2.3, F5.15, B6.13, B5.1d, F5.13; 18 added by discovery: NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a,
 F5.10, B2.2b, B5.4b, F5.11, F5.12, B2.1a, B5.1d, B6.13, F5.13, F5.14, F5.15, F5.16,
 B6.14)
 
 ### Ready for execution
 
-**31** (`B2.1a` additionally needs real provider credentials from the user)
+**30** (`B2.1a` also needs real provider credentials) (`B2.1a` additionally needs real provider credentials from the user)
 
 ### Blocked
 
@@ -2994,10 +3002,10 @@ D1–D9 are resolved.
 | P0        |         0 |
 | P1        |         0 |
 | P2        |        18 |
-| P3        |        13 |
-| **Total** |    **31** |
+| P3        |        12 |
+| **Total** |    **30** |
 
-Recomputed from the JSON index on 2026-09-23 (B5.1d).
+Recomputed from the JSON index on 2026-09-23 (F5.13).
 
 Priority is execution guidance, not permission to rewrite requirements.
 
@@ -3111,7 +3119,7 @@ were freshly executed.
 ## START HERE
 
 ```text
-F5.13
+B6.14
 ```
 
 Batch A (`B6.8`, `B6.9`, `AB-BE-03`) is complete — audits
@@ -3138,9 +3146,12 @@ product adjustment: in-app notifications live, SMS/email built but unconfigured.
 `B5.1d` is DONE ([audit](audit/2026-09-23-b51d-audit-atomicity.md)) — audited mutations are all-or-nothing now.
 
 The user asked for this run back to back: `F5.15` (DONE) → `B6.13` (DONE) →
-`B5.1d` (DONE) → `B2.1a` (stopped — no credentials) → `F5.13`. **`F5.13`** (guest direct-load of
-a protected route logs a hydration mismatch; P3, Batch D) is next. `B2.1a`
-resumes when the user supplies real Kavenegar/SMTP credentials. `B2.1a` will hit its stop condition (no real credentials) —
+`B5.1d` (DONE) → `B2.1a` (stopped — no credentials) → `F5.13` (DONE, [audit](audit/2026-09-23-f513-guard-redirect-after-mount.md)). The
+back-to-back run is complete.
+
+**`B6.14`** (a password reset does not end existing sessions; P2 security, Batch C,
+found during F2.3) is proposed next: it closes the gap F2.3 left in account
+recovery. `B2.1a` resumes when the user supplies real Kavenegar/SMTP credentials. `B2.1a` will hit its stop condition (no real credentials) —
 report it, do not fake it.
 
 After each task: update this pointer, the task status, the audit link and the
@@ -3242,18 +3253,18 @@ Reconciliation date:
 Current state:
 
 ```text
-31 remaining implementation units
+30 remaining implementation units
   (17 of the original 27, plus NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10,
-   B2.2b, B5.4b, F5.11, F5.12, B2.1a, F5.13, F5.16 and B6.14 —
-   the last twelve discovered as NEW-ABBE03-1, NEW-F55-1, NEW-F56-1,
+   B2.2b, B5.4b, F5.11, F5.12, B2.1a, F5.16 and B6.14 —
+   the last eleven discovered as NEW-ABBE03-1, NEW-F55-1, NEW-F56-1,
    NEW-F56-2, NEW-ABFE02-1, NEW-ABFE05-1/2/3, NEW-B21-1…4/6, NEW-F514-1 and
    NEW-F23-1 — found during them)
-14 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02,
-  AB-FE-05, B3.11, B2.1, F5.14, F2.3, F5.15, B6.13, B5.1d — the last four but F2.3
-  themselves discovered as NEW-B21-5, NEW-B21-6, NEW-B21-3 and NEW-B21-2)
+15 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02,
+  AB-FE-05, B3.11, B2.1, F5.14, F2.3, F5.15, B6.13, B5.1d, F5.13 — F5.14, F5.15,
+  B6.13, B5.1d and F5.13 themselves discovered as NEW-B21-5/6/3/2/4)
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = F5.13
+NEXT = B6.14
 ```

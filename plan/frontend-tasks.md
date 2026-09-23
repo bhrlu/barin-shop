@@ -453,13 +453,17 @@ conflict (DESIGN_SYSTEM.md §5).
   Done (2026-09-23): cleared only on 401/403/404; otherwise kept with retries at
   1 s / 3 s / 10 s. Browser tested 16/16 (negative control against the old code:
   4 failures). → audit: [2026-09-23-f515-auth-refresh-keeps-session.md](audit/2026-09-23-f515-auth-refresh-keeps-session.md)
-- [ ] **F5.13 Guest direct-load of a protected route logs a hydration mismatch**
+- [x] **F5.13 Guest direct-load of a protected route logs a hydration mismatch**
   (`NEW-B21-4`, discovered during B2.1) — opening e.g. `/account/payments` signed
   out renders the `ssr: false` route on the server, then `_authenticated`'s
   client `beforeLoad` redirects to `/auth?redirect=…` and React reports «Hydration
   failed … server rendered HTML didn't match the client» (page error; the tree is
   regenerated, nothing breaks visibly). Pre-existing: identical with the
   notification bell removed. Redirect without a mismatching first render.
+  Done (2026-09-23): `beforeLoad` resolves `{ user: null }`; the layout redirects
+  once after mount to the URL captured on first render. 7 → 0 hydration failures;
+  browser tested (20/20 + 58/58 + 16/16 + 54/54).
+  → audit: [2026-09-23-f513-guard-redirect-after-mount.md](audit/2026-09-23-f513-guard-redirect-after-mount.md)
 
 ## Rules reminder
 

@@ -2270,3 +2270,32 @@ unconfigured. Stop condition §18 — nothing implemented, faked or switched on.
 stays TODO and resumes when the user provides real credentials.
 
 **Next backlog pointer** — `F5.13`.
+
+## 2026-09-23 — F5.13 guest redirect without a hydration mismatch (task 7, end of run)
+
+**What was done** — `_authenticated/route.tsx`: `beforeLoad` no longer throws
+`redirect()` (on a direct load that swapped the tree to `/auth` mid-hydration); it
+resolves `{ user: null }` and the layout navigates once, after mount, to
+`/auth?redirect=<URL captured on first render>`. `DESIGN_SYSTEM.md` §4 records the rule.
+
+**Verification** — baseline: 7 guest direct loads → 7 hydration failures; after: 20/20
+guard checks (all redirect with the exact `?redirect=`, no error; signed-in pages,
+invalid token and link-click unchanged). Regression: B2.1 suite 58/58, F5.15 suite
+16/16, role/route sweep 54/54 with 0 hydration mismatches. lint/tsc/build clean.
+Level: *browser tested*.
+
+**My mistakes, found and fixed**
+- First attempt used `<Navigate>`: it re-fired with `/auth` as its own target (redirect
+  loop, «Maximum update depth exceeded») — caught by the suite before any commit.
+- The regression sweep's coupon step clicked `.first()`; after a toggle the list
+  reorders, so its "restore" click hit the other coupon and a debugging probe of mine
+  flipped one more — **both seed coupons ended inactive on the dev DB**. Restored to
+  their seeded `active = true` (SANDE10 validates again); the step now finds the card
+  by code and verifies the restore through the API.
+
+→ audit: [2026-09-23-f513-guard-redirect-after-mount.md](audit/2026-09-23-f513-guard-redirect-after-mount.md)
+
+**Back-to-back run summary** — done: F5.14, F2.3, F5.15, B6.13, B5.1d, F5.13;
+stopped: B2.1a (no credentials); discovered: F5.16, B6.14.
+
+**Next backlog pointer** — `B6.14` (proposed: closes F2.3's session-revocation gap).

@@ -310,6 +310,12 @@ Merged from the repo and spec B1 (global invariants); both are binding.
   values), so filters are shareable and the list is filtered by the backend — never
   re-filter `useCatalog()` client-side. `/admin/products` does the same for
   `page`/`category`/`availability` (AB-FE-05).
+- **Protected routes redirect after mount, never from an `ssr: false` `beforeLoad`**
+  (F5.13). `_authenticated/route.tsx` resolves `{ user: null }` for a guest and its
+  layout navigates to `/auth?redirect=…` once, from an effect, with the URL captured
+  on first render. A `throw redirect()` there, on a direct page load, swaps the
+  matched tree while React is hydrating the server HTML («Hydration failed»); a
+  `<Navigate>` re-fires with `/auth` as its own target (redirect loop).
 - **`validateSearch` must return rejected keys as `undefined`, not omit them.**
   TanStack Router merges a route's validated search over the parent's raw search
   (the root has no validator), so an omitted key survives raw (`?page=abc` reached
