@@ -512,7 +512,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "B5.1c",
+    "agent_start_task": "F5.10",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -973,7 +973,7 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "B5.1c",
       "title": "Reject a malformed admin_id on GET /admin/audit-logs with 422, not 500",
       "priority": "P3",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "backend",
       "depends_on": [],
       "blocks": [],
@@ -981,7 +981,10 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "backend-tasks.md",
       "discovered_as": "NEW-F55-1",
       "discovered_during": "F5.5",
-      "scope": "Type the admin_id query parameter of routers/admin.py::audit_logs as UUID so ?admin_id=<not-a-uuid> returns 422 instead of reaching CAST(:admin_id AS uuid) and failing with 500; add an api_smoke/pytest error-path check."
+      "scope": "Type the admin_id query parameter of routers/admin.py::audit_logs as UUID so ?admin_id=<not-a-uuid> returns 422 instead of reaching CAST(:admin_id AS uuid) and failing with 500; add an api_smoke/pytest error-path check.",
+      "audit": "plan/audit/2026-09-23-b51c-audit-log-admin-id-422.md",
+      "verification_level": "integration tested",
+      "completed": "2026-09-23"
     },
     {
       "id": "B5.4a",
@@ -1349,6 +1352,20 @@ changes to the file shipped in sequence; the collision is closed.
       "discovered_as": "NEW-B25-1",
       "discovered_during": "B2.5",
       "scope": "Send order lifecycle events to external systems. Needs a decision first: consumers, payload, HMAC signing secret (env only), retry policy and replay protection. Then: an outbox table like notification_deliveries, a sweeper job in services/jobs.py, signed POSTs, tests. Do not build without the decision."
+    },
+    {
+      "id": "B6.20",
+      "title": "Smoke contact-inbox checks skip silently under the rate limit",
+      "priority": "P3",
+      "status": "TODO",
+      "layer": "backend_tests",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "C",
+      "source": "backend-tasks.md",
+      "discovered_as": "NEW-B51C-1",
+      "discovered_during": "B5.1c",
+      "scope": "tests/api_smoke.py runs its contact inbox checks (mark answered, bogus status 422, cleanup) only when a `new` message exists; its own POST /contact is throttled (5/10 min/IP) on back-to-back runs, so 6 entries vanish without a FAIL. Seed the message directly (or record an explicit FAIL/skip line) so the run is deterministic."
     }
   ],
   "excluded": [
@@ -1369,8 +1386,8 @@ changes to the file shipped in sequence; the collision is closed.
     }
   ],
   "counts": {
-    "total_executable": 55,
-    "done": 38,
+    "total_executable": 56,
+    "done": 39,
     "open": 17,
     "P0": 0,
     "P1": 0,
@@ -2680,6 +2697,37 @@ old code. The live race probe shows 0 double restores.
 
 ---
 
+## B6.20 — Smoke contact-inbox checks skip silently under the rate limit
+
+* **Layer:** Backend tests
+* **Status:** TODO
+* **Priority:** P3
+* **Batch:** C
+* **Dependencies:** none
+* **Discovered as:** `NEW-B51C-1` during `B5.1c` — legacy discovery ID only;
+  `B6.20` is the executable ID.
+* **Source:** `backend-tasks.md` B6.20
+
+### Problem
+
+`tests/api_smoke.py` runs its contact-inbox checks (mark answered, bogus-status
+422, cleanup) only when a `new` message exists. Its own `POST /contact` is limited to
+5 per 10 minutes per IP (B3.11). On back-to-back runs no message is created, and the
+block disappears: 6 entries, with no FAIL and no notice. Observed: 247 → 245 between
+two runs.
+
+### Required implementation
+
+Make the block deterministic. Either seed the message it needs through the database,
+or record an explicit skip/FAIL line when none is available. Do not weaken the rate
+limit.
+
+### Verification
+
+Two smoke runs within a minute report the same entries.
+
+---
+
 ## B6.13 — Documented `pytest -q` silently skips every live-DB test
 
 * **Layer:** Backend tests
@@ -2962,7 +3010,10 @@ Clean environment; the app role cannot `ALTER`, `DROP`, disable triggers or bypa
 ## B5.1c — Malformed `admin_id` on the audit-log endpoint
 
 * **Layer:** Backend
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-b51c-audit-log-admin-id-422.md`](audit/2026-09-23-b51c-audit-log-admin-id-422.md)
+* **Verification level:** integration tested
+* **Delivered:** `admin_id` on `GET /admin/audit-logs` is typed `UUID | None`: a malformed value is a 422 (was a Postgres CAST error → 500); filters and shape unchanged. 6 tests (negative control: the 3 malformed cases fail), pytest 277, smoke 245/0 (+2). Found B6.20. Integration tested.
 * **Priority:** P3
 * **Batch:** C
 * **Dependencies:** none
@@ -3565,7 +3616,7 @@ files.
 B5.1b  (DONE 2026-09-23)
 AB-BE-01  (DONE 2026-09-23)
 AB-BE-02  (DONE 2026-09-23)
-B5.1c
+B5.1c  (DONE 2026-09-23)
 B5.4a  (DONE 2026-09-23)
 B2.2b
 B5.4b  (DONE 2026-09-23)
@@ -3576,6 +3627,7 @@ B6.15  (DONE 2026-09-23)
 B6.17  (DONE 2026-09-23)
 B6.18
 B6.19  (DONE 2026-09-23)
+B6.20
 ```
 
 `AB-BE-01` begins after `B6.8`.
@@ -3665,8 +3717,8 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**17** open · **38** DONE · 55 executable in total.
-28 units were added by discovery during earlier tasks (see
+**17** open · **39** DONE · 56 executable in total.
+29 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
@@ -3826,11 +3878,11 @@ were freshly executed.
 ## START HERE
 
 ```text
-B5.1c
+F5.10
 ```
 
-38 of 55 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. next P3 in Batch C — malformed admin_id on GET /admin/audit-logs is a 500
+39 of 56 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. next P3 (Batch D) — staff nav tabs visible to non-staff in the admin shell
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -3934,11 +3986,11 @@ Reconciliation date:
 Current state:
 
 ```text
-17 remaining implementation units (B2.1a, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B5.1e, F5.17, B6.18, F5.19, B2.5a)
-38 completed implementation units
+17 remaining implementation units (B2.1a, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, F5.10, B2.2b, F5.11, B5.1e, F5.17, B6.18, F5.19, B2.5a, B6.20)
+39 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = B5.1c
+NEXT = F5.10
 ```

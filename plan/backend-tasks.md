@@ -273,11 +273,13 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   discovered during B5.1b) — the app connects as the schema owner and a superuser, so
   it can drop tables or disable the audit triggers. Split a migrator role (DDL, seeds)
   from a DML-only app role; clean-env proof.
-- [ ] **B5.1c `GET /admin/audit-logs` 500s on a malformed `admin_id`**
+- [x] **B5.1c `GET /admin/audit-logs` 500s on a malformed `admin_id`**
   (`NEW-F55-1`, discovered during F5.5) — `?admin_id=foo` reaches
   `CAST(:admin_id AS uuid)` and Postgres raises, so the admin caller gets a 500
   instead of a 422. Type the query parameter as `UUID` in `routers/admin.py`.
   Admin-only; the F5.5 viewer only sends real UUIDs.
+  Done (2026-09-23): `admin_id` on `GET /admin/audit-logs` is typed `UUID | None`: a malformed value is a 422 (was a Postgres CAST error → 500); filters and shape unchanged. 6 tests (negative control: the 3 malformed cases fail), pytest 277, smoke 245/0 (+2). Found B6.20. Integration tested.
+  → audit: [2026-09-23-b51c-audit-log-admin-id-422.md](audit/2026-09-23-b51c-audit-log-admin-id-422.md)
 - [x] **B5.2 KPI aggregation endpoint** — `GET /admin/kpis?range=today|7d|30d|all`
   returning gross/net revenue, paid order count, AOV, pending refunds and low-stock
   count, plus daily revenue series + status breakdown and deltas vs the preceding
@@ -399,6 +401,10 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   exactly one kind on create (422). The admin dialog already blocks both cases.
   Done (2026-09-23): `POST /coupons` requires exactly one of `percent_off` / `amount_off` (both or neither → 422 in Persian, as PATCH); the no-op `_not_both` validator is gone. 4 tests (negative control: 2 fail), pytest 271, smoke 247/0. Integration tested.
   → audit: [2026-09-23-b615-coupon-create-one-kind.md](audit/2026-09-23-b615-coupon-create-one-kind.md)
+- [ ] **B6.20 Smoke contact-inbox checks skip silently under the rate limit**
+  (`NEW-B51C-1`, discovered during B5.1c) — the block runs only when a `new` message
+  exists; its own `POST /contact` is throttled (5/10 min/IP) on back-to-back runs,
+  so 6 entries vanish without a FAIL. Seed the message or log an explicit skip.
 - [x] **B6.19 Concurrent cancellation restores stock twice** (`NEW-ABBE01-1`, P1,
   discovered during AB-BE-01) — `cancel_order_tx` trusted a status read without a
   lock; a customer POST /cancel racing a staff PATCH restored the stock twice (5 of 6

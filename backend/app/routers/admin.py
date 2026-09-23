@@ -316,7 +316,9 @@ async def audit_logs(
     action: str | None = Query(default=None),
     entity_type: str | None = Query(default=None),
     entity_id: str | None = Query(default=None),
-    admin_id: str | None = Query(default=None),
+    # B5.1c: typed, so a malformed id is FastAPI's 422 instead of Postgres failing
+    # the CAST below (a 500)
+    admin_id: UUID | None = None,
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> list[dict]:
@@ -344,7 +346,7 @@ async def audit_logs(
         params["entity_id"] = entity_id
     if admin_id:
         conditions.append("a.admin_id = CAST(:admin_id AS uuid)")
-        params["admin_id"] = admin_id
+        params["admin_id"] = str(admin_id)
     if conditions:
         sql += " WHERE " + " AND ".join(conditions)
     params["offset"] = offset

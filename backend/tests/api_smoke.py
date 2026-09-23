@@ -140,6 +140,21 @@ def main() -> int:
     check(
         "GET /admin/audit-logs offset", isinstance(offset_rows, list), f"rows={len(offset_rows)}"
     )
+    # B5.1c: a malformed admin_id is a 422 (was a Postgres CAST error → 500)
+    bad_admin = call("GET", "/admin/audit-logs?admin_id=foo", admin)
+    check(
+        "GET /admin/audit-logs?admin_id=foo → 422",
+        bad_admin is not None and bad_admin.status_code == 422,
+        f"{bad_admin.status_code if bad_admin is not None else 0}",
+    )
+    good_admin = call(
+        "GET", "/admin/audit-logs?admin_id=00000000-0000-0000-0000-000000000000", admin
+    )
+    check(
+        "GET /admin/audit-logs?admin_id=<uuid> → 200 []",
+        good_admin is not None and good_admin.status_code == 200 and good_admin.json() == [],
+        f"{good_admin.status_code if good_admin is not None else 0}",
+    )
 
     # --- auth ---
     call("GET", "/auth/me", customer)

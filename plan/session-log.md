@@ -2794,3 +2794,17 @@ Verification: 4 tests (the old router fails 2), pytest 271, smoke 247/0 (+1).
 Existing rows are not migrated (API-only history; PATCH fixes one on edit).
 Level: *integration tested*.
 → audit: [2026-09-23-b615-coupon-create-one-kind.md](audit/2026-09-23-b615-coupon-create-one-kind.md)
+
+## 2026-09-23 — B5.1c malformed admin_id on the audit log → 422
+
+`admin_id` is now `UUID | None`: `?admin_id=foo` is FastAPI's 422 instead of a 500
+from Postgres. Valid ids still filter, and the shape is unchanged.
+
+Verification: 6 tests (the old router fails the 3 malformed cases), pytest 277,
+smoke 245/0 (+2 checks).
+
+The smoke total fell 247 → 245. Its contact-inbox block silently skips when its own
+POST /contact is rate-limited on back-to-back runs. Recorded as **B6.20**.
+
+Level: *integration tested*.
+→ audit: [2026-09-23-b51c-audit-log-admin-id-422.md](audit/2026-09-23-b51c-audit-log-admin-id-422.md)
