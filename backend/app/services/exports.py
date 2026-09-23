@@ -91,7 +91,10 @@ def _product_rows(rows) -> list[list]:
 
 
 def _csv(headers: list[str], rows: list[list]) -> str:
+    # B2.2b: a UTF-8 BOM first, so Excel opening the file directly reads it as UTF-8
+    # instead of garbling the Persian text
     buf = io.StringIO()
+    buf.write("\ufeff")
     writer = csv.writer(buf)  # stdlib: RFC-4180 quoting/escaping
     writer.writerow(headers)
     writer.writerows(rows)
@@ -161,21 +164,29 @@ def products_xlsx(rows) -> tuple[bytes, str]:
     return body, _content_disposition("xlsx", "sande-products", "محصولات-ساندِه")
 
 
+def _instant(value: str, label: str) -> datetime:
+    """An ISO-8601 bound as an aware UTC datetime (B2.2b): an explicit offset is
+    converted (`+03:30` midnight is 20:30 UTC the day before), a naive value is taken
+    as UTC — the admin UI sends UTC bounds without an offset."""
+    try:
+        ts = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(f"تاریخ {label} نامعتبر است: {value}") from exc
+    return ts.astimezone(UTC) if ts.tzinfo else ts.replace(tzinfo=UTC)
+
+
 def parse_range(from_str: str | None, to_str: str | None) -> tuple[datetime, datetime]:
-    """Clamp the export window; defaults to the last 30 days."""
-    to_ts = (
-        datetime.fromisoformat(to_str).replace(tzinfo=UTC)
-        if to_str
-        else datetime.now(UTC)
-    )
+    """Clamp the export window (`to` exclusive); defaults to the last 30 days.
+    Errors are Persian `ValueError`s the router turns into a 422."""
+    to_ts = _instant(to_str, "پایان") if to_str else datetime.now(UTC)
     if from_str:
-        from_ts = datetime.fromisoformat(from_str).replace(tzinfo=UTC)
+        from_ts = _instant(from_str, "شروع")
     else:
         from_ts = datetime.fromordinal(to_ts.toordinal() - 30).replace(
             tzinfo=UTC, hour=0, minute=0, second=0, microsecond=0
         )
     if from_ts >= to_ts:
-        raise ValueError("`from` must be before `to`")
+        raise ValueError("تاریخ شروع باید پیش از تاریخ پایان باشد")
     return from_ts, to_ts
 
 

@@ -155,7 +155,7 @@ tracking code; LIKE wildcards are literal) and `sort=new|old|total_desc|total_as
 | PATCH | `/admin/contact-messages/{id}` | mark a message `answered` (or reopen it as `new`) |
 | POST/GET/PATCH | `/coupons` · `/coupons/{id}` · `/coupons/generate` | coupon CRUD — incl. `max_discount_cap`, the ceiling (in tomans) on a **percent-off** discount; `null` = uncapped. `PATCH`: omitted/`null` = unchanged; `max_discount_cap: 0` / `max_uses: 0` clear the cap, `expires_at: ""` clears the expiry; sending `percent_off` clears `amount_off` and vice versa (both → 422) — F5.16. `POST` needs exactly one of `percent_off` / `amount_off` (both or neither → 422, B6.15) |
 | DELETE | `/coupons/{id}` | remove a coupon (audited; past order discounts unaffected) |
-| GET | `/admin/export/orders.{csv\|xlsx}?from=&to=&status=` | order ledger export (B2.2/BE-08): customer, address, item breakdown, subtotal/discount/shipping/total; `from` defaults 30 days back, invalid range → 422 |
+| GET | `/admin/export/orders.{csv\|xlsx}?from=&to=&status=` | order ledger export (B2.2/BE-08): customer, address, item breakdown, subtotal/discount/shipping/total; `from` defaults 30 days back, `to` exclusive; ISO bounds — an explicit offset is converted to UTC, a naive value is UTC (B2.2b); invalid / inverted range → Persian 422. CSV bodies start with a UTF-8 BOM so Excel reads Persian directly (B2.2b) |
 | GET | `/admin/export/products.{csv\|xlsx}` | full catalog with stock/thresholds |
 | GET | `/admin/export/report?from=&to=` | daily/monthly revenue (cancelled excluded) + top-10 best-sellers JSON |
 

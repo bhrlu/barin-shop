@@ -512,7 +512,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "B2.2b",
+    "agent_start_task": "B6.18",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -1027,7 +1027,7 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "B2.2b",
       "title": "Export date/encoding correctness",
       "priority": "P3",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "backend",
       "depends_on": [],
       "blocks": [],
@@ -1035,7 +1035,10 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "backend-tasks.md",
       "discovered_as": "NEW-ABFE02-1",
       "discovered_during": "AB-FE-02",
-      "scope": "services/exports.py::parse_range must honour a supplied UTC offset (astimezone, naive stays UTC); add a UTF-8 BOM to the CSV exports for Excel; Persian 422 detail for bad dates; pytest for the offset case."
+      "scope": "services/exports.py::parse_range must honour a supplied UTC offset (astimezone, naive stays UTC); add a UTF-8 BOM to the CSV exports for Excel; Persian 422 detail for bad dates; pytest for the offset case.",
+      "audit": "plan/audit/2026-09-23-b22b-export-dates-and-bom.md",
+      "verification_level": "integration tested + browser tested",
+      "completed": "2026-09-23"
     },
     {
       "id": "B5.4b",
@@ -1402,12 +1405,12 @@ changes to the file shipped in sequence; the collision is closed.
   ],
   "counts": {
     "total_executable": 56,
-    "done": 44,
-    "open": 12,
+    "done": 45,
+    "open": 11,
     "P0": 0,
     "P1": 0,
     "P2": 0,
-    "P3": 12,
+    "P3": 11,
     "blocked": 0,
     "dropped": 2,
     "obsolete": 1,
@@ -3125,7 +3128,10 @@ Typecheck + lint + build; browser check as customer and as each staff role.
 ## B2.2b — Export date/encoding correctness
 
 * **Layer:** Backend
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-b22b-export-dates-and-bom.md`](audit/2026-09-23-b22b-export-dates-and-bom.md)
+* **Verification level:** integration tested + browser tested
+* **Delivered:** Export ranges convert an explicit offset to UTC (naive stays UTC, `to` exclusive), bad/inverted ranges are a Persian 422, and CSV bodies start with a UTF-8 BOM. 9 tests (negative control: 7 fail), pytest 287, smoke 253/0 (+BOM check), browser export panels 5/5. Integration + browser tested.
 * **Priority:** P3
 * **Batch:** C
 * **Dependencies:** none
@@ -3648,7 +3654,7 @@ AB-BE-01  (DONE 2026-09-23)
 AB-BE-02  (DONE 2026-09-23)
 B5.1c  (DONE 2026-09-23)
 B5.4a  (DONE 2026-09-23)
-B2.2b
+B2.2b  (DONE 2026-09-23)
 B5.4b  (DONE 2026-09-23)
 B5.1d  (DONE 2026-09-23)
 B6.13  (DONE 2026-09-23)
@@ -3747,13 +3753,13 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**12** open · **44** DONE · 56 executable in total.
+**11** open · **45** DONE · 56 executable in total.
 29 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
 
-**12** (`B2.1a` additionally needs real provider credentials from the user)
+**11** (`B2.1a` additionally needs real provider credentials from the user)
 
 ### Blocked
 
@@ -3791,8 +3797,8 @@ D1–D9 are resolved.
 | P0        |         0 |
 | P1        |         0 |
 | P2        |         0 |
-| P3        |        12 |
-| **Total** |    **12** |
+| P3        |        11 |
+| **Total** |    **11** |
 
 Generated from the JSON index on 2026-09-23.
 
@@ -3908,11 +3914,11 @@ were freshly executed.
 ## START HERE
 
 ```text
-B2.2b
+B6.18
 ```
 
-44 of 56 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. next P3 — export date/encoding correctness
+45 of 56 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. next P3 (Batch C) — presigned image upload has no server-side size/type limit
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -4016,11 +4022,11 @@ Reconciliation date:
 Current state:
 
 ```text
-12 remaining implementation units (B2.1a, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B2.2b, B5.1e, B6.18, F5.19, B2.5a)
-44 completed implementation units
+11 remaining implementation units (B2.1a, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B5.1e, B6.18, F5.19, B2.5a)
+45 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = B2.2b
+NEXT = B6.18
 ```

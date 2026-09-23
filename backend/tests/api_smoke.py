@@ -1027,8 +1027,13 @@ def main() -> int:
     # --- reports & exports (B2.2 / spec BE-08) ---
     csv_res = call("GET", "/admin/export/orders.csv?from=2026-01-01", admin)
     csv_ok = csv_res is not None and csv_res.status_code == 200
-    csv_head = csv_res.text.splitlines()[0] if csv_ok else ""
+    csv_head = csv_res.text.splitlines()[0].lstrip("\ufeff") if csv_ok else ""
     cd = csv_res.headers.get("content-disposition", "")[:40] if csv_ok else ""
+    check(
+        "CSV export starts with a UTF-8 BOM (B2.2b)",
+        csv_ok and csv_res.content.startswith(b"\xef\xbb\xbf"),
+        f"{csv_res.content[:3] if csv_ok else b''}",
+    )
     check(
         "GET /admin/export/orders.csv → header+rows",
         csv_ok
@@ -1046,7 +1051,8 @@ def main() -> int:
     pcsv = call("GET", "/admin/export/products.csv", admin)
     check(
         "GET /admin/export/products.csv",
-        pcsv is not None and pcsv.status_code == 200 and pcsv.text.startswith("product_id,"),
+        pcsv is not None and pcsv.status_code == 200
+        and pcsv.text.lstrip("\ufeff").startswith("product_id,"),
         f"{pcsv.status_code if pcsv else 0}",
     )
     pxlsx = call("GET", "/admin/export/products.xlsx", admin)

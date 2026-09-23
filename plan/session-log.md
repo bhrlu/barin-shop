@@ -2869,3 +2869,16 @@ Verification: a new test records every SQL a cancellation runs and asserts there
 no information_schema query (it fails on the old code). pytest 278, smoke 252/0.
 Level: *integration tested*.
 → audit: [2026-09-23-b68a-restore-stock-no-schema-probe.md](audit/2026-09-23-b68a-restore-stock-no-schema-probe.md)
+
+## 2026-09-23 — B2.2b export dates and CSV BOM
+
+`parse_range` now converts an explicit offset to UTC instead of dropping it:
+`+03:30` midnight is 20:30 UTC the day before. Naive input stays UTC. Bad or
+inverted ranges get a Persian 422. CSV exports start with a UTF-8 BOM so Excel
+reads the Persian text.
+
+Verification: 9 tests (the old service fails 7), including an order found on its
+Tehran-local day. pytest 287, smoke 253/0; the smoke's header checks strip the BOM
+and a new check asserts it. Browser export panels 5/5. Level: *integration +
+browser tested*.
+→ audit: [2026-09-23-b22b-export-dates-and-bom.md](audit/2026-09-23-b22b-export-dates-and-bom.md)
