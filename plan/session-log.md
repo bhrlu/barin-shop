@@ -2553,3 +2553,26 @@ Found:
 
 Level: *browser tested*.
 → audit: [2026-09-23-abfe04-product-image-gallery.md](audit/2026-09-23-abfe04-product-image-gallery.md)
+
+## 2026-09-23 — B6.17 storage upload follows the catalog capability
+
+`POST /storage/upload-url` used `AdminUser`, which means admin/super_admin only, so
+order_manager could edit a product but not add an image to it. It now uses
+`StaffCatalog`, the same guard as product create/edit.
+
+- order_manager: 403 → 200;
+- support and customer: 403, now with the Persian `require_staff` message;
+- anonymous: 401;
+- `/storage/sign`: unchanged.
+
+The `require_admin` docstring ("any staff role passes") was wrong and now says
+admin/super_admin only.
+
+Verification:
+
+- 8 tests, including "upload guard == product-edit guard". Negative control: 4 fail.
+- pytest 216, smoke 235/0 (+2 checks).
+- Browser: order_manager uploads through the gallery into MinIO.
+
+Not done: server-side size/type limits (B6.18). Level: *integration + browser tested*.
+→ audit: [2026-09-23-b617-storage-upload-catalog-capability.md](audit/2026-09-23-b617-storage-upload-catalog-capability.md)

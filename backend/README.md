@@ -112,7 +112,7 @@ Public / customer:
 | GET | `/notifications/unread-count` | user | `{unread}` for the header bell |
 | PATCH | `/notifications/{id}/read` | user | mark one read (idempotent: keeps the first `read_at`); someone else's id → 404 |
 | POST | `/notifications/read-all` | user | mark all own unread → `{updated}` |
-| POST | `/storage/upload-url` · `/storage/sign` | admin / user | MinIO presign |
+| POST | `/storage/upload-url` · `/storage/sign` | `catalog` staff (admin, super_admin, order_manager — B6.17) / user | MinIO presign |
 
 Admin:
 

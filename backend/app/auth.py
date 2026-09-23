@@ -112,7 +112,8 @@ async def _resolve_roles(session: AsyncSession, user_id: UUID, token_role: str |
 async def require_admin(
     user: Annotated[AuthUser, Depends(get_current_user)],
 ) -> AuthUser:
-    """Any staff role passes; bare customers are rejected (legacy convenience)."""
+    """Only `admin` / `super_admin` pass (`AuthUser.is_admin`). Other staff roles are
+    refused — guard staff routes with `require_staff(<capability>)` instead (B6.17)."""
     if not user.is_admin:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin role required")
     return user

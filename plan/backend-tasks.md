@@ -392,11 +392,13 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
 - [ ] **B6.15 `POST /coupons` accepts both discount kinds or neither** (`NEW-F516-1`,
   discovered during F5.16) — `CouponCreate._not_both` is a no-op stub; validate
   exactly one kind on create (422). The admin dialog already blocks both cases.
-- [ ] **B6.17 Storage upload refuses order_manager** (`NEW-ABFE04-1`, discovered
+- [x] **B6.17 Storage upload refuses order_manager** (`NEW-ABFE04-1`, discovered
   during AB-FE-04) — `POST /storage/upload-url` uses `AdminUser` (`is_admin` =
   admin/super_admin only), so order_manager, who edits the catalog since B5.4b, gets
   403 and cannot add product images. Guard with `StaffCatalog`; fix the
   `require_admin` docstring ("any staff role passes" is wrong); per-role tests.
+  Done (2026-09-23): `POST /storage/upload-url` now uses `StaffCatalog` (the product-edit guard): order_manager 200 (was 403), support/customer 403 with the Persian message, anonymous 401; `/storage/sign` unchanged; `require_admin` docstring corrected. 8 tests (negative control: 4 fail), smoke 235/0, browser upload as order_manager into MinIO. Integration + browser tested.
+  → audit: [2026-09-23-b617-storage-upload-catalog-capability.md](audit/2026-09-23-b617-storage-upload-catalog-capability.md)
 - [ ] **B6.18 Presigned image upload has no server-side size/type limit**
   (`NEW-ABFE04-2`, discovered during AB-FE-04) — the presigned PUT signs no type or
   length (200 kB of random bytes as `text/plain` accepted); the 5 MB / image rule is

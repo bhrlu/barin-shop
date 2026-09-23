@@ -16,7 +16,7 @@ from fastapi import APIRouter, HTTPException, status
 from minio.error import MinioException
 from pydantic import BaseModel, Field
 
-from app.auth import AdminUser, CurrentUser
+from app.auth import CurrentUser, StaffCatalog
 from app.config import settings
 
 log = logging.getLogger(__name__)
@@ -72,8 +72,10 @@ def _client():
 _STORAGE_ERRORS = (MinioException, urllib3.exceptions.HTTPError, OSError)
 
 
+# B6.17: whoever may edit the catalog may add product images — `AdminUser` meant
+# admin/super_admin only and refused order_manager, who edits products since B5.4b
 @router.post("/upload-url", response_model=UploadUrlOut)
-async def create_upload_url(body: UploadUrlIn, user: AdminUser) -> UploadUrlOut:
+async def create_upload_url(body: UploadUrlIn, user: StaffCatalog) -> UploadUrlOut:
     ext = body.filename.rsplit(".", 1)[-1].lower() if "." in body.filename else "jpg"
     if ext not in {"jpg", "jpeg", "png", "webp", "gif", "avif"}:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "فرمت تصویر مجاز نیست")

@@ -1002,6 +1002,17 @@ def main() -> int:
         admin,
         json={"filename": "x.jpg", "content_type": "image/jpeg"},
     )
+    # B6.17: presigning follows the catalog capability — order_manager yes, support no
+    order_mgr = login("ordermgr@sande.local", "staff1234")
+    for who, token, expected in (("order_manager", order_mgr, 200), ("support", support, 403)):
+        res = call(
+            "POST",
+            "/storage/upload-url",
+            token,
+            json={"filename": "x.png", "content_type": "image/png"},
+        )
+        got = res.status_code if res is not None else 0
+        check(f"upload-url as {who} → {expected}", got == expected, f"{got}")
 
     # --- unauthenticated guard ---
     call("GET", "/orders")

@@ -507,7 +507,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "B6.17",
+    "agent_start_task": "AB-BE-02",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -1238,7 +1238,7 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "B6.17",
       "title": "Storage upload refuses order_manager (catalog staff)",
       "priority": "P2",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "backend",
       "depends_on": [],
       "blocks": [],
@@ -1246,7 +1246,10 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "backend-tasks.md",
       "discovered_as": "NEW-ABFE04-1",
       "discovered_during": "AB-FE-04",
-      "scope": "POST /storage/upload-url uses AdminUser (is_admin = admin/super_admin only), so order_manager — who holds the catalog capability and edits products since B5.4b — gets 403 and cannot add product images (the gallery shows the English 'Admin role required'). Guard it with StaffCatalog; keep /storage/sign as is; fix the misleading require_admin docstring ('any staff role passes'); tests for each role."
+      "scope": "POST /storage/upload-url uses AdminUser (is_admin = admin/super_admin only), so order_manager — who holds the catalog capability and edits products since B5.4b — gets 403 and cannot add product images (the gallery shows the English 'Admin role required'). Guard it with StaffCatalog; keep /storage/sign as is; fix the misleading require_admin docstring ('any staff role passes'); tests for each role.",
+      "audit": "plan/audit/2026-09-23-b617-storage-upload-catalog-capability.md",
+      "verification_level": "integration tested + browser tested",
+      "completed": "2026-09-23"
     },
     {
       "id": "B6.18",
@@ -1282,11 +1285,11 @@ changes to the file shipped in sequence; the collision is closed.
   ],
   "counts": {
     "total_executable": 51,
-    "done": 29,
-    "open": 22,
+    "done": 30,
+    "open": 21,
     "P0": 0,
     "P1": 0,
-    "P2": 6,
+    "P2": 5,
     "P3": 16,
     "blocked": 0,
     "dropped": 2,
@@ -2467,7 +2470,10 @@ deadlock / no 500; fresh-DB convergence via `down -v && up -d --build` (Rule 14)
 ## B6.17 — Storage upload refuses order_manager (catalog staff)
 
 * **Layer:** Backend (auth)
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-b617-storage-upload-catalog-capability.md`](audit/2026-09-23-b617-storage-upload-catalog-capability.md)
+* **Verification level:** integration tested + browser tested
+* **Delivered:** `POST /storage/upload-url` now uses `StaffCatalog` (the product-edit guard): order_manager 200 (was 403), support/customer 403 with the Persian message, anonymous 401; `/storage/sign` unchanged; `require_admin` docstring corrected. 8 tests (negative control: 4 fail), smoke 235/0, browser upload as order_manager into MinIO. Integration + browser tested.
 * **Priority:** P2
 * **Batch:** C
 * **Dependencies:** none
@@ -3312,7 +3318,7 @@ B5.1d  (DONE 2026-09-23)
 B6.13  (DONE 2026-09-23)
 B6.14  (DONE 2026-09-23)
 B6.15
-B6.17
+B6.17  (DONE 2026-09-23)
 B6.18
 ```
 
@@ -3400,13 +3406,13 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**22** open · **29** DONE · 51 executable in total.
+**21** open · **30** DONE · 51 executable in total.
 24 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
 
-**22** (`B2.1a` additionally needs real provider credentials from the user)
+**21** (`B2.1a` additionally needs real provider credentials from the user)
 
 ### Blocked
 
@@ -3443,9 +3449,9 @@ D1–D9 are resolved.
 | --------- | --------: |
 | P0        |         0 |
 | P1        |         0 |
-| P2        |         6 |
+| P2        |         5 |
 | P3        |        16 |
-| **Total** |    **22** |
+| **Total** |    **21** |
 
 Generated from the JSON index on 2026-09-23.
 
@@ -3561,11 +3567,11 @@ were freshly executed.
 ## START HERE
 
 ```text
-B6.17
+AB-BE-02
 ```
 
-29 of 51 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. P2 bug found in AB-FE-04 — order_manager cannot upload product images (403)
+30 of 51 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. next P2 — variant SKU / price / color fields (unblocks AB-FE-03)
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -3669,11 +3675,11 @@ Reconciliation date:
 Current state:
 
 ```text
-22 remaining implementation units (B2.1a, AB-BE-01, AB-BE-02, F4.3, AB-FE-03, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B6.15, B5.1e, F5.17, B6.17, B6.18)
-29 completed implementation units
+21 remaining implementation units (B2.1a, AB-BE-01, AB-BE-02, F4.3, AB-FE-03, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B6.15, B5.1e, F5.17, B6.18)
+30 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = B6.17
+NEXT = AB-BE-02
 ```
