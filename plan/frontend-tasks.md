@@ -421,7 +421,7 @@ conflict (DESIGN_SYSTEM.md §5).
   switches with provider state). Also fixed the shared `ui/switch.tsx` thumb,
   which slid out of its track under RTL. Browser tested.
   → audit: [2026-09-22-b21-notification-infrastructure.md](audit/2026-09-22-b21-notification-infrastructure.md)
-- [ ] **F5.14 Admin coupon create / edit / toggle all fail with 422** (`NEW-B21-5`,
+- [x] **F5.14 Admin coupon create / edit / toggle all fail with 422** (`NEW-B21-5`,
   discovered during B2.1) — `api.adminCreateCoupon` and `api.adminUpdateCoupon`
   pass a raw `body: JSON.stringify(…)`, but `request()` sets
   `Content-Type: application/json` only on the `json:` path, so the browser sends
@@ -429,6 +429,15 @@ conflict (DESIGN_SYSTEM.md §5).
   dictionary…»). Verified: the same body is 200 as `application/json`, 422 as
   `text/plain`. Every save and every «فعال» switch on `/admin/coupons` is
   silently rejected. Fix: pass `json:` in both methods; add a browser check.
+  Done (2026-09-22): both methods use `json:`; browser tested 14/14 (create,
+  toggle off/on, edit, delete, error paths).
+  → audit: [2026-09-22-f514-coupon-json-body.md](audit/2026-09-22-f514-coupon-json-body.md)
+- [ ] **F5.16 Coupon edit dialog cannot clear expiry / total cap / discount kind**
+  (`NEW-F514-1`, discovered during F5.14) — the dialog sends `null` for an emptied
+  field and `PATCH /coupons/{id}` treats `null` as "unchanged" (observed: clearing
+  the expiry keeps the old date; a percent coupon switched to a fixed amount keeps
+  `percent_off`; `max_uses` cannot be cleared at all). Define clear semantics in
+  `CouponUpdate`, send them from the dialog; pytest + browser.
 - [ ] **F5.15 A failed `/auth/me` signs the user out** (`NEW-B21-6`, discovered
   during B2.1) — `AuthProvider.refresh()` calls `setToken(null)` on *any* error,
   not only a 401: a network error, a backend restart or a full-page navigation

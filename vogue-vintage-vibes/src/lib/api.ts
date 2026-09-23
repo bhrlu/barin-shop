@@ -852,7 +852,7 @@ export const api = {
     max_uses: number | null;
     max_uses_per_user: number;
     expires_at: string | null;
-  }) => request<CouponValidation>("/coupons", { method: "POST", body: JSON.stringify(input) }),
+  }) => request<CouponValidation>("/coupons", { method: "POST", json: input }),
   adminUpdateCoupon: (
     id: string,
     patch: Partial<{
@@ -864,7 +864,7 @@ export const api = {
       max_uses_per_user: number;
       expires_at: string | null;
     }>,
-  ) => request<{ ok: boolean }>(`/coupons/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  ) => request<{ ok: boolean }>(`/coupons/${id}`, { method: "PATCH", json: patch }),
   adminDeleteCoupon: (id: string) => request<void>(`/coupons/${id}`, { method: "DELETE" }),
   adminGenerateCouponCode: () => request<{ code: string }>("/coupons/generate", { method: "POST" }),
 

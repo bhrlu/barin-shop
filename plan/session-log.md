@@ -2144,3 +2144,26 @@ the bell removed, or curl).
 **Next backlog pointer** — `F5.14` (admin coupon 422 regression, P1), then
 `F2.3` (forgot password, P1; reset email through `services/notifications.py`,
 SMTP unconfigured → check the stop conditions).
+
+## 2026-09-22 — F5.14 admin coupon 422 (first of the back-to-back run)
+
+**Context.** The user asked to run the remaining pointer + follow-up tasks back to
+back: F5.14 → F2.3 → F5.15 → B6.13 → B5.1d → B2.1a → F5.13, one audit/commit each.
+
+**What was done** — `api.adminCreateCoupon` / `api.adminUpdateCoupon` sent a raw
+`body: JSON.stringify(…)`, so the browser used `text/plain` and FastAPI answered 422
+for every coupon create, edit and toggle. Both now pass `json:`. `request()`, the
+backend and the payload are unchanged.
+
+**Verification** — browser 14/14 on `/admin/coupons` (create, toggle off/on, edit,
+delete, duplicate → Persian 409 error, empty discount → client error; every write
+`application/json`); prettier/tsc/lint/build clean. Level: *browser tested*.
+
+**Discovered, recorded, not fixed** — F5.16 (P2): the edit dialog cannot clear
+expiry / total cap / discount kind (sends `null`, PATCH ignores it).
+
+**Not done** — F5.16, F5.9.
+
+→ audit: [2026-09-22-f514-coupon-json-body.md](audit/2026-09-22-f514-coupon-json-body.md)
+
+**Next backlog pointer** — `F2.3`.

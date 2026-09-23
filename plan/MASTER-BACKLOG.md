@@ -507,7 +507,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "F5.14",
+    "agent_start_task": "F2.3",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -1061,7 +1061,7 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "F5.14",
       "title": "Admin coupon create / edit / toggle fail with 422 (text/plain body)",
       "priority": "P1",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "frontend",
       "depends_on": [],
       "blocks": [],
@@ -1069,7 +1069,10 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "frontend-tasks.md",
       "discovered_as": "NEW-B21-5",
       "discovered_during": "B2.1",
-      "scope": "api.adminCreateCoupon / adminUpdateCoupon send body: JSON.stringify(...) without the JSON content type (request() sets it only for json:), so FastAPI rejects every coupon save and active toggle with 422. Pass json: in both; verify create, edit and toggle in a browser."
+      "scope": "api.adminCreateCoupon / adminUpdateCoupon send body: JSON.stringify(...) without the JSON content type (request() sets it only for json:), so FastAPI rejects every coupon save and active toggle with 422. Pass json: in both; verify create, edit and toggle in a browser.",
+      "audit": "plan/audit/2026-09-22-f514-coupon-json-body.md",
+      "verification_level": "browser tested",
+      "completed": "2026-09-22"
     },
     {
       "id": "F5.15",
@@ -1084,6 +1087,20 @@ changes to the file shipped in sequence; the collision is closed.
       "discovered_as": "NEW-B21-6",
       "discovered_during": "B2.1",
       "scope": "AuthProvider.refresh() clears the token on any api.me() error (network error, backend restart, request interrupted by a full-page navigation), not only 401/403. Clear only on 401/403; otherwise keep the token and retry."
+    },
+    {
+      "id": "F5.16",
+      "title": "Coupon edit dialog cannot clear expiry / total cap / discount kind",
+      "priority": "P2",
+      "status": "TODO",
+      "layer": "fullstack",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "D",
+      "source": "frontend-tasks.md",
+      "discovered_as": "NEW-F514-1",
+      "discovered_during": "F5.14",
+      "scope": "admin.coupons.tsx sends null for an emptied expiry / max_uses / the other discount kind; PATCH /coupons/{id} treats null as unchanged (expires_at clears only on \"\"; max_uses has no clear encoding). Define clear semantics in CouponUpdate, send them from the dialog, add pytest + browser checks."
     }
   ],
   "excluded": [
@@ -1104,12 +1121,12 @@ changes to the file shipped in sequence; the collision is closed.
     }
   ],
   "counts": {
-    "total_executable": 43,
-    "done": 9,
+    "total_executable": 44,
+    "done": 10,
     "open": 34,
     "P0": 0,
-    "P1": 2,
-    "P2": 19,
+    "P1": 1,
+    "P2": 20,
     "P3": 13,
     "blocked": 0,
     "dropped": 2,
@@ -1635,7 +1652,13 @@ Focused auth tests + notification stub + frontend flow.
 ## F5.14 — Admin coupon create / edit / toggle fail with 422
 
 * **Layer:** Frontend
-* **Status:** TODO
+* **Status:** DONE (2026-09-22)
+* **Audit:** [`plan/audit/2026-09-22-f514-coupon-json-body.md`](audit/2026-09-22-f514-coupon-json-body.md)
+* **Verification level:** browser tested — headless Chromium 14/14 on
+  `/admin/coupons` (create, toggle off/on, edit, delete, duplicate-code and
+  empty-discount errors; every write sent as `application/json`); tsc / lint /
+  build clean. Fix: `json:` instead of a raw `body:` in `api.adminCreateCoupon` /
+  `api.adminUpdateCoupon`. Found on the way: `F5.16`.
 * **Priority:** P1
 * **Batch:** D
 * **Dependencies:** none
@@ -2058,6 +2081,38 @@ or let the failure fail the request. Do not swallow-and-rollback.
 
 A pytest that forces the audit insert to fail and asserts the chosen outcome on
 the mutation; full pytest + ruff + `api_smoke.py`.
+
+---
+
+## F5.16 — Coupon edit dialog cannot clear expiry / total cap / discount kind
+
+* **Layer:** Full-stack
+* **Status:** TODO
+* **Priority:** P2
+* **Batch:** D
+* **Dependencies:** none (touches the same dialog as `F5.9`)
+* **Discovered as:** `NEW-F514-1` during `F5.14` — legacy discovery ID only;
+  `F5.16` is the executable ID.
+* **Source:** `frontend-tasks.md` F5.16
+
+### Problem
+
+`admin.coupons.tsx` builds the edit PATCH with `null` for every emptied field
+(expiry, total cap, the discount kind not chosen). `PATCH /coupons/{id}` treats
+`null` as "leave unchanged": clearing the expiry and saving keeps the old date
+(observed in the browser), a percent coupon switched to a fixed amount keeps its
+`percent_off`, and `max_uses` has no "clear" encoding at all.
+
+### Required implementation
+
+Define explicit clear semantics in `CouponUpdate` (e.g. `""`/`0` like the
+existing `expires_at` / `max_discount_cap` conventions), send them from the
+dialog, and keep create unchanged.
+
+### Verification
+
+pytest for each clear path + a browser edit that clears expiry, cap and switches
+kind.
 
 ---
 
@@ -2738,8 +2793,9 @@ F5.10
 F5.11
 F5.12
 F5.13
-F5.14  (P1 — do first)
+F5.14  (DONE 2026-09-22)
 F5.15
+F5.16
 ```
 
 These can mostly run in parallel because they touch different concerns.
@@ -2802,9 +2858,9 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**34** (9 completed: B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02, AB-FE-05, B3.11,
-B2.1; 16 added by discovery: NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10, B2.2b,
-B5.4b, F5.11, F5.12, B2.1a, B5.1d, B6.13, F5.13, F5.14, F5.15)
+**34** (10 completed: B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02, AB-FE-05, B3.11,
+B2.1, F5.14; 17 added by discovery: NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10,
+B2.2b, B5.4b, F5.11, F5.12, B2.1a, B5.1d, B6.13, F5.13, F5.14, F5.15, F5.16)
 
 ### Ready for execution
 
@@ -2844,12 +2900,12 @@ D1–D9 are resolved.
 | Priority  | Remaining |
 | --------- | --------: |
 | P0        |         0 |
-| P1        |         2 |
-| P2        |        19 |
+| P1        |         1 |
+| P2        |        20 |
 | P3        |        13 |
 | **Total** |    **34** |
 
-Recomputed from the JSON index on 2026-09-22 (B2.1 session).
+Recomputed from the JSON index on 2026-09-22 (F5.14).
 
 Priority is execution guidance, not permission to rewrite requirements.
 
@@ -2963,7 +3019,7 @@ were freshly executed.
 ## START HERE
 
 ```text
-F5.14
+F2.3
 ```
 
 Batch A (`B6.8`, `B6.9`, `AB-BE-03`) is complete — audits
@@ -2980,11 +3036,9 @@ only `F5.9` (P2).
 `B2.1` ([audit](audit/2026-09-22-b21-notification-infrastructure.md)) — executed as notification infrastructure under the D2
 product adjustment: in-app notifications live, SMS/email built but unconfigured.
 
-Two P1s are open. **`F5.14` goes first**: it is a regression in a shipped
-feature — every coupon create, edit and «فعال» toggle on `/admin/coupons` is
-rejected with 422 today (found by the B2.1 browser regression sweep) — and the fix
-is two call sites in `src/lib/api.ts`. **`F2.3`** (forgot password, Batch F; its
-dependency `B2.1` is DONE) is next after it.
+`F5.14` is DONE ([audit](audit/2026-09-22-f514-coupon-json-body.md)) — the coupon manager saves again.
+**`F2.3`** (forgot password, Batch F; its dependency `B2.1` is DONE) is the only
+remaining P1.
 
 **For `F2.3`, check the stop conditions (§18) first.** The reset email must go through
 `services/notifications.py` (add an email-only entry point; see the F2.3 hand-off),
@@ -2993,9 +3047,9 @@ email path with a stub transport is possible; real delivery is not. Decide — w
 the user if needed — how a reset link is verified locally before inventing one,
 and report real delivery as unverified instead of faking it.
 
-After `F5.14` is completed:
+After `F2.3` is completed:
 
-1. update this pointer (to `F2.3`, the remaining P1);
+1. update this pointer (to the highest-priority P2);
 2. update the task status;
 3. link the new audit;
 4. record the actual verification level;
@@ -3099,14 +3153,14 @@ Current state:
 ```text
 34 remaining implementation units
   (18 of the original 27, plus NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10,
-   B2.2b, B5.4b, F5.11, F5.12, B2.1a, B5.1d, B6.13, F5.13, F5.14 and F5.15 — the
+   B2.2b, B5.4b, F5.11, F5.12, B2.1a, B5.1d, B6.13, F5.13, F5.15 and F5.16 — the
    last fourteen discovered as NEW-ABBE03-1, NEW-F55-1, NEW-F56-1, NEW-F56-2,
-   NEW-ABFE02-1, NEW-ABFE05-1/2/3 and NEW-B21-1…6 — found during them)
-9 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02,
-  AB-FE-05, B3.11, B2.1)
+   NEW-ABFE02-1, NEW-ABFE05-1/2/3, NEW-B21-1…4/6 and NEW-F514-1 — found during them)
+10 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02,
+  AB-FE-05, B3.11, B2.1, F5.14 — the last one itself discovered as NEW-B21-5)
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = F5.14 (then F2.3)
+NEXT = F2.3
 ```
