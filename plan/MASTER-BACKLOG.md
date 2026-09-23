@@ -507,7 +507,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "B2.1a",
+    "agent_start_task": "F5.13",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -661,7 +661,8 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "backend-tasks.md",
       "discovered_as": "NEW-B21-1",
       "discovered_during": "B2.1",
-      "scope": "Requires real Kavenegar + SMTP credentials (stop and report if absent). Put them in infra/.env, confirm *_configured on /admin/settings, send one real SMS and one real email end to end, verify sender line / TLS mode, record the result. Adapters were only tested against stub transports."
+      "scope": "Requires real Kavenegar + SMTP credentials (stop and report if absent). Put them in infra/.env, confirm *_configured on /admin/settings, send one real SMS and one real email end to end, verify sender line / TLS mode, record the result. Adapters were only tested against stub transports.",
+      "stopped": "2026-09-23: stop condition — no Kavenegar/SMTP credentials in infra/.env or the backend container (sms_configured/email_configured false); stays TODO until the user supplies them"
     },
     {
       "id": "F2.3",
@@ -2667,6 +2668,10 @@ stock-issue flows re-tested.
 * **Priority:** P3
 * **Batch:** F
 * **Dependencies:** `B2.1` (DONE) + **real credentials from the user**
+* **Attempted 2026-09-23 (back-to-back run) — stopped (§18):** no Kavenegar or
+  SMTP value in `infra/.env` or the backend container; `/admin/settings` reports
+  `sms_configured` / `email_configured` false. Nothing was changed or faked.
+  Resume when the user provides the credentials.
 * **Discovered as:** `NEW-B21-1` during `B2.1` — legacy discovery ID only;
   `B2.1a` is the executable ID.
 * **Source:** `backend-tasks.md` B2.1a
@@ -3106,7 +3111,7 @@ were freshly executed.
 ## START HERE
 
 ```text
-B2.1a
+F5.13
 ```
 
 Batch A (`B6.8`, `B6.9`, `AB-BE-03`) is complete — audits
@@ -3133,9 +3138,9 @@ product adjustment: in-app notifications live, SMS/email built but unconfigured.
 `B5.1d` is DONE ([audit](audit/2026-09-23-b51d-audit-atomicity.md)) — audited mutations are all-or-nothing now.
 
 The user asked for this run back to back: `F5.15` (DONE) → `B6.13` (DONE) →
-`B5.1d` (DONE) → `B2.1a` → `F5.13`. **`B2.1a`** (activate the real SMS/email
-providers) is next and **needs real credentials** — stop and report if they are
-absent; then continue with `F5.13`. `B2.1a` will hit its stop condition (no real credentials) —
+`B5.1d` (DONE) → `B2.1a` (stopped — no credentials) → `F5.13`. **`F5.13`** (guest direct-load of
+a protected route logs a hydration mismatch; P3, Batch D) is next. `B2.1a`
+resumes when the user supplies real Kavenegar/SMTP credentials. `B2.1a` will hit its stop condition (no real credentials) —
 report it, do not fake it.
 
 After each task: update this pointer, the task status, the audit link and the
@@ -3250,5 +3255,5 @@ Current state:
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = B2.1a
+NEXT = F5.13
 ```

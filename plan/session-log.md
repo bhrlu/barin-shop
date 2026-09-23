@@ -2261,3 +2261,12 @@ fails 5. pytest 157, ruff clean, smoke 229/0. Level: *integration tested*.
 → audit: [2026-09-23-b51d-audit-atomicity.md](audit/2026-09-23-b51d-audit-atomicity.md)
 
 **Next backlog pointer** — `B2.1a` (needs real credentials), then `F5.13`.
+
+## 2026-09-23 — B2.1a stopped: no provider credentials (task 6)
+
+Checked `infra/.env` and the backend container for `KAVENEGAR_*` / `SMTP_*` (reported
+set/unset only, never values): all unset; `/admin/settings` reports both providers
+unconfigured. Stop condition §18 — nothing implemented, faked or switched on. B2.1a
+stays TODO and resumes when the user provides real credentials.
+
+**Next backlog pointer** — `F5.13`.

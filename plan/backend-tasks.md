@@ -57,6 +57,8 @@ Legend: `[ ]` todo · `[x]` done (audit file required) · audit links in `plan/a
   `/admin/settings`, send one real SMS and one real email end to end, check the
   Kavenegar sender line / template rules and the SMTP TLS mode, and record the
   result. The adapters were only tested against stub transports.
+  **Stopped 2026-09-23** (back-to-back run): no credentials in `infra/.env` or the
+  backend container — nothing changed; resume when the user supplies them.
 - [x] **B2.2 Reports & exports** — daily/monthly sales, best-sellers, Excel (openpyxl/pandas) + CSV product import/export
   Done (2026-09-22): `/admin/export/orders.{csv,xlsx}`, `/admin/export/products.{csv,xlsx}`
   (StaffOrders guard, RFC-4180 CSV, RFC-6266 filenames) + `/admin/export/report`
