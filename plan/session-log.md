@@ -2962,3 +2962,67 @@ stay separate.
 user-directed P1).
 
 → audit: [2026-09-24-f520-complete-customer-profile.md](audit/2026-09-24-f520-complete-customer-profile.md)
+
+## 2026-09-24 — B6.18 upload policy carries the size and type limits
+
+**Task** — `B6.18` (P3, Batch C, the execution pointer). Discovered during
+AB-FE-04 (`NEW-ABFE04-2`). The gallery's «≤ 5 MB, image/*» rule was browser-only:
+`POST /storage/upload-url` signed a PUT URL, and a V4 query-signed PUT signs
+neither a length nor a content type (AB-FE-04 measured 200 kB of random bytes as
+`text/plain` → 200).
+
+**What was done** —
+
+- `routers/storage.py` now signs a `PostPolicy` instead of a PUT URL: `key`
+pinned to the returned path, `content-length-range` 1–5 MB, `starts-with
+$Content-Type image/`. Response becomes `{path, upload_url, fields, max_bytes}`
+(`public_url_template` dropped — it was the same string and had no consumer); a
+non-`image/*` request `content_type` is a 422 (extension check unchanged).
+- `api.ts#uploadImage` multipart-POSTs the signed `fields` then `file` last, still
+through `XMLHttpRequest` (progress unchanged), and maps MinIO's
+`EntityTooLarge`/`AccessDenied` XML codes to Persian messages. New `UploadTicket`
+type.
+- Verified MinIO's behaviour first rather than assuming it: the `Content-Type`
+condition is checked against the **form field**, not the file part's header, so
+the API puts `Content-Type` into `fields`.
+
+**Tests** — `test_storage_access.py`: the decoded base64 policy must carry the key
+equals-condition, the 5 MB range and the `image/` starts-with; `fields` must carry
+`key` + `Content-Type`; plus 3 parametrized 422 cases. `test_catalog_errors.py`
+fake moved to `presigned_post_policy` (its AttributeError → 500 check still
+passes). `api_smoke.py` +3 policy checks. Negative control: with HEAD's router and
+a fake supporting both methods, 3 of the new tests fail (`KeyError: 'fields'` and
+`200 == 422` for `text/plain`).
+
+**Verification** — pytest **348** (4 new), ruff clean, smoke **257/0**, `tsc` no
+error in the changed files (the only `tsc` errors are pre-existing in
+`admin.users.tsx`/`admin.orders.tsx`/`AdminDataTable.tsx`), lint 0 errors (14
+pre-existing warnings). Live against the running stack (real Postgres + real
+MinIO, backend hot-reloaded): 204 + echoed CORS on the browser-shaped multipart
+POST with 408 bytes stored = 408 sent and the public GET 200; 400 on 5 MB + 1;
+403 on a tampered form type; 403 on a tampered key; API 422 for `text/plain`. No
+DDL/infra/seed change, so no clean-environment run. Level: *integration tested
+(real MinIO + real Postgres, error paths) with the browser request reproduced at
+the HTTP level*.
+
+**Decisions** — one POST policy replaces the PUT (the task's own suggestion);
+`Content-Type` is a signed form field, not a client choice; `public_url_template`
+removed rather than kept as a duplicate of `upload_url`; the frontend keeps its
+pre-upload constant check purely as UX, the server is authoritative.
+
+**What was explicitly NOT done** — no browser click-through of the gallery (no
+Playwright/Chromium available this session); `bun run build` could not run
+locally (Node v20.9.0 lacks `node:util.styleText` required by the installed
+Vite/rolldown — pre-existing); `infra/README.md`, `frontend-tasks.md` and
+`feature-roadmap.md` were left untouched (nothing they document changed — see the
+audit).
+
+**Discovered follow-ups** — **B6.18a** (P3, Batch C): MinIO enforces the declared
+`Content-Type`, never the bytes, so a ticket holder can store arbitrary data
+labelled `image/png`; only worth fixing if the upload surface opens beyond
+`catalog` staff.
+
+**Next backlog pointer** — `B5.1e` (P3, Batch C: run the backend as a
+least-privilege database role) — the last un-gated Batch C item.
+
+→ audit: [2026-09-24-b618-upload-policy-limits.md](audit/2026-09-24-b618-upload-policy-limits.md)

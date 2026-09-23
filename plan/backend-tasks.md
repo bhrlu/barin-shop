@@ -435,11 +435,25 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   `require_admin` docstring ("any staff role passes" is wrong); per-role tests.
   Done (2026-09-23): `POST /storage/upload-url` now uses `StaffCatalog` (the product-edit guard): order_manager 200 (was 403), support/customer 403 with the Persian message, anonymous 401; `/storage/sign` unchanged; `require_admin` docstring corrected. 8 tests (negative control: 4 fail), smoke 235/0, browser upload as order_manager into MinIO. Integration + browser tested.
   → audit: [2026-09-23-b617-storage-upload-catalog-capability.md](audit/2026-09-23-b617-storage-upload-catalog-capability.md)
-- [ ] **B6.18 Presigned image upload has no server-side size/type limit**
+- [x] **B6.18 Presigned image upload has no server-side size/type limit**
   (`NEW-ABFE04-2`, discovered during AB-FE-04) — the presigned PUT signs no type or
   length (200 kB of random bytes as `text/plain` accepted); the 5 MB / image rule is
   client-side only. Presigned POST policy (`content-length-range`, `image/*`) +
   multipart upload in `api.uploadImage` (keep progress).
+  Done (2026-09-24): `POST /storage/upload-url` returns a presigned POST policy
+  (`key` pinned, `content-length-range` 1–5 MB, `starts-with $Content-Type image/`)
+  plus `fields`/`max_bytes`; `uploadImage` multipart-POSTs with the same XHR progress
+  and maps MinIO's `EntityTooLarge`/`AccessDenied` to Persian. Live MinIO: 204 + CORS
+  on the happy path, 400 over 5 MB, 403 on a tampered type and on a tampered key, API
+  422 for a non-image request. pytest 348 (4 new), smoke 257/0 (+3), negative control
+  3 fail. Integration tested (real MinIO + real Postgres); no browser click-through.
+  → audit: [2026-09-24-b618-upload-policy-limits.md](audit/2026-09-24-b618-upload-policy-limits.md)
+- [ ] **B6.18a Verify the uploaded bytes are actually an image** (`NEW-B618-1`,
+  discovered during B6.18) — the policy enforces the *declared* `Content-Type`
+  (`image/*`) and the size, but MinIO never sniffs the bytes, so a ticket holder can
+  store arbitrary data labelled `image/png` at a public URL. Magic-byte check after
+  upload (or an upload proxy) if the upload surface ever opens beyond `catalog`
+  staff; otherwise accepted residual risk — do not start without that trigger.
 - [x] **B6.13 The documented `pytest -q` silently skips every DB test**
   (`NEW-B21-3`, discovered during B2.1) — `test_addresses.py` (collected first) and
   three other modules `os.environ.setdefault("DATABASE_URL", "…u:p@…/db")` at

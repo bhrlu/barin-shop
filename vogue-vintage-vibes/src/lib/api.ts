@@ -703,6 +703,18 @@ export type PaymentSession = {
   tracking_code: string;
 };
 
+/** `POST /storage/upload-url` (B6.18): a presigned MinIO **POST policy**.
+ * `upload_url` is the bucket URL to POST to; `fields` are the signed form
+ * fields (append every one, then the `file` part last). The policy itself
+ * carries the server-enforced limits — `max_bytes` and `Content-Type: image/*`
+ * — so MinIO refuses an oversized or non-image upload whatever the client does. */
+export type UploadTicket = {
+  path: string;
+  upload_url: string;
+  fields: Record<string, string>;
+  max_bytes: number;
+};
+
 // ---------------------------------------------------------------------------
 // Endpoints
 // ---------------------------------------------------------------------------
@@ -1004,30 +1016,48 @@ export const api = {
       json: { paths },
     }),
   /**
-   * Presign, then PUT the file straight to MinIO. The PUT uses XMLHttpRequest because
-   * `fetch` cannot report upload progress; `onProgress` receives 0–1 (AB-FE-04).
+   * Ask for a presigned POST policy, then multipart-POST the file straight to MinIO
+   * (B6.18: the policy, not the client, carries the ≤ 5 MB / image-type limits). The
+   * POST uses XMLHttpRequest because `fetch` cannot report upload progress;
+   * `onProgress` receives 0–1 (AB-FE-04).
    */
   uploadImage: async (file: File, onProgress?: (fraction: number) => void) => {
-    const presign = await request<{ path: string; upload_url: string }>("/storage/upload-url", {
+    const ticket = await request<UploadTicket>("/storage/upload-url", {
       method: "POST",
       json: { filename: file.name, content_type: file.type || "image/jpeg" },
     });
+    const form = new FormData();
+    for (const [name, value] of Object.entries(ticket.fields)) form.append(name, value);
+    // S3 POST requires the file part last, and MinIO checks the `Content-Type`
+    // form field above (already in `fields`), not the part's own header.
+    form.append("file", file, file.name);
     await new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.open("PUT", presign.upload_url);
-      xhr.setRequestHeader("Content-Type", file.type || "image/jpeg");
+      xhr.open("POST", ticket.upload_url);
+      // no Content-Type header: the browser sets the multipart boundary itself
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable) onProgress?.(event.loaded / event.total);
       };
-      xhr.onload = () =>
-        xhr.status >= 200 && xhr.status < 300
-          ? resolve()
-          : reject(new ApiError(xhr.status, "آپلود انجام نشد"));
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) return resolve();
+        // MinIO's refusal is an XML body; name the two policy limits when it is one
+        const code = /<Code>([^<]+)<\/Code>/.exec(xhr.responseText ?? "")?.[1];
+        reject(
+          new ApiError(
+            xhr.status,
+            code === "EntityTooLarge"
+              ? "حجم فایل بیشتر از حد مجاز (۵ مگابایت) است"
+              : code === "AccessDenied"
+                ? "نوع فایل مجاز نیست؛ فقط تصویر قابل آپلود است"
+                : "آپلود انجام نشد",
+          ),
+        );
+      };
       xhr.onerror = () => reject(new ApiError(0, "ارتباط با فضای ذخیره‌سازی برقرار نشد"));
-      xhr.send(file);
+      xhr.send(form);
     });
     onProgress?.(1);
-    return presign.path;
+    return ticket.path;
   },
 
   // --- search ---

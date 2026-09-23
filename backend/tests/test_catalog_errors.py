@@ -150,10 +150,10 @@ class _FakeMinio:
     def __init__(self, error: Exception | None) -> None:
         self.error = error
 
-    def presigned_put_object(self, *args, **kwargs):
+    def presigned_post_policy(self, *args, **kwargs):
         if self.error:
             raise self.error
-        return "http://minio.test/put"
+        return {"policy": "policy", "x-amz-signature": "sig"}
 
     def presigned_get_object(self, *args, **kwargs):
         if self.error:

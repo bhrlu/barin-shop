@@ -1,3 +1,5 @@
+import base64
+import json
 import os
 import sys
 from uuid import uuid4
@@ -1098,6 +1100,32 @@ def main() -> int:
         )
         got = res.status_code if res is not None else 0
         check(f"upload-url as {who} → {expected}", got == expected, f"{got}")
+
+    # B6.18: the ticket is a POST policy that carries the size and type limits, so
+    # MinIO — not the browser — refuses an oversized or non-image upload
+    ticket = call(
+        "POST",
+        "/storage/upload-url",
+        order_mgr,
+        json={"filename": "x.webp", "content_type": "image/webp"},
+    )
+    if ticket is not None and ticket.status_code == 200:
+        data = ticket.json()
+        conditions = json.loads(base64.b64decode(data["fields"]["policy"]))["conditions"]
+        check(
+            "upload policy caps size at 5 MB",
+            ["content-length-range", 1, 5 * 1024 * 1024] in conditions,
+            str(conditions),
+        )
+        check(
+            "upload policy requires an image type",
+            ["starts-with", "$Content-Type", "image/"] in conditions,
+            str(conditions),
+        )
+        check("upload policy pins the key", data["fields"]["key"] == data["path"], data["path"])
+    else:
+        got = ticket.status_code if ticket is not None else 0
+        check("upload-url returns a POST policy", False, f"{got}")
 
     # --- unauthenticated guard ---
     call("GET", "/orders")

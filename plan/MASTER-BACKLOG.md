@@ -512,7 +512,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "B6.18",
+    "agent_start_task": "B5.1e",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -1296,7 +1296,7 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "B6.18",
       "title": "Presigned image upload has no server-side size/type limit",
       "priority": "P3",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "backend",
       "depends_on": ["B6.17"],
       "blocks": [],
@@ -1304,7 +1304,24 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "backend-tasks.md",
       "discovered_as": "NEW-ABFE04-2",
       "discovered_during": "AB-FE-04",
-      "scope": "The presigned PUT from /storage/upload-url signs no content-type or length: 200 kB of random bytes as text/plain were accepted. The 5 MB / image-type rule is client-side only. Switch to a presigned POST policy (content-length-range <= 5 MB, Content-Type starts-with image/) and move api.uploadImage to a multipart POST (keeping progress), or equivalent server-side enforcement; tests + browser upload."
+      "scope": "The presigned PUT from /storage/upload-url signs no content-type or length: 200 kB of random bytes as text/plain were accepted. The 5 MB / image-type rule is client-side only. Switch to a presigned POST policy (content-length-range <= 5 MB, Content-Type starts-with image/) and move api.uploadImage to a multipart POST (keeping progress), or equivalent server-side enforcement; tests + browser upload.",
+      "audit": "plan/audit/2026-09-24-b618-upload-policy-limits.md",
+      "verification_level": "integration tested on real MinIO + real Postgres (happy path, oversize, tampered type, tampered key) with the browser request reproduced over HTTP; not click-tested in a browser",
+      "completed": "2026-09-24"
+    },
+    {
+      "id": "B6.18a",
+      "title": "Verify the uploaded bytes are actually an image",
+      "priority": "P3",
+      "status": "TODO",
+      "layer": "backend",
+      "depends_on": ["B6.18"],
+      "blocks": [],
+      "batch": "C",
+      "source": "backend-tasks.md",
+      "discovered_as": "NEW-B618-1",
+      "discovered_during": "B6.18",
+      "scope": "B6.18's policy enforces the declared Content-Type (image/*) and the size; MinIO never sniffs the bytes, so a ticket holder can store arbitrary data labelled image/png at a public URL. Magic-byte check after upload (or an upload proxy) if the upload surface opens beyond catalog staff; otherwise accepted residual risk - do not start without that trigger."
     },
     {
       "id": "F5.18",
@@ -2662,10 +2679,14 @@ admin (200). The gallery upload works in the browser as order_manager.
 ## B6.18 — Presigned image upload has no server-side size/type limit
 
 * **Layer:** Backend (storage) + `src/lib/api.ts`
-* **Status:** TODO
+* **Status:** DONE (2026-09-24)
+* **Audit:** [`plan/audit/2026-09-24-b618-upload-policy-limits.md`](audit/2026-09-24-b618-upload-policy-limits.md)
+* **Verification level:** integration tested on real MinIO + real Postgres (happy path, oversize, tampered type, tampered key) with the browser request reproduced over HTTP; not click-tested in a browser
+* **Delivered:** `POST /storage/upload-url` returns a presigned **POST policy** instead of a PUT URL — `key` pinned to the returned path, `content-length-range` 1–5 MB, `starts-with $Content-Type image/` — plus the signed `fields` and `max_bytes` (`public_url_template` dropped, no consumer); a non-image `content_type` is a 422. `api.uploadImage` multipart-POSTs fields-then-file with the same XHR progress and maps `EntityTooLarge`/`AccessDenied` to Persian. Live MinIO: 204 + CORS on the happy path (408 bytes stored = 408 sent), 400 over 5 MB, 403 on a tampered type and key; pytest 348 (4 new), smoke 257/0 (+3); negative control 3 fail on HEAD's router.
 * **Priority:** P3
 * **Batch:** C
 * **Dependencies:** `B6.17`
+* **Blocks:** `B6.18a` (byte-level verification)
 * **Discovered as:** `NEW-ABFE04-2` during `AB-FE-04` — legacy discovery ID only;
   `B6.18` is the executable ID.
 * **Source:** `backend-tasks.md` B6.18
@@ -2691,6 +2712,37 @@ Or use an equivalent server-side check.
 
 Tests: the policy carries the limits. A browser upload still works, and an
 oversized or non-image upload is refused by MinIO.
+
+---
+
+## B6.18a — Verify the uploaded bytes are actually an image
+
+* **Layer:** Backend (storage)
+* **Status:** TODO
+* **Priority:** P3
+* **Batch:** C
+* **Dependencies:** `B6.18`
+* **Discovered as:** `NEW-B618-1` during `B6.18` — legacy discovery ID only;
+  `B6.18a` is the executable ID.
+* **Source:** `backend-tasks.md` B6.18a
+
+### Problem
+
+B6.18's POST policy enforces the **declared** `Content-Type` (`image/*`) and the
+size, but MinIO never inspects the bytes: a ticket holder can store arbitrary data
+labelled `image/png` at a public URL. Only `catalog` staff can obtain a ticket, so
+this is accepted residual risk today.
+
+### Required implementation
+
+A magic-byte check of the uploaded object (post-upload verification) or an upload
+proxy, **only if** the upload surface opens beyond catalog staff or the object URLs
+become same-origin. Do not start without that trigger.
+
+### Verification
+
+If implemented: arbitrary bytes stored under an image content type are rejected or
+removed, and a real JPG/PNG/WEBP/GIF/AVIF still uploads.
 
 ---
 
@@ -3710,9 +3762,11 @@ B6.13  (DONE 2026-09-23)
 B6.14  (DONE 2026-09-23)
 B6.15  (DONE 2026-09-23)
 B6.17  (DONE 2026-09-23)
-B6.18
+B6.18  (DONE 2026-09-24)
+B6.18a
 B6.19  (DONE 2026-09-23)
 B6.20  (DONE 2026-09-23)
+B5.1e
 ```
 
 `AB-BE-01` begins after `B6.8`.
@@ -3964,14 +4018,16 @@ were freshly executed.
 ## START HERE
 
 ```text
-B6.18
+B5.1e
 ```
 
-46 of 57 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. next P3 (Batch C) — presigned image upload has no server-side size/type limit
+47 of 58 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. next P3 (Batch C) — run the backend as a least-privilege database role
 
-(`F5.20` was executed out of order as a user-directed P1 on 2026-09-24; the
-pointer stays on `B6.18`.)
+(`F5.20` was executed out of order as a user-directed P1 on 2026-09-24, and
+`B6.18` followed it; the pointer moves to the last remaining Batch C item,
+`B5.1e`. `B6.18a` is also open in Batch C but is gated on a trigger — see its
+section.)
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -4075,11 +4131,11 @@ Reconciliation date:
 Current state:
 
 ```text
-11 remaining implementation units (B2.1a, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B5.1e, B6.18, F5.19, B2.5a)
-46 completed implementation units
+11 remaining implementation units (B2.1a, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B5.1e, B6.18a, F5.19, B2.5a)
+47 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = B6.18
+NEXT = B5.1e
 ```
