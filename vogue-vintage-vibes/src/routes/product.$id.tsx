@@ -148,9 +148,15 @@ function ProductDetail({
   const preorder = availability === "preorder";
   const availableAt = formatFaDate(product.availableAt);
   const badge = product.badge ?? (product.isNew ? "new" : null);
+  // F5.18: a size×colour with its own price (variant `price_override`) shows that price;
+  // the server charges it too
+  const selectedVariant = size
+    ? variants.find((variant) => variant.size === size && variant.color === selectedColor)
+    : undefined;
+  const price = selectedVariant?.price_override ?? product.price;
   const discount =
-    product.oldPrice && product.oldPrice > product.price
-      ? Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100)
+    product.oldPrice && product.oldPrice > price
+      ? Math.round(((product.oldPrice - price) / product.oldPrice) * 100)
       : null;
 
   const purchasable = !comingSoon && !preorder && Boolean(combo) && !combo?.soldOut;
@@ -264,8 +270,10 @@ function ProductDetail({
           </div>
 
           <p className="mt-4 flex items-baseline gap-3">
-            <span className="text-xl">{formatToman(product.price)} تومان</span>
-            {product.oldPrice && (
+            <span className="text-xl" data-testid="product-price">
+              {formatToman(price)} تومان
+            </span>
+            {product.oldPrice && product.oldPrice > price && (
               <span className="text-sm text-muted-foreground line-through">
                 {formatToman(product.oldPrice)}
               </span>

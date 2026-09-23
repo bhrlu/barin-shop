@@ -7,8 +7,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { catalogQuery } from "@/lib/catalog";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 
 export type CartLine = {
   productId: string;
@@ -96,21 +96,42 @@ export function useCart() {
   return context;
 }
 
+/** Identity of a cart line (the cart merges lines with the same product, size and colour). */
+const cartLineKey = (line: Pick<CartLine, "productId" | "size" | "color">) =>
+  `${line.productId}|${line.size}|${line.color}`;
+
 /**
- * The cart's subtotal at catalogue prices — display only; the backend recomputes the
- * real total at checkout. It needs the whole catalogue, so it lives here and not in
- * `CartProvider`, which wraps every route (admin included): only the pages that show
- * a subtotal (cart, checkout) pay for the catalogue fetch (F5.12).
+ * The server's quote for the cart: `POST /stock/check` — authoritative, variant-aware
+ * stock and prices (`subtotal`, and each line's unit price, variant `price_override`
+ * included). The cart and checkout show these instead of multiplying catalogue prices
+ * (F5.18; the backend prices every order, R11). Keyed on every line and quantity, so
+ * an edit re-quotes; the previous quote stays on screen while the new one loads, and
+ * `priceOf(line)` looks prices up by line, never by position.
  */
-export function useCartSubtotal() {
+export function useCartQuote() {
   const { lines } = useCart();
-  const { data: catalog } = useQuery({ ...catalogQuery, staleTime: 60_000 });
-  return useMemo(
-    () =>
-      lines.reduce((sum, line) => {
-        const product = catalog?.find((p) => p.id === line.productId);
-        return product ? sum + product.price * line.quantity : sum;
-      }, 0),
-    [lines, catalog],
-  );
+  const key = lines
+    .map((line) => `${line.productId}:${line.size}:${line.color}:${line.quantity}`)
+    .join("|");
+  return useQuery({
+    queryKey: ["cart-stock", key],
+    enabled: lines.length > 0,
+    placeholderData: keepPreviousData,
+    queryFn: async () => {
+      const quote = await api.stockCheck(
+        lines.map((line) => ({
+          product_id: line.productId,
+          size: line.size,
+          color: line.color,
+          quantity: line.quantity,
+        })),
+      );
+      const prices = new Map<string, number | null>(
+        lines.map((line, index) => [cartLineKey(line), quote.unit_prices[index] ?? null]),
+      );
+      /** the server's unit price for a cart line (null while unknown) */
+      const priceOf = (line: CartLine) => prices.get(cartLineKey(line)) ?? null;
+      return { ...quote, priceOf };
+    },
+  });
 }

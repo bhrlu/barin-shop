@@ -261,3 +261,21 @@ async def test_old_blank_and_duplicate_skus_cannot_block_the_index(ctx, db):
         assert rows == {"S": f"OLD-{tag}", "M": None, "L": None}  # earliest keeps it
     finally:
         await db.rollback()
+
+
+async def test_stock_check_returns_each_lines_server_unit_price(ctx):
+    """F5.18: the storefront shows these instead of pricing lines itself."""
+    await _variant(ctx, "p1", size="M", price_override=80_000)
+    await _variant(ctx, "p1", size="L", stock=0)  # sold-out variant: an issue, still priced
+    lines = [
+        {"product_id": ctx["p1"], "size": "M", "color": "کرم", "quantity": 2},
+        {"product_id": ctx["p1"], "size": "S", "color": "کرم", "quantity": 1},
+        {"product_id": ctx["p1"], "size": "L", "color": "کرم", "quantity": 1},
+        {"product_id": "abbe02-missing", "size": "M", "color": "کرم", "quantity": 1},
+        {"product_id": ctx["p2"], "size": "M", "color": "کرم", "quantity": 1},
+    ]
+    quote = (await _stock_check(lines)).json()
+    assert quote["unit_prices"] == [80_000, 100_000, 100_000, None, 250_000]
+    # the subtotal still counts only the lines that can be bought
+    assert quote["subtotal"] == 80_000 * 2 + 100_000 + 250_000
+    assert {i["reason"] for i in quote["issues"]} == {"insufficient_stock", "not_found"}

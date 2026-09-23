@@ -94,7 +94,7 @@ Public / customer:
 | POST | `/products/{id}/view` · GET `/recently-viewed` | user | view tracking |
 | GET | `/search?q=` · `/search/suggest` | optional | search (name, description, material, category, tags) + autocomplete |
 | GET/DELETE | `/search/history` | user | recent searches |
-| POST | `/stock/check` | – | pre-check cart lines (availability-gated, variant-aware) |
+| POST | `/stock/check` | – | pre-check cart lines (availability-gated, variant-aware); returns the server `subtotal` and `unit_prices` per line in request order (variant `price_override` included — F5.18) |
 | POST | `/coupons/validate` | user | validate a code against a subtotal |
 | POST | `/checkout` | user | create order (stock-locked, coupon applied) |
 | GET | `/orders` · `/orders/{id}` | user | my orders / one order |
@@ -229,7 +229,9 @@ oversell. Shared by `POST /stock/check` and checkout via `app/services/variants.
 product's price). `variants.variant_price()` resolves a line's unit price from the
 locked database rows, never from the request, for both the stock-check quote and
 the order (`order_items.price`), so coupon discounts and shipping use the overridden
-subtotal. The storefront does not display overrides yet (F5.18).
+subtotal. The storefront shows these server prices (F5.18): the product page uses the
+selected variant's override, and the cart/checkout take line prices and the subtotal
+from the `POST /stock/check` quote.
 
 Each order line records the variant it drew from in `order_items.variant_id`, so
 cancelling an order (`POST /orders/{id}/cancel` or an admin `PATCH` to

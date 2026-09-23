@@ -42,8 +42,11 @@ async def check(body: list[StockCheckLine], session: DbSession) -> StockCheckOut
 
     issues: list[StockIssue] = []
     subtotal = 0
+    unit_prices: list[int | None] = []
     for line in body:
         p = products.get(line.product_id)
+        variant = variants.get((line.product_id, line.size, line.color))
+        unit_prices.append(variant_price(p, variant) if p is not None else None)
         if p is None:
             issues.append(StockIssue(product_id=line.product_id, reason="not_found", available=0))
             continue
@@ -66,7 +69,6 @@ async def check(body: list[StockCheckLine], session: DbSession) -> StockCheckOut
             )
             continue
 
-        variant = variants.get((line.product_id, line.size, line.color))
         available, variant_ok = variant_stock(p, variant)
         if not variant_ok:
             issues.append(
@@ -84,4 +86,4 @@ async def check(body: list[StockCheckLine], session: DbSession) -> StockCheckOut
             continue
         subtotal += variant_price(p, variant) * line.quantity
 
-    return StockCheckOut(ok=not issues, subtotal=subtotal, issues=issues)
+    return StockCheckOut(ok=not issues, subtotal=subtotal, issues=issues, unit_prices=unit_prices)

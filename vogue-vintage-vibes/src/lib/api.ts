@@ -458,7 +458,14 @@ export type StockIssue = {
   available: number | null;
 };
 
-export type StockCheckResult = { ok: boolean; subtotal: number; issues: StockIssue[] };
+export type StockCheckResult = {
+  ok: boolean;
+  /** server subtotal of the lines that can be bought (variant price overrides included) */
+  subtotal: number;
+  issues: StockIssue[];
+  /** F5.18: server unit price per request line, in request order; null = unknown product */
+  unit_prices: (number | null)[];
+};
 
 export type KpiRange = "today" | "7d" | "30d" | "all";
 

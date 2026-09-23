@@ -222,6 +222,10 @@ class StockCheckOut(BaseModel):
     ok: bool
     subtotal: int
     issues: list[StockIssue]
+    # F5.18: the server's unit price for each request line, in request order (variant
+    # override or product price) so the storefront never prices a line itself; null
+    # when the product does not exist
+    unit_prices: list[int | None] = []
 
 
 # --- products -------------------------------------------------------------------

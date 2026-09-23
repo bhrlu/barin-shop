@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { ShieldCheck } from "lucide-react";
 import { api, ApiError, type StockIssue } from "@/lib/api";
 import { formatToman, toFa } from "@/lib/format";
-import { useCart, useCartSubtotal } from "@/lib/cart";
+import { useCart, useCartQuote } from "@/lib/cart";
 import { useAuth } from "@/lib/auth";
 import { useCatalog } from "@/lib/catalog";
 import { stockIssueLabel } from "@/lib/stock-issues";
@@ -32,12 +32,21 @@ const FREE_SHIPPING_FROM = 2000000;
 
 function CheckoutPage() {
   const { lines, clear } = useCart();
-  const subtotal = useCartSubtotal();
+  // F5.18: the server's quote (variant prices included), shared with the cart page
+  const quote = useCartQuote();
+  const subtotal = quote.data?.subtotal;
   const { user, loading } = useAuth();
   const { byId } = useCatalog();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
-  const shipping = subtotal >= FREE_SHIPPING_FROM ? 0 : SHIPPING;
+  const shipping = subtotal !== undefined && subtotal >= FREE_SHIPPING_FROM ? 0 : SHIPPING;
+  const pending = (
+    <span
+      aria-label="در حال محاسبه"
+      className="inline-block h-4 w-20 animate-pulse rounded bg-clay align-middle"
+    />
+  );
+  const failedOrPending = quote.isError ? "—" : pending;
 
   // saved addresses pre-fill the form; the default one is picked automatically
   // and the customer can switch to another (or back to a blank form)
@@ -282,6 +291,7 @@ function CheckoutPage() {
             {lines.map((line) => {
               const product = byId(line.productId);
               if (!product) return null;
+              const unitPrice = quote.data?.priceOf(line);
               return (
                 <li
                   key={`${line.productId}-${line.size}-${line.color}`}
@@ -294,7 +304,9 @@ function CheckoutPage() {
                       سایز {toFa(line.size)} · {line.color}
                     </span>
                   </span>
-                  <span>{formatToman(product.price * line.quantity)}</span>
+                  <span>
+                    {unitPrice == null ? failedOrPending : formatToman(unitPrice * line.quantity)}
+                  </span>
                 </li>
               );
             })}
@@ -302,11 +314,21 @@ function CheckoutPage() {
           <dl className="mt-6 space-y-3 border-t border-border pt-4 text-sm">
             <div className="flex justify-between">
               <dt className="text-muted-foreground">ارسال</dt>
-              <dd>{shipping === 0 ? "رایگان" : `${formatToman(shipping)} تومان`}</dd>
+              <dd>
+                {subtotal === undefined
+                  ? failedOrPending
+                  : shipping === 0
+                    ? "رایگان"
+                    : `${formatToman(shipping)} تومان`}
+              </dd>
             </div>
             <div className="flex justify-between text-base">
               <dt>مبلغ نهایی</dt>
-              <dd>{formatToman(subtotal + shipping)} تومان</dd>
+              <dd>
+                {subtotal === undefined
+                  ? failedOrPending
+                  : `${formatToman(subtotal + shipping)} تومان`}
+              </dd>
             </div>
           </dl>
         </aside>

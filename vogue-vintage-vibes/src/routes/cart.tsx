@@ -1,12 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Minus, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, type StockIssue } from "@/lib/api";
 import { useCatalog } from "@/lib/catalog";
 import { formatToman, toFa } from "@/lib/format";
-import { useCart, useCartSubtotal, type CartLine } from "@/lib/cart";
+import { useCart, useCartQuote, type CartLine } from "@/lib/cart";
 import { stockIssueMessage } from "@/lib/stock-issues";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,30 +56,13 @@ function issuesForLines(lines: CartLine[], issues: StockIssue[]): (StockIssue | 
 
 function CartPage() {
   const { lines, setQuantity, remove } = useCart();
-  const subtotal = useCartSubtotal();
   const { byId } = useCatalog();
   const [code, setCode] = useState("");
   const [discount, setDiscount] = useState(0);
 
-  // `POST /stock/check` — authoritative, variant-aware stock for the whole cart.
-  // The query key includes every line and quantity, so any edit re-validates;
-  // React Query keeps the previous result rendered while the new one is in flight.
-  const stockKey = lines
-    .map((line) => `${line.productId}:${line.size}:${line.color}:${line.quantity}`)
-    .join("|");
-  const stock = useQuery({
-    queryKey: ["cart-stock", stockKey],
-    enabled: lines.length > 0,
-    queryFn: () =>
-      api.stockCheck(
-        lines.map((line) => ({
-          product_id: line.productId,
-          size: line.size,
-          color: line.color,
-          quantity: line.quantity,
-        })),
-      ),
-  });
+  // `POST /stock/check` — authoritative, variant-aware stock *and prices* for the whole
+  // cart (F5.18: line prices and the subtotal come from here, never from the catalogue)
+  const stock = useCartQuote();
   // F3.5b: React Query re-checks when the tab becomes visible again, but coming back to
   // the window (alt-tab, side-by-side windows) only fires `focus` — re-check there too.
   // `cancelRefetch: false` joins a check already in flight (a tab switch fires both).
@@ -96,12 +78,28 @@ function CartPage() {
   const issues = issuesForLines(lines, stock.data?.issues ?? []);
   const blocked = stock.data ? !stock.data.ok : false;
 
-  const shipping = subtotal === 0 || subtotal >= FREE_SHIPPING_FROM ? 0 : SHIPPING;
-  const total = Math.max(0, subtotal - discount) + shipping;
+  const subtotal = stock.data?.subtotal;
+  const shipping =
+    subtotal === undefined || subtotal === 0 || subtotal >= FREE_SHIPPING_FROM ? 0 : SHIPPING;
+  const total = subtotal === undefined ? undefined : Math.max(0, subtotal - discount) + shipping;
+  // an amount still being quoted is a placeholder, a failed quote a dash — never a guess
+  const money = (value: number | null | undefined) =>
+    value == null ? (
+      stock.isError ? (
+        "—"
+      ) : (
+        <span
+          aria-label="در حال محاسبه"
+          className="inline-block h-4 w-20 animate-pulse rounded bg-clay align-middle"
+        />
+      )
+    ) : (
+      `${formatToman(value)} تومان`
+    );
 
   const applyCode = async () => {
     const trimmed = code.trim();
-    if (!trimmed) return;
+    if (!trimmed || subtotal === undefined) return;
     try {
       const result = await api.validateCoupon(trimmed, subtotal);
       setDiscount(result.discount);
@@ -143,6 +141,7 @@ function CartPage() {
             const product = byId(line.productId);
             const issue = issues[index];
             const lineKey = `${line.productId}-${line.size}-${line.color}`;
+            const unitPrice = stock.data?.priceOf(line);
 
             // A line whose product is gone from the active catalog used to
             // render nothing at all, leaving it impossible to remove.
@@ -218,7 +217,7 @@ function CartPage() {
                   </div>
                 </div>
                 <p className="shrink-0 text-sm">
-                  {formatToman(product.price * line.quantity)} تومان
+                  {money(unitPrice == null ? unitPrice : unitPrice * line.quantity)}
                 </p>
               </li>
             );
@@ -230,7 +229,7 @@ function CartPage() {
           <dl className="mt-5 space-y-3 text-sm">
             <div className="flex justify-between">
               <dt className="text-muted-foreground">جمع کالاها</dt>
-              <dd>{formatToman(subtotal)} تومان</dd>
+              <dd>{money(subtotal)}</dd>
             </div>
             {discount > 0 && (
               <div className="flex justify-between">
@@ -240,11 +239,17 @@ function CartPage() {
             )}
             <div className="flex justify-between">
               <dt className="text-muted-foreground">ارسال</dt>
-              <dd>{shipping === 0 ? "رایگان" : `${formatToman(shipping)} تومان`}</dd>
+              <dd>
+                {subtotal === undefined
+                  ? money(undefined)
+                  : shipping === 0
+                    ? "رایگان"
+                    : `${formatToman(shipping)} تومان`}
+              </dd>
             </div>
             <div className="flex justify-between border-t border-border pt-3 text-base">
               <dt>مبلغ نهایی</dt>
-              <dd>{formatToman(total)} تومان</dd>
+              <dd>{money(total)}</dd>
             </div>
           </dl>
 
@@ -273,7 +278,12 @@ function CartPage() {
               placeholder="کد تخفیف"
               className="rounded-none bg-background"
             />
-            <Button variant="outline" className="rounded-none" onClick={applyCode}>
+            <Button
+              variant="outline"
+              className="rounded-none"
+              onClick={applyCode}
+              disabled={subtotal === undefined}
+            >
               ثبت
             </Button>
           </div>

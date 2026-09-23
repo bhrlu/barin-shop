@@ -2608,3 +2608,27 @@ on it.
 
 Level: *clean-environment tested*.
 → audit: [2026-09-23-abbe02-variant-sku-price-color.md](audit/2026-09-23-abbe02-variant-sku-price-color.md)
+
+## 2026-09-23 — F5.18 storefront shows variant price overrides
+
+`POST /stock/check` now also returns `unit_prices` (additive): the server unit price
+for each line, in request order. `useCartQuote()` in `lib/cart.tsx` is the one shared
+quote query. It replaces `useCartSubtotal`, keeps the previous quote on screen while
+re-quoting, and has `priceOf(line)` look prices up by line key. The cart and checkout
+take line totals, subtotal, shipping, total and the coupon quote from it. The product
+page shows the selected variant's override.
+
+Verification:
+
+- 11 browser checks, ending with "the server charged exactly what was shown".
+  Negative control with the old frontend: 6 fail (M shown at 100 000; cart 940 000 vs
+  900 000; checkout 1 029 000 vs 989 000).
+- F5.12 and F3.5b suites re-run green.
+- pytest 230, smoke 235/0.
+
+Process slip: the negative control's backups were named by `basename`, so
+`lib/cart.tsx` was overwritten with the cart page. It was caught from the diff, the
+file was rebuilt, and everything was re-run.
+
+Level: *browser tested*.
+→ audit: [2026-09-23-f518-storefront-variant-prices.md](audit/2026-09-23-f518-storefront-variant-prices.md)

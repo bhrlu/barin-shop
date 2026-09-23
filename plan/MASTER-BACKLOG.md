@@ -507,7 +507,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "F5.18",
+    "agent_start_task": "AB-FE-03",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -1272,7 +1272,7 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "F5.18",
       "title": "Storefront shows variant price overrides",
       "priority": "P2",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "frontend",
       "depends_on": ["AB-BE-02"],
       "blocks": ["AB-FE-03"],
@@ -1280,7 +1280,10 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "frontend-tasks.md",
       "discovered_as": "NEW-ABBE02-1",
       "discovered_during": "AB-BE-02",
-      "scope": "The server prices a line with the variant's price_override (AB-BE-02), but the product page shows products.price for every variant and the cart/checkout subtotal (useCartSubtotal) uses catalogue prices, which the cart also sends to /coupons/validate. Show the selected variant's price on the product page, and take the cart/checkout subtotal from the POST /stock/check quote the cart already makes (server-authoritative); browser-test with an override."
+      "scope": "The server prices a line with the variant's price_override (AB-BE-02), but the product page shows products.price for every variant and the cart/checkout subtotal (useCartSubtotal) uses catalogue prices, which the cart also sends to /coupons/validate. Show the selected variant's price on the product page, and take the cart/checkout subtotal from the POST /stock/check quote the cart already makes (server-authoritative); browser-test with an override.",
+      "audit": "plan/audit/2026-09-23-f518-storefront-variant-prices.md",
+      "verification_level": "browser tested",
+      "completed": "2026-09-23"
     }
   ],
   "excluded": [
@@ -1302,11 +1305,11 @@ changes to the file shipped in sequence; the collision is closed.
   ],
   "counts": {
     "total_executable": 52,
-    "done": 31,
-    "open": 21,
+    "done": 32,
+    "open": 20,
     "P0": 0,
     "P1": 0,
-    "P2": 5,
+    "P2": 4,
     "P3": 16,
     "blocked": 0,
     "dropped": 2,
@@ -3102,7 +3105,10 @@ coupon browser flows still pass.
 ## F5.18 — Storefront shows variant price overrides
 
 * **Layer:** Frontend
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-f518-storefront-variant-prices.md`](audit/2026-09-23-f518-storefront-variant-prices.md)
+* **Verification level:** browser tested
+* **Delivered:** The storefront shows the server's prices: `POST /stock/check` gains `unit_prices` (per line, request order, variant override included); a shared `useCartQuote()` replaces the catalogue-based subtotal in cart and checkout (line totals, subtotal, coupon quote; skeleton while loading); the product page shows the selected variant's price. 11 browser checks — the order charged equals what was shown (negative control: 6 fail); F5.12/F3.5b suites re-run green. Browser tested.
 * **Priority:** P2
 * **Batch:** D
 * **Dependencies:** `AB-BE-02` (DONE)
@@ -3406,7 +3412,7 @@ F5.14  (DONE 2026-09-22)
 F5.15  (DONE 2026-09-23)
 F5.16  (DONE 2026-09-23)
 F5.17
-F5.18
+F5.18  (DONE 2026-09-23)
 ```
 
 These can mostly run in parallel because they touch different concerns.
@@ -3471,13 +3477,13 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**21** open · **31** DONE · 52 executable in total.
+**20** open · **32** DONE · 52 executable in total.
 25 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
 
-**21** (`B2.1a` additionally needs real provider credentials from the user)
+**20** (`B2.1a` additionally needs real provider credentials from the user)
 
 ### Blocked
 
@@ -3514,9 +3520,9 @@ D1–D9 are resolved.
 | --------- | --------: |
 | P0        |         0 |
 | P1        |         0 |
-| P2        |         5 |
+| P2        |         4 |
 | P3        |        16 |
-| **Total** |    **21** |
+| **Total** |    **20** |
 
 Generated from the JSON index on 2026-09-23.
 
@@ -3632,11 +3638,11 @@ were freshly executed.
 ## START HERE
 
 ```text
-F5.18
+AB-FE-03
 ```
 
-31 of 52 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. P2 found in AB-BE-02 — the storefront must show variant price overrides before AB-FE-03 exposes them
+32 of 52 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. P2, now unblocked (AB-BE-02 + F5.18 done) — two-column product editor + RHF/Zod + swatches
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -3740,11 +3746,11 @@ Reconciliation date:
 Current state:
 
 ```text
-21 remaining implementation units (B2.1a, AB-BE-01, F4.3, AB-FE-03, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B6.15, B5.1e, F5.17, B6.18, F5.18)
-31 completed implementation units
+20 remaining implementation units (B2.1a, AB-BE-01, F4.3, AB-FE-03, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B6.15, B5.1e, F5.17, B6.18)
+32 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = F5.18
+NEXT = AB-FE-03
 ```
