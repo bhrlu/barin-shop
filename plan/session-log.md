@@ -2241,3 +2241,23 @@ modules were left (no-ops, minimal diff).
 → audit: [2026-09-23-b613-pytest-runs-db-tests.md](audit/2026-09-23-b613-pytest-runs-db-tests.md)
 
 **Next backlog pointer** — `B5.1d`.
+
+## 2026-09-23 — B5.1d audited mutations are all-or-nothing (task 5)
+
+**What was done** — `record_audit` no longer rolls back and carries on (which
+silently discarded the audited change while the router answered 200); it logs and
+re-raises, so the request fails with 500 and the whole transaction rolls back. All
+18 call sites record before committing (checked), so each is now atomic.
+
+**Decision taken** — all-or-nothing over a SAVEPOINT, following B5.1's own rule that
+an admin action must not exist without its trail. Reversible if availability is
+preferred.
+
+**Verification** — 6 tests with a real trigger-forced audit failure (status change;
+staff cancel incl. stock restore + notification; customer cancel; refund settlement
+incl. payment row; coupon edit; normal-path control). Negative control: the old code
+fails 5. pytest 157, ruff clean, smoke 229/0. Level: *integration tested*.
+
+→ audit: [2026-09-23-b51d-audit-atomicity.md](audit/2026-09-23-b51d-audit-atomicity.md)
+
+**Next backlog pointer** — `B2.1a` (needs real credentials), then `F5.13`.

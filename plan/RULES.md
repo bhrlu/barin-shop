@@ -187,7 +187,7 @@ Canonical implementations in this repo — use these, do not re-derive them:
 | Order transitions, cancel, stock restore | `backend/app/services/order_lifecycle.py` (`ALLOWED_STATUS_TRANSITIONS`, `CANCELLABLE_STATUSES`, `assert_transition`, `restore_stock`, `cancel_order_tx`) |
 | Payments / refunds / simulation mode | `backend/app/services/payments.py` |
 | Pagination envelope | `backend/app/services/pagination.py` (frontend side: `toPage()` in `src/lib/api.ts`) |
-| Audit logging | `backend/app/services/audit.py` |
+| Audit logging | `backend/app/services/audit.py` (record the entry **before** committing; a failed insert fails the request — B5.1d) |
 | Client IP (audit trail, throttles) | `backend/app/services/client_ip.py` (`resolve_client_ip`; XFF only from `TRUSTED_PROXIES`), stored per request in `audit.client_ip_ctx` |
 | Contact-form abuse guard | `backend/app/services/contact_guard.py` (`record_attempt`) |
 | Password reset tokens + reset email | `backend/app/services/password_reset.py` (`request_reset`, `reset_password`); the email goes through `notifications.queue_private_email` |

@@ -3,7 +3,8 @@
 One row per privileged mutation: who did what to which entity, with the old/new
 values where the router has them. Uses the request's own session so the entry
 commits atomically with the mutation it describes — an admin action without its
-audit trail, or vice versa, must not happen.
+audit trail, or vice versa, must not happen. Every caller records the entry
+before it commits, so a failed insert fails the request (B5.1d).
 
 The client IP (B5.1a) is captured per request by the middleware in
 `app.main`, which sets `client_ip_ctx` on every inbound call; `record_audit`
@@ -62,10 +63,11 @@ async def record_audit(
 ) -> None:
     """Insert one audit_logs row on the caller's session (no commit here).
 
-    Never raises into the request path: a failed audit write is logged, not
-    propagated — the mutation itself has already succeeded or failed on its own
-    terms. (A stricter all-or-nothing coupling would let a broken audit insert
-    roll back a legitimate order-status change.)
+    A failed insert is logged and **re-raised** (B5.1d): the request answers 500
+    and `get_session` rolls the whole transaction back, so the audited mutation
+    and its entry land together or not at all. The previous behaviour — roll
+    back and carry on — silently discarded the mutation while the router still
+    committed an empty transaction and answered 200.
     """
     if action not in ACTIONS:
         log.warning("audit: unknown action %r", action)
@@ -92,6 +94,6 @@ async def record_audit(
                 "ip": ip_address,
             },
         )
-    except Exception:  # noqa: BLE001
-        await session.rollback()
-        log.exception("audit: failed to record %s on %s", action, entity_id)
+    except Exception:
+        log.exception("audit: failed to record %s on %s — failing the request", action, entity_id)
+        raise

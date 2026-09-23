@@ -249,13 +249,17 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   → audit: [2026-09-21-b51a-audit-ip-f41-status-badges.md](audit/2026-09-21-b51a-audit-ip-f41-status-badges.md)
 - [ ] **B5.1b Audit tamper-resistance at the DB level** — REVOKE UPDATE/DELETE on
   `audit_logs` for the app role (append-only) in `infra/initdb` or startup DDL.
-- [ ] **B5.1d `record_audit` rolls back the mutation it is auditing** (`NEW-B21-2`,
+- [x] **B5.1d `record_audit` rolls back the mutation it is auditing** (`NEW-B21-2`,
   discovered during B2.1) — on an insert failure `services/audit.py::record_audit`
   calls `session.rollback()` and swallows the error, which also discards the
   order/refund/role change made earlier on the same session; the router then
   commits nothing and still answers 200 with the new values. Use a SAVEPOINT
   (`begin_nested()`) around the audit insert, or let it fail the request —
   decide which, then add a pytest that forces the audit insert to fail.
+  Done (2026-09-23): decided all-or-nothing — the failure is logged and re-raised,
+  the request answers 500 and nothing is persisted. 6 tests with a real
+  trigger-forced failure; the old code fails 5 of them.
+  → audit: [2026-09-23-b51d-audit-atomicity.md](audit/2026-09-23-b51d-audit-atomicity.md)
 - [ ] **B5.1c `GET /admin/audit-logs` 500s on a malformed `admin_id`**
   (`NEW-F55-1`, discovered during F5.5) — `?admin_id=foo` reaches
   `CAST(:admin_id AS uuid)` and Postgres raises, so the admin caller gets a 500
