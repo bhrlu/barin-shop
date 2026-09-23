@@ -504,6 +504,14 @@ conflict (DESIGN_SYSTEM.md §5).
   AB-BE-01) — show `GET /admin/inventory/logs` (reason, signed change, product ×
   variant, order number, who, when) on `/admin/inventory` with `AdminDataTable`
   filters and a per-product history link; catalog staff only.
+- [x] **F5.20 Complete customer profile** (user-directed P1, separate from
+  AB-FE-06) — personal info (first/last name, birth date, gender), contact +
+  verification state, optional Iranian national ID, optional size profile;
+  `GET/PATCH /auth/me` + new `/auth/me/size-profile`; `/account` profile tab
+  rebuilt into sections with the existing design system; national ID is
+  owner-only (admin lists, JWT and audit logs untouched).
+  Done (2026-09-24): `profiles` gains 7 columns + one-to-one `user_size_profiles` (idempotent `PROFILE_DDL`); `services/profile.py` validates the national-ID checksum, birth-date bounds, gender set and cm/kg ranges; omitted = unchanged / explicit `null` = cleared on every profile PATCH; `full_name` is re-derived from the merged first/last (unless set explicitly) so the header, checkout and admin lists never go stale; verification timestamps exist but nothing sets them. 57 backend tests (mutation-checked), pytest 344, smoke 253/0, browser 24/24 incl. checkout regression, clean-env `down -v` DDL proof. Clean-environment tested + browser tested. Backend part tracked in `backend-tasks.md`.
+  → audit: [2026-09-24-f520-complete-customer-profile.md](audit/2026-09-24-f520-complete-customer-profile.md)
 
 ## Rules reminder
 

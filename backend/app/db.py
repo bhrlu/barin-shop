@@ -506,6 +506,52 @@ PASSWORD_RESET_DDL = [
 ]
 
 
+# --- Customer profile (idempotent) --------------------------------------------
+# F5.20: the structured customer profile. All new `profiles` columns are
+# nullable — an existing row keeps every value it had, and a customer who never
+# fills the profile still works everywhere (signup, checkout, admin lists).
+# `national_id` is TEXT (leading zeros) and CHECK-guarded to exactly 10 digits;
+# the Iranian checksum is validated in Python (`services/profile.py`), the DB
+# only bounds the shape. `email_verified_at` / `phone_verified_at` are NULL
+# until a real verification flow sets them — entering a value is not verifying
+# it. `user_size_profiles` is one-to-one (PK = user id) fashion measurements,
+# all optional, centimetres / kilograms.
+PROFILE_DDL = [
+    "ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS first_name TEXT",
+    "ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS last_name TEXT",
+    "ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS birth_date DATE",
+    # closed set: male / female / other (smallest explicit set for this product)
+    (
+        "ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS gender TEXT "
+        "CHECK (gender IS NULL OR gender IN ('male', 'female', 'other'))"
+    ),
+    (
+        "ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS national_id TEXT "
+        "CHECK (national_id IS NULL OR national_id ~ '^[0-9]{10}$')"
+    ),
+    "ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ",
+    "ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS phone_verified_at TIMESTAMPTZ",
+    """
+    CREATE TABLE IF NOT EXISTS public.user_size_profiles (
+      user_id UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
+      height_cm INTEGER CHECK (height_cm IS NULL OR height_cm BETWEEN 100 AND 230),
+      weight_kg INTEGER CHECK (weight_kg IS NULL OR weight_kg BETWEEN 30 AND 250),
+      chest_cm INTEGER CHECK (chest_cm IS NULL OR chest_cm BETWEEN 60 AND 160),
+      waist_cm INTEGER CHECK (waist_cm IS NULL OR waist_cm BETWEEN 50 AND 160),
+      hip_cm INTEGER CHECK (hip_cm IS NULL OR hip_cm BETWEEN 60 AND 180),
+      preferred_top_size TEXT,
+      preferred_bottom_size TEXT,
+      preferred_shoe_size TEXT,
+      fit_preference TEXT CHECK (
+        fit_preference IS NULL OR fit_preference IN ('slim', 'regular', 'relaxed')
+      ),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+    """,
+]
+
+
 # --- Lock-free steady-state boot (B6.16) --------------------------------------
 # `IF NOT EXISTS` does not make DDL cheap: `ALTER TABLE … ADD COLUMN IF NOT EXISTS`
 # takes an ACCESS EXCLUSIVE lock on the table even when the column is there, and
@@ -596,6 +642,7 @@ async def startup_ddl() -> None:
             CONTACT_DDL,
             NOTIFICATION_DDL,
             PASSWORD_RESET_DDL,
+            PROFILE_DDL,
             [co_purchase_ddl()],
         ):
             for stmt in statements:

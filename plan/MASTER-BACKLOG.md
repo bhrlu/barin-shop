@@ -1355,6 +1355,21 @@ changes to the file shipped in sequence; the collision is closed.
       "scope": "Show the stock ledger (GET /admin/inventory/logs: reason, change, product/variant, order number, who, when) on /admin/inventory with AdminDataTable filters (reason, product) and a per-product history link; catalog staff only (the API already 403s others)."
     },
     {
+      "id": "F5.20",
+      "title": "Complete customer profile",
+      "priority": "P1",
+      "status": "DONE",
+      "layer": "fullstack",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "D",
+      "source": "frontend-tasks.md",
+      "scope": "Turn the minimal profile into a structured, privacy-conscious customer profile: personal info (first/last name, birth date, gender), contact verification state (email/phone, timestamps only), optional Iranian national ID (validated, leading-zero-safe, owner-only), and an optional one-to-one size profile (height/weight/chest/waist/hip + preferred sizes) under GET/PATCH /auth/me and /auth/me/size-profile; extend the /account profile tab. No card/IBAN/company fields, no AB-FE-06 merge, no Shahkar, no fake verification.",
+      "audit": "plan/audit/2026-09-24-f520-complete-customer-profile.md",
+      "verification_level": "clean-environment tested + browser tested",
+      "completed": "2026-09-24"
+    },
+    {
       "id": "B2.5a",
       "title": "Outbound order webhooks (needs a product decision)",
       "priority": "P3",
@@ -1404,8 +1419,8 @@ changes to the file shipped in sequence; the collision is closed.
     }
   ],
   "counts": {
-    "total_executable": 56,
-    "done": 45,
+    "total_executable": 57,
+    "done": 46,
     "open": 11,
     "P0": 0,
     "P1": 0,
@@ -3383,6 +3398,40 @@ support cannot reach it.
 
 ---
 
+## F5.20 — Complete customer profile
+
+* **Layer:** Full-stack
+* **Status:** DONE (2026-09-24)
+* **Priority:** P1
+* **Batch:** D
+* **Dependencies:** none
+* **Source:** user task brief (separate from `AB-FE-06`, which stays TODO)
+* **Audit:** [`plan/audit/2026-09-24-f520-complete-customer-profile.md`](audit/2026-09-24-f520-complete-customer-profile.md)
+* **Verification level:** clean-environment tested + browser tested — 57 new tests
+  (mutation-checked: clear semantics, ownership, one-to-one, full-name
+  derivation), pytest 344, smoke 253/0, ruff clean, tsc/lint/build clean (27
+  pre-existing tsc errors unchanged), clean-env `down -v && up --build` with DDL
+  + login proof, browser suite 24/24 incl. checkout regression and the derived
+  header name.
+* **Delivered:** `profiles` gains `first_name`, `last_name`, `birth_date`,
+  `gender`, `national_id` (UNIQUE partial index), `email_verified_at`,
+  `phone_verified_at` via idempotent `PROFILE_DDL`; new one-to-one
+  `user_size_profiles` (`user_id` PK, CHECK-bounded cm/kg integers, preferred
+  sizes + fit preference). `services/profile.py` is the canonical validation
+  (national-ID checksum, birth-date bounds, closed gender set, measurement
+  ranges). `GET/PATCH /auth/me` extended (omitted = unchanged, explicit `null`
+  = cleared; `full_name` re-derived from the merged first/last when they are
+  sent, unless the request sets it explicitly), and
+  new `GET/PATCH /auth/me/size-profile` (`routers/profile.py`). `/account`
+  profile tab rebuilt into the requested sections with the existing design
+  system; national ID reaches only `/auth/me` (admin lists untouched, no JWT
+  or audit exposure); verification timestamps exist but no code path sets them.
+* **Not in this task:** real phone/email verification (needs B2.1a
+  credentials), size recommendation (needs a size-chart contract), Shahkar,
+  card/IBAN/company billing, AB-FE-06.
+
+---
+
 ## B2.5a — Outbound order webhooks (needs a product decision)
 
 * **Layer:** Backend
@@ -3688,6 +3737,7 @@ F5.16  (DONE 2026-09-23)
 F5.17  (DONE 2026-09-23)
 F5.18  (DONE 2026-09-23)
 F5.19
+F5.20  (DONE 2026-09-24)
 ```
 
 These can mostly run in parallel because they touch different concerns.
@@ -3917,8 +3967,11 @@ were freshly executed.
 B6.18
 ```
 
-45 of 56 executable units are DONE — each links its audit
+46 of 57 executable units are DONE — each links its audit
 and verification level in the JSON index and in its own section. next P3 (Batch C) — presigned image upload has no server-side size/type limit
+
+(`F5.20` was executed out of order as a user-directed P1 on 2026-09-24; the
+pointer stays on `B6.18`.)
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -4023,7 +4076,7 @@ Current state:
 
 ```text
 11 remaining implementation units (B2.1a, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B5.1e, B6.18, F5.19, B2.5a)
-45 completed implementation units
+46 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete

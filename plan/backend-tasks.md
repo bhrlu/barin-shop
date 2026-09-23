@@ -382,6 +382,16 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   است»; `routers/storage.py` has two to review. Same fix shape as B6.9.
   Done (2026-09-23): only SQLSTATE 23505 keeps the duplicate answers in the four product/variant handlers and only MinIO/network errors keep the storage 502/`null`; everything else surfaces as a 500. Shared `services/db_errors.is_unique_violation`. 7 tests (negative control: 4 fail).
   → audit: [2026-09-23-b69a-narrow-catalog-storage-handlers.md](audit/2026-09-23-b69a-narrow-catalog-storage-handlers.md)
+- [x] **F5.20 backend part — complete customer profile schema + API** (task
+  tracked in `frontend-tasks.md` F5.20): `PROFILE_DDL` (7 nullable `profiles`
+  columns incl. unique-where-not-null `national_id`, new one-to-one
+  `user_size_profiles` with CHECK-bounded ranges), `services/profile.py`
+  (national-ID checksum, birth-date bounds, gender set, measurement ranges),
+  `GET/PATCH /auth/me` extended + new `GET/PATCH /auth/me/size-profile`
+  (`routers/profile.py`) with omitted = unchanged / explicit `null` = cleared,
+  and `full_name` re-derived from the merged first/last unless set explicitly;
+  national ID exposed only to its owner.
+  → audit: [2026-09-24-f520-complete-customer-profile.md](audit/2026-09-24-f520-complete-customer-profile.md)
 - [x] **F2.3 backend part — password reset tokens + endpoints** (task tracked in
   `frontend-tasks.md` F2.3): `password_reset_tokens`, `services/password_reset.py`,
   `POST /auth/password/forgot|reset`, `notifications.queue_private_email`.

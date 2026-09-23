@@ -2882,3 +2882,83 @@ Tehran-local day. pytest 287, smoke 253/0; the smoke's header checks strip the B
 and a new check asserts it. Browser export panels 5/5. Level: *integration +
 browser tested*.
 → audit: [2026-09-23-b22b-export-dates-and-bom.md](audit/2026-09-23-b22b-export-dates-and-bom.md)
+
+## 2026-09-24 — F5.20 complete customer profile
+
+**Scope.** User-directed P1 full-stack task, deliberately separate from
+`AB-FE-06` (admin Customer 360°, still TODO): personal info, contact
+verification state, optional Iranian national ID, optional fashion size
+profile — no banking/company fields, no admin-side expansion.
+
+**What was done**
+
+- `PROFILE_DDL` in `app/db.py` (idempotent, additive): `profiles` gains
+  `first_name`, `last_name`, `birth_date`, `gender`, `national_id` (TEXT,
+  unique where not null), `email_verified_at`, `phone_verified_at`; new
+  one-to-one `user_size_profiles` (`user_id` PK → users ON DELETE CASCADE;
+  integer cm/kg with CHECK ranges 100–250 / 30–300 / 40–200; preferred
+  top/bottom/shoe sizes + fit preference; created/updated).
+- `services/profile.py` is the single validation point (R7): Persian/Arabic
+  digit normalization, exactly-10-digit + checksum national ID (leading zeros
+  preserved), birth date 1900-today, closed gender set
+  `male/female/unspecified`, measurement ranges identical to the DDL CHECKs.
+- `GET/PATCH /auth/me` extended; **omitted = unchanged, explicit `null` =
+  cleared** via `model_fields_set` (the first implementation used
+  `if x is not None` and the clear tests caught it — fixed). `full_name` stays
+  a real, editable column and is re-derived from the merged first/last when
+  they are sent, unless the request also carries an explicit `full_name` (the
+  first cut did not derive at all; the derivation tests caught it and it was
+  fixed before commit). New `GET/PATCH /auth/me/size-profile` in
+  `routers/profile.py` (account-scoped, no id in path or body).
+- Frontend: `api.ts` types + `getSizeProfile`/`updateSizeProfile` (all HTTP
+  through `src/lib/api.ts`); `/account` profile tab rebuilt into «اطلاعات
+  شخصی / اطلاعات تماس / اطلاعات هویتی / سایز من» with the existing design
+  system, Persian-digit-tolerant inputs, Persian 422 errors surfaced, save per
+  section with disabled submit and no optimistic writes (server response is
+  canonical).
+- Privacy: national ID returns only from `/auth/me` to its owner;
+  `/admin/users` SELECT untouched; nothing in JWTs, auth logs or
+  `audit_logs` (self-edits are not privileged mutations, F2.3 precedent);
+  verification timestamps exist but **no code path sets them** — no fake
+  verification.
+
+**Tests** — `backend/tests/test_profile.py`, 57 tests: compatibility
+(existing full_name/phone/avatar still work), personal info, full-name
+derivation (both names, one-sided merge, clearing, explicit override), national
+ID, clear semantics, verification state, size-profile CRUD + ranges +
+one-to-one, authorization, schema assertions. Mutation controls (§36): the old
+clear semantics fails the omitted-field test; removing ownership scoping fails
+cross-user; removing the `user_id` PK fails the uniqueness test.
+
+**Verification** — focused 57/57 (live-DB on docker), full pytest **344**,
+ruff clean, smoke **253/0**, tsc 0 new errors (27 pre-existing, A/B-confirmed),
+lint 0 errors, build OK, clean env `down -v && up --build` with `db-init`
+exit 0, schema proof via `information_schema`/`pg_indexes`, seeded login OK,
+browser suite **24/24** (guest redirect, sections, persistence, invalid
+national ID rejected + not stored, size profile Persian digits, empty optionals
+allowed, no mobile overflow, `/admin/users` clean, national ID only to
+`/auth/me`, checkout/orders/notifications regression, zero page errors), a
+manual size→cart→checkout flow, and a browser check that saving «سارا» /
+«محمدی» updates the account header to the derived «سارا محمدی» and it
+survives a reload (re-run green after the derivation fix). Level:
+*clean-environment tested + browser tested*.
+
+**Decisions** — `full_name` kept compatible (server-derived when first/last
+are supplied); separate `user_size_profiles` table; national ID optional,
+TEXT, checksummed; timestamps (not booleans) for verification, NULL =
+unverified; canonical `date` storage with an ISO input (no second date
+library); cm/kg documented; no audit rows for self-edits.
+
+**What was explicitly NOT done** — no card/CVV/expiry/IBAN/Sheba fields; no
+company billing; no Shahkar; no OTP/email verification flow (B2.1a
+credentials); no size recommendation (needs a size-chart contract); no admin
+Customer 360° (`AB-FE-06`); no migration framework.
+
+**Discovered follow-ups** — none new; the two adjacent items (real
+verification workflow, size recommendation) already exist as known gaps and
+stay separate.
+
+**Next backlog pointer** — `B6.18` (unchanged; F5.20 ran out of order as a
+user-directed P1).
+
+→ audit: [2026-09-24-f520-complete-customer-profile.md](audit/2026-09-24-f520-complete-customer-profile.md)

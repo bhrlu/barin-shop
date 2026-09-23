@@ -139,9 +139,48 @@ export type UserInfo = {
   avatar_url: string | null;
   role: string;
   created_at: string | null;
+  // F5.20: structured profile. `national_id` is returned only here, to the
+  // signed-in owner (never in admin lists, never in the JWT). The *_verified_at
+  // timestamps stay null until a real verification flow exists.
+  first_name: string | null;
+  last_name: string | null;
+  birth_date: string | null;
+  gender: string | null;
+  national_id: string | null;
+  email_verified_at: string | null;
+  phone_verified_at: string | null;
 };
 
 export type TokenResponse = { access_token: string; token_type: string; user: UserInfo };
+
+/** `GET/PATCH /auth/me/size-profile` — the fashion measurements (F5.20).
+ * Units: centimetres for the body measurements, kilograms for weight. All
+ * fields optional; the row starts empty. */
+export type SizeProfile = {
+  height_cm: number | null;
+  weight_kg: number | null;
+  chest_cm: number | null;
+  waist_cm: number | null;
+  hip_cm: number | null;
+  preferred_top_size: string | null;
+  preferred_bottom_size: string | null;
+  preferred_shoe_size: string | null;
+  fit_preference: "slim" | "regular" | "relaxed" | null;
+  updated_at: string | null;
+};
+
+/** PATCH body: omitted = unchanged, explicit `null` = cleared (F5.20). */
+export type SizeProfileInput = {
+  height_cm?: number | null;
+  weight_kg?: number | null;
+  chest_cm?: number | null;
+  waist_cm?: number | null;
+  hip_cm?: number | null;
+  preferred_top_size?: string | null;
+  preferred_bottom_size?: string | null;
+  preferred_shoe_size?: string | null;
+  fit_preference?: "slim" | "regular" | "relaxed" | null;
+};
 
 export type ProductColor = { name: string; hex: string };
 
@@ -691,7 +730,19 @@ export const api = {
     full_name?: string | null;
     phone?: string | null;
     avatar_url?: string | null;
+    /** F5.20 clear semantics: omitted = unchanged, `null` = cleared. */
+    first_name?: string | null;
+    last_name?: string | null;
+    birth_date?: string | null;
+    gender?: "male" | "female" | "other" | null;
+    /** A value is checksum-validated server-side; `""` clears the field. */
+    national_id?: string | null;
   }) => request<UserInfo>("/auth/me", { method: "PATCH", json: body }),
+
+  // --- size profile (F5.20) ---
+  sizeProfile: () => request<SizeProfile>("/auth/me/size-profile"),
+  updateSizeProfile: (body: SizeProfileInput) =>
+    request<SizeProfile>("/auth/me/size-profile", { method: "PATCH", json: body }),
 
   // --- catalog ---
   products: (params: ProductListParams = {}) => {

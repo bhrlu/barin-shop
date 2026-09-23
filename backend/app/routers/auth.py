@@ -24,6 +24,7 @@ from app.schemas import (
 )
 from app.security import create_access_token, hash_password, verify_password
 from app.services.password_reset import ResetError, request_reset, reset_password
+from app.services.profile import normalize_birth_date, normalize_national_id
 from app.services.roles import resolve_role
 
 log = logging.getLogger(__name__)
@@ -32,17 +33,28 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
+_PROFILE_COLUMNS = (
+    "p.id, u.email, p.full_name, p.phone, p.avatar_url, p.created_at, "
+    "p.first_name, p.last_name, p.birth_date, p.gender, p.national_id, "
+    "p.email_verified_at, p.phone_verified_at"
+)
+
+
 async def _load_user(session, user_id) -> dict | None:
     row = (
         await session.execute(
             text(
-                "SELECT p.id, u.email, p.full_name, p.phone, p.avatar_url, p.created_at "
+                f"SELECT {_PROFILE_COLUMNS} "
                 "FROM public.profiles p JOIN public.users u ON u.id = p.id WHERE p.id = :uid"
             ),
             {"uid": str(user_id)},
         )
     ).mappings().first()
     return dict(row) if row else None
+
+
+def _iso(value) -> str | None:
+    return value.isoformat() if value else None
 
 
 async def _issue_token(session, user_id, email: str) -> TokenOut:
@@ -57,7 +69,14 @@ async def _issue_token(session, user_id, email: str) -> TokenOut:
             phone=info.get("phone"),
             avatar_url=info.get("avatar_url"),
             role=role,
-            created_at=info.get("created_at").isoformat() if info.get("created_at") else None,
+            created_at=_iso(info.get("created_at")),
+            first_name=info.get("first_name"),
+            last_name=info.get("last_name"),
+            birth_date=_iso(info.get("birth_date")),
+            gender=info.get("gender"),
+            national_id=info.get("national_id"),
+            email_verified_at=_iso(info.get("email_verified_at")),
+            phone_verified_at=_iso(info.get("phone_verified_at")),
         ),
     )
 
@@ -135,9 +154,19 @@ async def reset_password_endpoint(body: ResetPasswordRequest, session: DbSession
 async def update_me(
     body: ProfileUpdateIn, user: CurrentUser, session: DbSession
 ) -> UserInfoOut:
-    """Update the signed-in customer's profile (used by the account page)."""
+    """Update the signed-in customer's profile (used by the account page).
+
+    F5.20 clear semantics: an omitted field is unchanged, an explicit `null`
+    clears one of the new optional fields, and `national_id: ""` clears it. A
+    supplied national ID is checksum-validated and normalised to bare digits;
+    the phone or email written here is NOT verified — only a real verification
+    flow may set the *_verified_at timestamps (none exists yet, F5.20 decision).
+    The pre-F5.20 fields (`full_name`, `phone`, `avatar_url`) keep their old
+    "null = unchanged" behaviour so every existing caller stays valid.
+    """
     sets: list[str] = []
     params: dict = {"uid": str(user.id)}
+    sent = body.model_fields_set
     if body.full_name is not None:
         sets.append("full_name = :full_name")
         params["full_name"] = body.full_name
@@ -147,6 +176,44 @@ async def update_me(
     if body.avatar_url is not None:
         sets.append("avatar_url = :avatar_url")
         params["avatar_url"] = body.avatar_url
+    # F5.20 fields: `in sent` distinguishes omitted (unchanged) from null (cleared).
+    # When first/last are sent (and the request does not also set full_name
+    # explicitly), full_name is re-derived from the merged result so checkout,
+    # the account header and the admin lists never show a stale name.
+    for column in ("first_name", "last_name", "gender"):
+        if column in sent:
+            sets.append(f"{column} = :{column}")
+            params[column] = getattr(body, column)
+    if ("first_name" in sent or "last_name" in sent) and "full_name" not in sent:
+        first = (
+            ":first_name" if "first_name" in sent
+            else "COALESCE(first_name, '')"
+        )
+        last = (
+            ":last_name" if "last_name" in sent
+            else "COALESCE(last_name, '')"
+        )
+        if "first_name" not in sent:
+            params["first_name"] = body.first_name
+        if "last_name" not in sent:
+            params["last_name"] = body.last_name
+        sets.append(
+            "full_name = btrim(COALESCE(" + first + ", '') || ' ' || "
+            "COALESCE(" + last + ", ''), ' ')"
+        )
+    if "birth_date" in sent:
+        try:
+            params["birth_date"] = normalize_birth_date(body.birth_date)
+        except ValueError as exc:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        sets.append("birth_date = :birth_date")
+    if "national_id" in sent:
+        try:
+            # "" / null normalise to None = cleared; otherwise validated digits
+            params["national_id"] = normalize_national_id(body.national_id)
+        except ValueError as exc:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        sets.append("national_id = :national_id")
     if sets:
         await session.execute(
             text(f"UPDATE public.profiles SET {', '.join(sets)} WHERE id = :uid"), params
@@ -168,7 +235,14 @@ async def me(user: CurrentUser, session: DbSession) -> UserInfoOut:
         phone=info["phone"],
         avatar_url=info["avatar_url"],
         role=role,
-        created_at=info["created_at"].isoformat() if info["created_at"] else None,
+        created_at=_iso(info["created_at"]),
+        first_name=info["first_name"],
+        last_name=info["last_name"],
+        birth_date=_iso(info["birth_date"]),
+        gender=info["gender"],
+        national_id=info["national_id"],
+        email_verified_at=_iso(info["email_verified_at"]),
+        phone_verified_at=_iso(info["phone_verified_at"]),
     )
 
 

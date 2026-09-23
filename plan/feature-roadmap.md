@@ -137,6 +137,8 @@ Endpoints noted in `code` already exist and are verified working.
 
 ### Account & auth
 - [x] Forgot / reset password (F2.3)
+- [x] Complete customer profile (F5.20) — personal info, verification state (display-only), optional national ID (checksummed, owner-only), optional size profile (`user_size_profiles`)
+- [ ] Real phone/email verification workflow (needs B2.1a credentials)
 - [ ] SMS OTP login
 - [ ] Two-factor authentication
 

@@ -1,5 +1,6 @@
 """Pydantic request/response schemas shared by the routers."""
 
+from datetime import date
 from typing import Any, Literal
 from uuid import UUID
 
@@ -53,12 +54,78 @@ class UserInfoOut(BaseModel):
     avatar_url: str | None
     role: str
     created_at: str | None = None
+    # F5.20: the structured profile. `first_name`/`last_name` are the canonical
+    # split of the name; `full_name` stays for every existing consumer. The
+    # national ID is returned ONLY here, to its owner (never in admin lists,
+    # never in the JWT). Verification timestamps are NULL until a real
+    # verification flow exists — entering a phone/email does not verify it.
+    first_name: str | None = None
+    last_name: str | None = None
+    birth_date: str | None = None
+    gender: str | None = None
+    national_id: str | None = None
+    email_verified_at: str | None = None
+    phone_verified_at: str | None = None
 
 
 class ProfileUpdateIn(BaseModel):
+    """PATCH /auth/me — F5.20 clear semantics for the optional fields.
+
+    - omitted field            → unchanged (every pre-F5.20 caller keeps working);
+    - `null` on an optional    → cleared (first_name, last_name, birth_date, gender);
+    - `national_id: ""`        → cleared; a value is validated as a real
+      Iranian national code (checksum included) and stored as bare digits;
+    - `full_name` still sets the compatibility name (checkout, admin lists and
+      order rows read it); there is one canonical source, the profile row.
+    """
+
     full_name: str | None = Field(default=None, max_length=120)
     phone: str | None = Field(default=None, max_length=20)
     avatar_url: str | None = Field(default=None, max_length=500)
+    first_name: str | None = Field(default=None, max_length=60)
+    last_name: str | None = Field(default=None, max_length=60)
+    birth_date: date | None = None
+    gender: Literal["male", "female", "other"] | None = None
+    national_id: str | None = Field(default=None, max_length=40)
+
+    @field_validator("birth_date", mode="before")
+    @classmethod
+    def _empty_birth_date_is_none(cls, value: Any) -> Any:
+        return None if value in ("", None) else value
+
+
+class SizeProfileOut(BaseModel):
+    """GET /auth/me/size-profile — null fields when nothing was saved yet."""
+
+    height_cm: int | None = None
+    weight_kg: int | None = None
+    chest_cm: int | None = None
+    waist_cm: int | None = None
+    hip_cm: int | None = None
+    preferred_top_size: str | None = None
+    preferred_bottom_size: str | None = None
+    preferred_shoe_size: str | None = None
+    fit_preference: Literal["slim", "regular", "relaxed"] | None = None
+    updated_at: str | None = None
+
+
+class SizeProfileUpdateIn(BaseModel):
+    """PATCH /auth/me/size-profile — same clear convention as ProfileUpdateIn.
+
+    omitted → unchanged · `null` → cleared · every value optional (F5.20):
+    the size profile exists so a future recommendation feature can read it,
+    nothing here is required.
+    """
+
+    height_cm: int | None = Field(default=None, ge=100, le=230)
+    weight_kg: int | None = Field(default=None, ge=30, le=250)
+    chest_cm: int | None = Field(default=None, ge=60, le=160)
+    waist_cm: int | None = Field(default=None, ge=50, le=160)
+    hip_cm: int | None = Field(default=None, ge=60, le=180)
+    preferred_top_size: str | None = Field(default=None, max_length=20)
+    preferred_bottom_size: str | None = Field(default=None, max_length=20)
+    preferred_shoe_size: str | None = Field(default=None, max_length=20)
+    fit_preference: Literal["slim", "regular", "relaxed"] | None = None
 
 
 class CartLine(BaseModel):

@@ -14,7 +14,7 @@ backend/
 ├── app/
 │   ├── main.py            # FastAPI app + CORS + Zarinpal Status mapping
 │   ├── config.py          # pydantic-settings
-│   ├── db.py              # async engine + idempotent coupon & catalog DDL
+│   ├── db.py              # async engine + idempotent coupon, catalog & profile DDL
 │   ├── models.py          # SQLAlchemy models (mirrors the Postgres schema)
 │   ├── security.py        # HS256 JWT + bcrypt password hashing
 │   ├── auth.py            # CurrentUser / AdminUser / OptionalUser dependencies
@@ -27,10 +27,11 @@ backend/
 │                          # refund claims in all 4 states, reviews, inbox, variants
 │   ├── services/          # coupons, checkout, payments, pricing, search, roles, variants,
 │                          # notifications (+ notification_providers: Kavenegar / SMTP),
-│                          # inventory_log (stock ledger), jobs (B2.5 background jobs)
+│                          # inventory_log (stock ledger), profile (national-ID / birth-date /
+│                          # measurement validation, F5.20), jobs (B2.5 background jobs)
 │   ├── worker.py          # B2.5: `python -m app.worker` — runs services/jobs.py
-│   └── routers/           # health, auth, products, reviews, addresses, favorites,
-│                          # orders, admin, storage, search, stock, coupons, checkout, payments,
+│   └── routers/           # health, auth, profile (size-profile, F5.20), products, reviews, addresses,
+│                          # favorites, orders, admin, storage, search, stock, coupons, checkout, payments,
 │                          # notifications
 └── tests/                 # pytest units + tests/api_smoke.py (live end-to-end)
 ```
@@ -82,7 +83,8 @@ Public / customer:
 |---|---|---|---|
 | GET | `/health` | – | liveness (used by the compose healthcheck) |
 | POST | `/auth/signup` · `/auth/login` | – | register / sign in → token |
-| GET/PATCH | `/auth/me` | user | profile read / update |
+| GET/PATCH | `/auth/me` | user | profile read / update — identity fields (first/last name, birth date, gender), `national_id`, verification timestamps, plus the legacy `full_name`/`phone`/`avatar_url`. PATCH: omitted = unchanged, explicit `null` = cleared (F5.20); `full_name` is derived from first/last when they are supplied |
+| GET/PATCH | `/auth/me/size-profile` | user | the caller's optional fashion measurements — height/weight/chest/waist/hip (cm/kg, CHECK-bounded), preferred top/bottom/shoe sizes, fit preference; row is created on first PATCH; `national_id` and this endpoint's data are returned **only to their owner** (F5.20) |
 | POST | `/auth/password/forgot` | – | `{email}` → **202** with the same message for every address (never reveals an account); emails a one-time link if the account exists (F2.3) |
 | POST | `/auth/password/reset` | – | `{token, password}` → 200; 400 for an unknown / used / superseded / expired link |
 | GET | `/products` | optional | catalog list — filters `category, tag, badge, availability, on_sale, size, color, min_price, max_price` + `sort`. `size`/`color` are **multi-value** (repeatable and/or comma-separated) |
@@ -337,7 +339,10 @@ columns (including `payments.authority` and `order_items.variant_id`) and the
 `coupons` (incl. `coupons.max_discount_cap`), `product_variants`,
 `product_reviews`, `search_history`,
 `recently_viewed`, `contact_messages`, `contact_attempts`, `notifications`,
-`notification_deliveries` and `notification_settings` (single row) tables.
+`notification_deliveries`, `notification_settings` (single row),
+`user_size_profiles` (F5.20 one-to-one size profile) tables, and the profile
+columns (`first_name`, `last_name`, `birth_date`, `gender`, `national_id`,
+`email_verified_at`, `phone_verified_at`).
 
 **Lock-free boot (B6.16).** Each DDL statement is checked against the catalog first and
 only runs when its column / index / table / enum label is missing, the DDL of

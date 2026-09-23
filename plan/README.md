@@ -103,7 +103,8 @@ plan/
     ├── 2026-09-23-f511-shop-invalid-url-params.md
     ├── 2026-09-23-f517-coupons-route-split.md
     ├── 2026-09-23-b68a-restore-stock-no-schema-probe.md
-    └── 2026-09-23-b22b-export-dates-and-bom.md
+    ├── 2026-09-23-b22b-export-dates-and-bom.md
+    └── 2026-09-24-f520-complete-customer-profile.md
 ```
 
 The two `ADMIN-*.md` files hold the back-office task split (epics [BE-01]… and
