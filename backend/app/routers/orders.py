@@ -274,6 +274,9 @@ async def cancel_order(order_id: UUID, user: CurrentUser, session: DbSession) ->
         await cancel_order_tx(session, str(order_id), order["status"])
     except CancelError as exc:
         await session.rollback()
+        if exc.already_cancelled:
+            # lost a race with another cancel (B6.19): same answer as the check above
+            return CancelOut(ok=True, order_number=order["order_number"], refund_eligible=False)
         raise HTTPException(status.HTTP_409_CONFLICT, exc.message) from exc
 
     await record_audit(

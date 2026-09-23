@@ -99,7 +99,7 @@ Public / customer:
 | POST | `/checkout` | user | create order (stock-locked, coupon applied) |
 | GET | `/orders` · `/orders/{id}` | user | my orders / one order |
 | POST | `/orders/{id}/cancel` · `/refunds` | user | cancel / refund request |
-| PATCH | `/orders/{id}` | admin | status + payment status + shipment tracking code (`tracking_code`; empty string clears). Status changes pass the **state machine (B6.1)**: pending→processing→shipped→delivered, cancel from pending/processing, terminal delivered/cancelled — illegal moves get 409; cancellation restores stock |
+| PATCH | `/orders/{id}` | admin | status + payment status + shipment tracking code (`tracking_code`; empty string clears). Status changes pass the **state machine (B6.1)**: pending→processing→shipped→delivered, cancel from pending/processing, terminal delivered/cancelled — illegal moves get 409; cancellation restores stock **exactly once** — the status flip is a compare-and-set, so a customer cancel racing a staff cancel restores once and the loser gets 409 (PATCH) or the idempotent 200 (POST /cancel) (B6.19) |
 | GET | `/orders/{id}/payment-session` | user | simulated gateway session |
 | POST | `/orders/{id}/payment-complete` | user | simulated gateway callback |
 | GET | `/payments/mine` | user | payment history |

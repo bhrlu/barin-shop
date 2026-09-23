@@ -392,6 +392,13 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
 - [ ] **B6.15 `POST /coupons` accepts both discount kinds or neither** (`NEW-F516-1`,
   discovered during F5.16) — `CouponCreate._not_both` is a no-op stub; validate
   exactly one kind on create (422). The admin dialog already blocks both cases.
+- [x] **B6.19 Concurrent cancellation restores stock twice** (`NEW-ABBE01-1`, P1,
+  discovered during AB-BE-01) — `cancel_order_tx` trusted a status read without a
+  lock; a customer POST /cancel racing a staff PATCH restored the stock twice (5 of 6
+  live trials). Compare-and-set the status flip; restore only when this request
+  flipped it.
+  Done (2026-09-23): `cancel_order_tx` flips the status with a compare-and-set (`WHERE status = ANY(cancellable) RETURNING id`); only the winner restores stock, a losing POST /cancel answers the idempotent 200 and a losing PATCH 409. Live race probe 5/6 double restores → 0/6; 4 new tests (negative control: all fail on the old code); pytest 246, smoke 241/0. Integration tested.
+  → audit: [2026-09-23-b619-cancel-restores-stock-once.md](audit/2026-09-23-b619-cancel-restores-stock-once.md)
 - [x] **B6.17 Storage upload refuses order_manager** (`NEW-ABFE04-1`, discovered
   during AB-FE-04) — `POST /storage/upload-url` uses `AdminUser` (`is_admin` =
   admin/super_admin only), so order_manager, who edits the catalog since B5.4b, gets

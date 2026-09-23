@@ -19,10 +19,14 @@ CANCELLABLE_STATUSES = {"pending", "processing"}
 
 
 class CancelError(Exception):
-    """Order cannot be cancelled from its current status (caller maps to 409)."""
+    """Order cannot be cancelled from its current status (caller maps to 409).
 
-    def __init__(self, message: str) -> None:
+    `already_cancelled` is set when another request cancelled it first (B6.19), so an
+    idempotent caller can answer as it does for an order read as cancelled."""
+
+    def __init__(self, message: str, *, already_cancelled: bool = False) -> None:
         self.message = message
+        self.already_cancelled = already_cancelled
         super().__init__(message)
 
 # Legal linear fulfilment transitions (Rule 4: the status strings are frozen).
@@ -114,10 +118,30 @@ async def cancel_order_tx(session: AsyncSession, order_id: str, old_status: str)
     """
     if old_status not in CANCELLABLE_STATUSES:
         raise CancelError(f"سفارش در وضعیت {old_status} قابل لغو نیست")
-    await session.execute(
-        text("UPDATE public.orders SET status = 'cancelled' WHERE id = CAST(:oid AS uuid)"),
-        {"oid": order_id},
-    )
+    # B6.19: compare-and-set. `old_status` was read without a lock, so two cancels (a
+    # customer's POST /cancel and a staff PATCH, or a double click) could both get here
+    # and restore the stock twice. Only the request whose UPDATE still finds the order
+    # cancellable flips it and gives the stock back; a concurrent one waits for the row
+    # lock, re-reads the status and finds nothing to do.
+    flipped = (
+        await session.execute(
+            text(
+                "UPDATE public.orders SET status = 'cancelled' "
+                "WHERE id = CAST(:oid AS uuid) AND status = ANY(:cancellable) RETURNING id"
+            ),
+            {"oid": order_id, "cancellable": sorted(CANCELLABLE_STATUSES)},
+        )
+    ).first()
+    if flipped is None:
+        current = (
+            await session.execute(
+                text("SELECT status FROM public.orders WHERE id = CAST(:oid AS uuid)"),
+                {"oid": order_id},
+            )
+        ).scalar()
+        if current == "cancelled":
+            raise CancelError("این سفارش پیش‌تر لغو شده است", already_cancelled=True)
+        raise CancelError(f"سفارش در وضعیت {current} قابل لغو نیست")
     await restore_stock(session, order_id)
     # B2.1: both cancel paths (customer POST /cancel, staff PATCH) end here
     await notify_order_event(session, order_id, "cancelled")

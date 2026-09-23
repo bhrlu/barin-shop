@@ -2699,3 +2699,26 @@ Verification:
 
 Not done: the other admin lists. Level: *browser + integration tested*.
 → audit: [2026-09-23-f43-admin-data-table.md](audit/2026-09-23-f43-admin-data-table.md)
+
+## 2026-09-23 — B6.19 concurrent cancellation restored stock twice (P1, found in AB-BE-01)
+
+While mapping stock mutations for the inventory ledger, R10 ("what if this runs
+twice?") pointed at `cancel_order_tx`. It trusted a status read without a lock. A
+live probe raced a customer POST /cancel against a staff PATCH `cancelled`: **5 of 6
+trials restored the stock twice**.
+
+The status flip is now a compare-and-set
+(`UPDATE … WHERE status = ANY(cancellable) RETURNING id`). Only the winner restores
+stock. A POST /cancel that loses answers with the existing idempotent 200; a PATCH
+that loses gets 409.
+
+Verification:
+
+- 4 tests: stale second cancel, two racing sessions, a move to `shipped` in between,
+  and both endpoints at once. Negative control: all 4 fail on the old code.
+- Live probe: 0 of 6 double restores.
+- pytest 246, smoke 241/0.
+
+Done before AB-BE-01 so the ledger never records a double return.
+Level: *integration tested + live race probe*.
+→ audit: [2026-09-23-b619-cancel-restores-stock-once.md](audit/2026-09-23-b619-cancel-restores-stock-once.md)

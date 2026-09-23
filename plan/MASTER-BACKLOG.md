@@ -1290,6 +1290,23 @@ changes to the file shipped in sequence; the collision is closed.
       "audit": "plan/audit/2026-09-23-f518-storefront-variant-prices.md",
       "verification_level": "browser tested",
       "completed": "2026-09-23"
+    },
+    {
+      "id": "B6.19",
+      "title": "Concurrent cancellation restores stock twice",
+      "priority": "P1",
+      "status": "DONE",
+      "layer": "backend",
+      "depends_on": [],
+      "blocks": ["AB-BE-01"],
+      "batch": "C",
+      "source": "backend-tasks.md",
+      "discovered_as": "NEW-ABBE01-1",
+      "discovered_during": "AB-BE-01",
+      "scope": "cancel_order_tx trusted a status read without a lock, so a customer POST /cancel racing a staff PATCH (or a double click) both restored stock (5 of 6 live trials, +2 units each). Make the status flip a compare-and-set and restore only when this request flipped the row; the loser answers idempotently.",
+      "audit": "plan/audit/2026-09-23-b619-cancel-restores-stock-once.md",
+      "verification_level": "integration tested + live race probe",
+      "completed": "2026-09-23"
     }
   ],
   "excluded": [
@@ -1310,8 +1327,8 @@ changes to the file shipped in sequence; the collision is closed.
     }
   ],
   "counts": {
-    "total_executable": 52,
-    "done": 34,
+    "total_executable": 53,
+    "done": 35,
     "open": 18,
     "P0": 0,
     "P1": 0,
@@ -2576,6 +2593,42 @@ oversized or non-image upload is refused by MinIO.
 
 ---
 
+## B6.19 — Concurrent cancellation restores stock twice
+
+* **Layer:** Backend (order lifecycle)
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-b619-cancel-restores-stock-once.md`](audit/2026-09-23-b619-cancel-restores-stock-once.md)
+* **Verification level:** integration tested + live race probe
+* **Delivered:** `cancel_order_tx` flips the status with a compare-and-set (`WHERE status = ANY(cancellable) RETURNING id`); only the winner restores stock, a losing POST /cancel answers the idempotent 200 and a losing PATCH 409. Live race probe 5/6 double restores → 0/6; 4 new tests (negative control: all fail on the old code); pytest 246, smoke 241/0. Integration tested.
+* **Priority:** P1
+* **Batch:** C
+* **Dependencies:** none
+* **Blocks:** `AB-BE-01` (the ledger would record the double return)
+* **Discovered as:** `NEW-ABBE01-1` during `AB-BE-01` — legacy discovery ID only;
+  `B6.19` is the executable ID.
+* **Source:** `backend-tasks.md` B6.19
+
+### Problem
+
+`cancel_order_tx` trusted the status its caller had read without a lock, flipped the
+order to `cancelled` unconditionally, and restored the stock. A customer's
+`POST /orders/{id}/cancel` racing a staff `PATCH {status: cancelled}` (or a double
+click) both passed, and both restored the stock. Reproduced live: 5 of 6 trials,
++2 units each.
+
+### Required implementation
+
+Make the flip a compare-and-set: the `UPDATE` only matches an order that is still
+cancellable. Restore stock only when this request flipped the row. The losing
+request answers idempotently: POST /cancel → 200, PATCH → 409.
+
+### Verification
+
+Concurrent tests (two sessions, and the real endpoints). A negative control on the
+old code. The live race probe shows 0 double restores.
+
+---
+
 ## B6.13 — Documented `pytest -q` silently skips every live-DB test
 
 * **Layer:** Backend tests
@@ -3402,6 +3455,7 @@ B6.14  (DONE 2026-09-23)
 B6.15
 B6.17  (DONE 2026-09-23)
 B6.18
+B6.19  (DONE 2026-09-23)
 ```
 
 `AB-BE-01` begins after `B6.8`.
@@ -3489,8 +3543,8 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**18** open · **34** DONE · 52 executable in total.
-25 units were added by discovery during earlier tasks (see
+**18** open · **35** DONE · 53 executable in total.
+26 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
@@ -3653,8 +3707,8 @@ were freshly executed.
 AB-BE-01
 ```
 
-34 of 52 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. next P2 — inventory ledger (depends on B6.8, done)
+35 of 53 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. P2 — inventory ledger (B6.19 fixed first so no double return is ever logged)
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -3759,7 +3813,7 @@ Current state:
 
 ```text
 18 remaining implementation units (B2.1a, AB-BE-01, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B6.15, B5.1e, F5.17, B6.18)
-34 completed implementation units
+35 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete

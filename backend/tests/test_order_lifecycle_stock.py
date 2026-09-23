@@ -184,3 +184,107 @@ class TestVariantStockRestoration:
         await cancel_order_tx(db, order["order_id"], "pending")
         await db.commit()
         assert await _stocks(db, fixtures) == before
+
+
+class TestConcurrentCancellation:
+    """B6.19: `cancel_order_tx` used to trust the status its caller had read without a
+    lock, so two cancels racing (customer POST /cancel + staff PATCH, or a double
+    click) both restored the stock — reproduced 5 of 6 times against the live stack
+    (+2 units each). The status flip is now a compare-and-set."""
+
+    async def test_a_stale_second_cancel_restores_nothing(self, db, fixtures):
+        before = await _stocks(db, fixtures)
+        order = await _checkout(db, fixtures, "M", "مشکی", qty=2)
+        await cancel_order_tx(db, order["order_id"], "pending")
+        await db.commit()
+        # the caller read `pending` before the first cancel committed
+        with pytest.raises(CancelError) as exc:
+            await cancel_order_tx(db, order["order_id"], "pending")
+        await db.rollback()
+        assert exc.value.already_cancelled
+        assert await _stocks(db, fixtures) == before
+
+    async def test_two_sessions_racing_restore_once(self, db, fixtures):
+        import asyncio
+
+        before = await _stocks(db, fixtures)
+        order = await _checkout(db, fixtures, "M", "مشکی", qty=2)
+
+        async def cancel() -> str:
+            async with SessionLocal() as session:
+                try:
+                    await cancel_order_tx(session, order["order_id"], "pending")
+                    await asyncio.sleep(0.2)  # hold the row lock across the other attempt
+                    await session.commit()
+                    return "cancelled"
+                except CancelError as error:
+                    await session.rollback()
+                    return "already" if error.already_cancelled else "refused"
+
+        outcomes = sorted(await asyncio.gather(cancel(), cancel()))
+        assert outcomes == ["already", "cancelled"]
+        await db.commit()
+        assert await _stocks(db, fixtures) == before
+
+    async def test_a_move_between_read_and_cancel_is_refused(self, db, fixtures):
+        before = await _stocks(db, fixtures)
+        order = await _checkout(db, fixtures, "M", "مشکی", qty=2)
+        await db.execute(
+            text("UPDATE public.orders SET status = 'shipped' WHERE id = CAST(:o AS uuid)"),
+            {"o": order["order_id"]},
+        )
+        await db.commit()
+        with pytest.raises(CancelError) as exc:  # the caller still thinks `pending`
+            await cancel_order_tx(db, order["order_id"], "pending")
+        await db.rollback()
+        assert not exc.value.already_cancelled
+        assert await _stocks(db, fixtures) == (before[0] - 2, before[1] - 2)
+
+
+async def test_http_customer_and_staff_cancelling_at_once(db, fixtures):
+    """The reported race through the real endpoints: one restore, both callers answered."""
+    import asyncio
+
+    import httpx
+
+    from app.main import app
+    from app.security import create_access_token
+
+    admin_id = (
+        await db.execute(
+            text("INSERT INTO public.users (email, password_hash) VALUES (:e, 'x') RETURNING id"),
+            {"e": f"b619-{uuid4().hex[:8]}@test.local"},
+        )
+    ).scalar()
+    await db.execute(
+        text("INSERT INTO public.user_roles (user_id, role) VALUES (:u, 'admin')"),
+        {"u": str(admin_id)},
+    )
+    await db.commit()
+    try:
+        cust = create_access_token(fixtures["user_id"], "c@test.local", "customer")
+        staff = create_access_token(admin_id, "a@test.local", "customer")
+        for _ in range(3):
+            before = await _stocks(db, fixtures)
+            order = await _checkout(db, fixtures, "M", "مشکی", qty=1)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                r1, r2 = await asyncio.gather(
+                    client.post(
+                        f"/orders/{order['order_id']}/cancel",
+                        headers={"Authorization": f"Bearer {cust}"},
+                    ),
+                    client.patch(
+                        f"/orders/{order['order_id']}",
+                        headers={"Authorization": f"Bearer {staff}"},
+                        json={"status": "cancelled"},
+                    ),
+                )
+            assert r1.status_code == 200, r1.text
+            assert r2.status_code in (200, 409), r2.text
+            await db.commit()
+            assert await _stocks(db, fixtures) == before
+    finally:
+        await db.execute(text("DELETE FROM public.users WHERE id = :u"), {"u": str(admin_id)})
+        await db.commit()
