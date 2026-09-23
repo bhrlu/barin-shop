@@ -249,8 +249,10 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   falls back to it, so all audit sites record the caller IP with no signature
   churn. Verified live + smoke assertion.
   → audit: [2026-09-21-b51a-audit-ip-f41-status-badges.md](audit/2026-09-21-b51a-audit-ip-f41-status-badges.md)
-- [ ] **B5.1b Audit tamper-resistance at the DB level** — REVOKE UPDATE/DELETE on
+- [x] **B5.1b Audit tamper-resistance at the DB level** — REVOKE UPDATE/DELETE on
   `audit_logs` for the app role (append-only) in `infra/initdb` or startup DDL.
+  Done (2026-09-23): triggers make `audit_logs` append-only (UPDATE/DELETE/TRUNCATE refused; only the FK `admin_id → NULL` cascade allowed) — REVOKE cannot, the app role owns the table and is a superuser. New guard shapes keep the boot lock-free. 6 tests + negative control; clean env.
+  → audit: [2026-09-23-b51b-audit-log-append-only.md](audit/2026-09-23-b51b-audit-log-append-only.md)
 - [x] **B5.1d `record_audit` rolls back the mutation it is auditing** (`NEW-B21-2`,
   discovered during B2.1) — on an insert failure `services/audit.py::record_audit`
   calls `session.rollback()` and swallows the error, which also discards the
@@ -262,6 +264,10 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   the request answers 500 and nothing is persisted. 6 tests with a real
   trigger-forced failure; the old code fails 5 of them.
   → audit: [2026-09-23-b51d-audit-atomicity.md](audit/2026-09-23-b51d-audit-atomicity.md)
+- [ ] **B5.1e Run the backend as a least-privilege database role** (`NEW-B51B-1`,
+  discovered during B5.1b) — the app connects as the schema owner and a superuser, so
+  it can drop tables or disable the audit triggers. Split a migrator role (DDL, seeds)
+  from a DML-only app role; clean-env proof.
 - [ ] **B5.1c `GET /admin/audit-logs` 500s on a malformed `admin_id`**
   (`NEW-F55-1`, discovered during F5.5) — `?admin_id=foo` reaches
   `CAST(:admin_id AS uuid)` and Postgres raises, so the admin caller gets a 500

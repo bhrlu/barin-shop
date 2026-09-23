@@ -55,7 +55,6 @@ async def admin(db):
     )
     await db.commit()
     yield create_access_token(uid, email, "customer")
-    await db.execute(text("DELETE FROM public.audit_logs WHERE admin_id = :u"), {"u": str(uid)})
     await db.execute(text("DELETE FROM public.users WHERE id = :u"), {"u": str(uid)})
     await db.execute(text("DELETE FROM public.products WHERE name LIKE 'B69A-%'"))
     await db.commit()

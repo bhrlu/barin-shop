@@ -2404,3 +2404,16 @@ and only MinIO/network errors keep the storage 502/`null`; anything else surface
 with trigger-injected SQLSTATEs + a fake MinIO client (negative control: 4 fail);
 pytest 197; smoke 229/0. Level: *integration tested*.
 → audit: [2026-09-23-b69a-narrow-catalog-storage-handlers.md](audit/2026-09-23-b69a-narrow-catalog-storage-handlers.md)
+
+## 2026-09-23 — B5.1b audit log append-only (resumed after the usage-limit pause)
+
+Triggers refuse UPDATE/DELETE/TRUNCATE on `audit_logs`; only the FK cascade that nulls
+`admin_id` (every other column unchanged) is allowed, so users stay deletable. REVOKE
+would do nothing — the app role owns the table and is a superuser. New DDL guard shapes
+(function/trigger) keep B6.16's lock-free boot. 6 tests; negative control (triggers
+dropped → an UPDATE rewrote a row; `startup_ddl()` recreated them). Six test cleanups
+that deleted audit rows were removed. On the clean stack the smoke's identity check
+failed twice — it asserted every audit row in the table has an admin, which deleted
+users (by design) break — and now checks this run's own entries. pytest 203, smoke
+229/0, clean environment. Found: **B5.1e** (least-privilege DB role, P3).
+→ audit: [2026-09-23-b51b-audit-log-append-only.md](audit/2026-09-23-b51b-audit-log-append-only.md)

@@ -249,6 +249,36 @@ AUDIT_DDL = [
         "CREATE INDEX IF NOT EXISTS audit_logs_entity_idx "
         "ON public.audit_logs(entity_type, entity_id)"
     ),
+    # B5.1b: append-only. The app's DB role owns the table (and is a superuser in
+    # the compose stack), so REVOKE cannot enforce it — triggers do. The one change
+    # allowed is the FK's ON DELETE SET NULL when a user is deleted: attribution is
+    # lost, nothing else may move. (A superuser can still disable triggers — full
+    # proof needs a least-privilege app role, B5.1e.)
+    """
+    CREATE OR REPLACE FUNCTION public.audit_logs_append_only() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+      IF TG_OP = 'UPDATE' AND OLD.admin_id IS NOT NULL AND NEW.admin_id IS NULL
+         AND (NEW.id, NEW.action, NEW.entity_type, NEW.entity_id, NEW.old_values,
+              NEW.new_values, NEW.ip_address, NEW.created_at)
+             IS NOT DISTINCT FROM
+             (OLD.id, OLD.action, OLD.entity_type, OLD.entity_id, OLD.old_values,
+              OLD.new_values, OLD.ip_address, OLD.created_at) THEN
+        RETURN NEW;
+      END IF;
+      RAISE EXCEPTION 'audit_logs is append-only (% refused)', TG_OP
+        USING ERRCODE = 'insufficient_privilege';
+    END $$
+    """,
+    (
+        "CREATE TRIGGER audit_logs_no_update_delete BEFORE UPDATE OR DELETE "
+        "ON public.audit_logs FOR EACH ROW EXECUTE FUNCTION public.audit_logs_append_only()"
+    ),
+    (
+        "CREATE TRIGGER audit_logs_no_truncate BEFORE TRUNCATE "
+        "ON public.audit_logs FOR EACH STATEMENT "
+        "EXECUTE FUNCTION public.audit_logs_append_only()"
+    ),
 ]
 
 
@@ -424,6 +454,19 @@ _DDL_GUARDS = [
     (
         re.compile(r"CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+public\.(\w+)", re.I),
         "SELECT to_regclass('public.' || :a) IS NULL",
+    ),
+    # functions are created once; changing a body later means a new function name
+    (
+        re.compile(r"CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+public\.(\w+)", re.I),
+        "SELECT to_regproc('public.' || :a) IS NULL",
+    ),
+    (
+        re.compile(
+            r"CREATE\s+(?:OR\s+REPLACE\s+)?TRIGGER\s+(\w+)\s.*?\sON\s+public\.(\w+)",
+            re.I | re.S,
+        ),
+        "SELECT NOT EXISTS (SELECT 1 FROM pg_trigger "
+        "WHERE tgname = :a AND tgrelid = to_regclass('public.' || :b))",
     ),
     (
         re.compile(

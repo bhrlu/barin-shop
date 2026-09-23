@@ -301,11 +301,7 @@ async def people(db):
     finally:
         await notifications.drain()
         ids = [str(p["id"]) for p in created.values()]
-        # audit rows only SET NULL on user delete — drop the ones these actors wrote
-        await db.execute(
-            text("DELETE FROM public.audit_logs WHERE admin_id = ANY(CAST(:ids AS uuid[]))"),
-            {"ids": ids},
-        )
+        # # audit_logs is append-only (B5.1b): deleting the users only nulls admin_id
         await db.execute(
             text("DELETE FROM public.users WHERE id = ANY(CAST(:ids AS uuid[]))"), {"ids": ids}
         )
@@ -918,12 +914,6 @@ async def test_admin_updates_switches_and_is_audited(db, people, switches):
     assert len(audit) == 1
     assert audit[0]["old_values"] == {"sms_enabled": False, "email_enabled": False}
     assert audit[0]["new_values"] == {"sms_enabled": True, "email_enabled": False}
-    await db.execute(
-        text("DELETE FROM public.audit_logs WHERE entity_type = 'settings' AND admin_id = ANY("
-             "CAST(:ids AS uuid[]))"),
-        {"ids": [str(admin["id"]), str(people["super_admin"]["id"])]},
-    )
-    await db.commit()
 
 
 async def test_settings_payload_is_validated(db, people, switches):

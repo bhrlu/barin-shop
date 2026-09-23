@@ -94,10 +94,7 @@ async def make(db):
         return {"id": str(uid), "token": create_access_token(uid, email, "customer")}
 
     yield _make
-    await db.execute(
-        text("DELETE FROM public.audit_logs WHERE admin_id = ANY(CAST(:ids AS uuid[]))"),
-        {"ids": ids},
-    )
+    # # audit_logs is append-only (B5.1b): deleting the users only nulls admin_id
     await db.execute(
         text("DELETE FROM public.users WHERE id = ANY(CAST(:ids AS uuid[]))"), {"ids": ids}
     )

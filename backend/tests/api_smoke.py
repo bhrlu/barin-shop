@@ -600,11 +600,22 @@ def main() -> int:
         and any(e["action"] in order_audit_actions for e in log_entries),
         f"entries={len(log_entries)}",
     )
+    # this run's own entries must carry who + when; rows of accounts deleted since
+    # (e.g. by the pytest suite) keep admin_id NULL — audit_logs is append-only (B5.1b)
+    own_entries = [
+        e for e in log_entries
+        if e.get("entity_id") in {str(order_id), str(sm_order_id)}
+        and e.get("action") in order_audit_actions
+    ]
     check(
         "audit entries carry admin identity + timestamps",
-        bool(log_entries)
-        and all(e.get("admin_id") and e.get("created_at") for e in log_entries),
-        f"first={log_entries[0].get('admin_email') if log_entries else None}",
+        bool(own_entries)
+        and all(
+            e.get("admin_id") and e.get("admin_email") == "admin@sande.local"
+            and e.get("created_at")
+            for e in own_entries
+        ),
+        f"own={len(own_entries)}",
     )
     # B5.1a: the middleware captures the caller IP (XFF-aware) on every request
     recent_ips = [e.get("ip_address") for e in log_entries]
@@ -698,11 +709,23 @@ def main() -> int:
         and any(e["action"] in order_audit_actions for e in log_entries),
         f"entries={len(log_entries)}",
     )
+    # the entries this run's own admin mutations wrote must carry who + when; rows of
+    # accounts deleted since (e.g. by the pytest suite) legitimately keep admin_id NULL
+    # — audit_logs is append-only and the FK nulls the attribution (B5.1b)
+    own_entries = [
+        e for e in log_entries
+        if e.get("entity_id") in {str(order_id), str(sm_order_id)}
+        and e.get("action") in order_audit_actions
+    ]
     check(
         "audit entries carry admin identity + timestamps",
-        bool(log_entries)
-        and all(e.get("admin_id") and e.get("created_at") for e in log_entries),
-        f"first={log_entries[0].get('admin_email') if log_entries else None}",
+        bool(own_entries)
+        and all(
+            e.get("admin_id") and e.get("admin_email") == "admin@sande.local"
+            and e.get("created_at")
+            for e in own_entries
+        ),
+        f"own={len(own_entries)}",
     )
     if order_id and refund_id:
         by_entity = call(

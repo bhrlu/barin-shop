@@ -95,10 +95,7 @@ async def world(db):
     finally:
         await notifications.drain()
         ids = [str(p["id"]) for p in people.values()]
-        await db.execute(
-            text("DELETE FROM public.audit_logs WHERE admin_id = ANY(CAST(:ids AS uuid[]))"),
-            {"ids": ids},
-        )
+        # # audit_logs is append-only (B5.1b): deleting the users only nulls admin_id
         await db.execute(
             text("DELETE FROM public.users WHERE id = ANY(CAST(:ids AS uuid[]))"), {"ids": ids}
         )
@@ -240,8 +237,7 @@ async def test_refund_settlement_is_atomic(db, world, break_audit):
 
 async def test_coupon_edit_is_atomic(db, world, break_audit):
     code = f"B51D{uuid4().hex[:6].upper()}"
-    admin_id = world["manager"]["id"]  # order_manager holds the coupons capability
-    token = world["manager"]["token"]
+    token = world["manager"]["token"]  # order_manager holds the coupons capability
     created = await _call("POST", "/coupons", token, json={"code": code, "percent_off": 10})
     assert created.status_code == 201, created.text
     coupon_id = (await _one(db, "SELECT id FROM public.coupons WHERE code = :c", c=code))[0]
@@ -253,9 +249,6 @@ async def test_coupon_edit_is_atomic(db, world, break_audit):
         assert pct[0] == 10
     finally:
         await db.execute(text("DELETE FROM public.coupons WHERE id = :c"), {"c": coupon_id})
-        await db.execute(
-            text("DELETE FROM public.audit_logs WHERE admin_id = :a"), {"a": str(admin_id)}
-        )
         await db.commit()
 
 

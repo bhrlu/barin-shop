@@ -507,7 +507,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "B5.1b",
+    "agent_start_task": "F5.12",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -683,13 +683,16 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "B5.1b",
       "title": "Audit-log DB tamper resistance",
       "priority": "P2",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "infra_db",
       "depends_on": [],
       "blocks": [],
       "batch": "C",
       "source": "backend-tasks.md",
-      "scope": "Make audit_logs append-only for the application role with positive INSERT/SELECT and negative UPDATE/DELETE verification."
+      "scope": "Make audit_logs append-only for the application role with positive INSERT/SELECT and negative UPDATE/DELETE verification.",
+      "audit": "plan/audit/2026-09-23-b51b-audit-log-append-only.md",
+      "verification_level": "fully verified (tamper resistance against the app / non-superusers; a superuser can still disable triggers — B5.1e)",
+      "completed": "2026-09-23"
     },
     {
       "id": "AB-BE-01",
@@ -1184,6 +1187,20 @@ changes to the file shipped in sequence; the collision is closed.
       "audit": "plan/audit/2026-09-23-b616-lock-free-startup-ddl.md",
       "verification_level": "fully verified",
       "completed": "2026-09-23"
+    },
+    {
+      "id": "B5.1e",
+      "title": "Run the backend as a least-privilege database role",
+      "priority": "P3",
+      "status": "TODO",
+      "layer": "infra_db",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "C",
+      "source": "backend-tasks.md",
+      "discovered_as": "NEW-B51B-1",
+      "discovered_during": "B5.1b",
+      "scope": "The backend connects as the schema owner and (compose) a superuser, so any path can drop tables, disable triggers or rewrite the audit trail. Split a migrator role (owns schema, runs startup_ddl/seeds) from a DML-only app role the backend uses; clean-env proof that the app role cannot ALTER/DROP/disable triggers."
     }
   ],
   "excluded": [
@@ -1204,13 +1221,13 @@ changes to the file shipped in sequence; the collision is closed.
     }
   ],
   "counts": {
-    "total_executable": 47,
-    "done": 22,
+    "total_executable": 48,
+    "done": 23,
     "open": 25,
     "P0": 0,
     "P1": 0,
-    "P2": 12,
-    "P3": 13,
+    "P2": 11,
+    "P3": 14,
     "blocked": 0,
     "dropped": 2,
     "obsolete": 1,
@@ -1787,7 +1804,10 @@ Browser: create, edit and toggle a coupon → 200 and the UI reflects it;
 ## B5.1b — Audit-log DB tamper resistance
 
 * **Layer:** Infra/DB
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-b51b-audit-log-append-only.md`](audit/2026-09-23-b51b-audit-log-append-only.md)
+* **Verification level:** fully verified (tamper resistance against the app / non-superusers; a superuser can still disable triggers — B5.1e)
+* **Delivered:** triggers make `audit_logs` append-only (UPDATE/DELETE/TRUNCATE refused; only the FK `admin_id → NULL` cascade allowed) — REVOKE cannot, the app role owns the table and is a superuser. New guard shapes keep the boot lock-free. 6 tests + negative control; clean env.
 * **Dependencies:** none
 
 ### Required implementation
@@ -2618,6 +2638,36 @@ Also test cancellation/refund behavior.
 
 ---
 
+## B5.1e — Run the backend as a least-privilege database role
+
+* **Layer:** Infra/DB
+* **Status:** TODO
+* **Priority:** P3
+* **Batch:** C
+* **Dependencies:** none
+* **Discovered as:** `NEW-B51B-1` during `B5.1b` — legacy discovery ID only;
+  `B5.1e` is the executable ID.
+* **Source:** `backend-tasks.md` B5.1e
+
+### Problem
+
+The backend connects as `sande`, the schema owner and (in compose) a superuser. Any
+code path — or an injected query — can therefore drop tables, disable the B5.1b
+triggers (`session_replication_role`) or rewrite the audit trail.
+
+### Required implementation
+
+A migrator role that owns the schema and runs `startup_ddl()` / the seeds, and an
+application role with DML only (no DDL, not owner, not superuser); the backend
+connects as the latter. Keep the Rule 14 bootstrap working.
+
+### Verification
+
+Clean environment; the app role cannot `ALTER`, `DROP`, disable triggers or bypass
+`audit_logs` append-only; the full suite and smoke still pass.
+
+---
+
 ## B5.1c — Malformed `admin_id` on the audit-log endpoint
 
 * **Layer:** Backend
@@ -3066,7 +3116,7 @@ files.
 ## Batch C — Backend quality / infrastructure
 
 ```text
-B5.1b
+B5.1b  (DONE 2026-09-23)
 AB-BE-01
 AB-BE-02
 B5.1c
@@ -3162,8 +3212,8 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**25** open · **22** DONE · 47 executable in total.
-20 units were added by discovery during earlier tasks (see
+**25** open · **23** DONE · 48 executable in total.
+21 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
@@ -3205,8 +3255,8 @@ D1–D9 are resolved.
 | --------- | --------: |
 | P0        |         0 |
 | P1        |         0 |
-| P2        |        12 |
-| P3        |        13 |
+| P2        |        11 |
+| P3        |        14 |
 | **Total** |    **25** |
 
 Generated from the JSON index on 2026-09-23.
@@ -3323,11 +3373,11 @@ were freshly executed.
 ## START HERE
 
 ```text
-B5.1b
+F5.12
 ```
 
-22 of 47 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. **`B5.1b`** (audit-log DB tamper resistance; P2, Batch C) is next.
+23 of 48 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. **`F5.12`** (cart provider loads the whole catalogue on every route; P2, Batch D) is next.
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -3431,11 +3481,11 @@ Reconciliation date:
 Current state:
 
 ```text
-25 remaining implementation units (B2.1a, B5.1b, AB-BE-01, AB-BE-02, F5.8, F5.7, F4.3, AB-FE-01, AB-FE-03, AB-FE-04, F3.5b, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, F5.12, B6.15)
-22 completed implementation units
+25 remaining implementation units (B2.1a, AB-BE-01, AB-BE-02, F5.8, F5.7, F4.3, AB-FE-01, AB-FE-03, AB-FE-04, F3.5b, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, F5.12, B6.15, B5.1e)
+23 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = B5.1b
+NEXT = F5.12
 ```
