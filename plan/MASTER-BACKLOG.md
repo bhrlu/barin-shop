@@ -507,7 +507,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "F5.9",
+    "agent_start_task": "B5.4a",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -915,7 +915,7 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "F5.9",
       "title": "Coupon discount-cap field in the admin dialog",
       "priority": "P2",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "frontend",
       "depends_on": ["AB-BE-03"],
       "blocks": [],
@@ -923,7 +923,10 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "frontend-tasks.md",
       "discovered_as": "NEW-ABBE03-1",
       "discovered_during": "AB-BE-03",
-      "scope": "Expose coupons.max_discount_cap in the F4.5 admin coupon dialog (admin.coupons.tsx) and in the AdminCoupon / adminCreateCoupon / adminUpdateCoupon types in src/lib/api.ts, including the 0-clears-the-ceiling semantics on PATCH."
+      "scope": "Expose coupons.max_discount_cap in the F4.5 admin coupon dialog (admin.coupons.tsx) and in the AdminCoupon / adminCreateCoupon / adminUpdateCoupon types in src/lib/api.ts, including the 0-clears-the-ceiling semantics on PATCH.",
+      "audit": "plan/audit/2026-09-23-f59-coupon-cap-field.md",
+      "verification_level": "browser tested",
+      "completed": "2026-09-23"
     },
     {
       "id": "B5.1c",
@@ -1176,11 +1179,11 @@ changes to the file shipped in sequence; the collision is closed.
   ],
   "counts": {
     "total_executable": 46,
-    "done": 17,
-    "open": 29,
+    "done": 18,
+    "open": 28,
     "P0": 0,
     "P1": 0,
-    "P2": 16,
+    "P2": 15,
     "P3": 13,
     "blocked": 0,
     "dropped": 2,
@@ -2088,7 +2091,10 @@ Worker execution + restart/retry test + duplicate-event test.
 ## F5.9 — Coupon discount-cap field in the admin dialog
 
 * **Layer:** Frontend
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-f59-coupon-cap-field.md`](audit/2026-09-23-f59-coupon-cap-field.md)
+* **Verification level:** browser tested
+* **Delivered:** cap field in the coupon dialog (percent coupons only; 0 clears on edit), shown on the card; the page now imports the canonical `AdminCoupon` type. Browser 14/14 incl. the real discount via `/coupons/validate`.
 * **Priority:** P2
 * **Batch:** B
 * **Dependencies:** `AB-BE-03` (DONE)
@@ -2973,7 +2979,7 @@ F5.5   (DONE 2026-09-22)
 F5.6   (DONE 2026-09-22)
 AB-FE-02 (DONE 2026-09-22)
 AB-FE-05 (DONE 2026-09-22)
-F5.9
+F5.9  (DONE 2026-09-23)
 ```
 
 `F5.9` depends on `AB-BE-03` (DONE) and edits `admin.coupons.tsx` plus the
@@ -3081,14 +3087,13 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**29** (17 completed: B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02, AB-FE-05, B3.11,
-B2.1, F5.14, F2.3, F5.15, B6.13, B5.1d, F5.13, B6.14, F5.16; 19 added by discovery:
-B6.8a, B6.9a, F5.9, B5.1c, B5.4a, F5.10, B2.2b, B5.4b, F5.11, F5.12, B2.1a,
-B5.1d, B6.13, F5.13, F5.14, F5.15, F5.16, B6.14, B6.15)
+**28** open · **18** DONE · 46 executable in total.
+19 units were added by discovery during earlier tasks (see
+`discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
 
-**29** (`B2.1a` additionally needs real provider credentials from the user)
+**28** (`B2.1a` additionally needs real provider credentials from the user)
 
 ### Blocked
 
@@ -3125,11 +3130,11 @@ D1–D9 are resolved.
 | --------- | --------: |
 | P0        |         0 |
 | P1        |         0 |
-| P2        |        16 |
+| P2        |        15 |
 | P3        |        13 |
-| **Total** |    **29** |
+| **Total** |    **28** |
 
-Recomputed from the JSON index on 2026-09-23 (F5.16).
+Generated from the JSON index on 2026-09-23.
 
 Priority is execution guidance, not permission to rewrite requirements.
 
@@ -3243,46 +3248,17 @@ were freshly executed.
 ## START HERE
 
 ```text
-F5.9
+B5.4a
 ```
 
-Batch A (`B6.8`, `B6.9`, `AB-BE-03`) is complete — audits
-[B6.8](audit/2026-09-22-b68-variant-stock-restore.md),
-[B6.9](audit/2026-09-22-b69-refund-exception-handling.md),
-[AB-BE-03](audit/2026-09-22-abbe03-coupon-max-discount-cap.md) — and so is every P1 in Batch B:
-`F5.5` ([audit](audit/2026-09-22-f55-audit-log-viewer.md)), `F5.6`
-([audit](audit/2026-09-22-f56-role-management-ui.md)), `AB-FE-02`
-([audit](audit/2026-09-22-abfe02-admin-export-controls.md)) and `AB-FE-05`
-([audit](audit/2026-09-22-abfe05-admin-products-pagination.md)). Batch B keeps
-only `F5.9` (P2).
+18 of 46 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. **`B5.4a`** (role-change lockout guard; P2, Batch C, security) is next — the user asked to run the whole backlog.
 
-`B3.11` is DONE ([audit](audit/2026-09-22-b311-contact-spam-guard.md)), and so is
-`B2.1` ([audit](audit/2026-09-22-b21-notification-infrastructure.md)) — executed as notification infrastructure under the D2
-product adjustment: in-app notifications live, SMS/email built but unconfigured.
+`B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
+report, never fake).
 
-`F5.14` is DONE ([audit](audit/2026-09-22-f514-coupon-json-body.md)) and so is
-`F2.3` ([audit](audit/2026-09-23-f23-forgot-password.md)) — **no P1 remains**.
-
-`F5.15` is DONE ([audit](audit/2026-09-23-f515-auth-refresh-keeps-session.md)).
-
-`B6.13` is DONE ([audit](audit/2026-09-23-b613-pytest-runs-db-tests.md)) — `pytest -q` now runs the live-DB tests.
-
-`B5.1d` is DONE ([audit](audit/2026-09-23-b51d-audit-atomicity.md)) — audited mutations are all-or-nothing now.
-
-The user asked for this run back to back: `F5.15` (DONE) → `B6.13` (DONE) →
-`B5.1d` (DONE) → `B2.1a` (stopped — no credentials) → `F5.13` (DONE, [audit](audit/2026-09-23-f513-guard-redirect-after-mount.md)). The
-back-to-back run is complete.
-
-`B6.14` is DONE ([audit](audit/2026-09-23-b614-reset-ends-sessions.md)) and so is
-`F5.16` ([audit](audit/2026-09-23-f516-coupon-edit-clear-and-kind.md)) — the user's "B6.14 then F5.16" run is complete.
-
-**`F5.9`** (coupon discount-cap field in the admin dialog; P2, Batch B — the last
-open Batch B item) is proposed next: it edits the same dialog F5.16 just reworked,
-and the backend cap (AB-BE-03) has had no UI since it shipped. `B2.1a` resumes when the user supplies real Kavenegar/SMTP credentials. `B2.1a` will hit its stop condition (no real credentials) —
-report it, do not fake it.
-
-After each task: update this pointer, the task status, the audit link and the
-verification level, and name the next task.
+After each task: mark it DONE in the JSON index and its section (audit link +
+verification level), regenerate the counts, and name the next task here.
 
 The execution pointer must always identify a single concrete next task.
 
@@ -3380,19 +3356,11 @@ Reconciliation date:
 Current state:
 
 ```text
-29 remaining implementation units
-  (17 of the original 27, plus B6.8a, B6.9a, F5.9, B5.1c, B5.4a, F5.10,
-   B2.2b, B5.4b, F5.11, F5.12, B2.1a and B6.15 —
-   the last ten discovered as NEW-ABBE03-1, NEW-F55-1, NEW-F56-1,
-   NEW-F56-2, NEW-ABFE02-1, NEW-ABFE05-1/2/3, NEW-B21-1…4/6, NEW-F514-1 and
-   NEW-F23-1 (B6.14, since DONE) and NEW-F516-1 — found during them)
-17 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02,
-  AB-FE-05, B3.11, B2.1, F5.14, F2.3, F5.15, B6.13, B5.1d, F5.13, B6.14, F5.16 —
-  the last seven but F2.3 themselves discovered as NEW-B21-5/6/3/2/4, NEW-F23-1
-  and NEW-F514-1)
+28 remaining implementation units (B2.1a, B5.1b, AB-BE-01, AB-BE-02, F5.8, F5.7, F4.3, AB-FE-01, AB-FE-03, AB-FE-04, F3.5b, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B6.9a, B5.1c, B5.4a, F5.10, B2.2b, B5.4b, F5.11, F5.12, B6.15)
+18 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = F5.9
+NEXT = B5.4a
 ```

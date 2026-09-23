@@ -2345,3 +2345,17 @@ backend reloads forced mid-run. Recorded as unexplained in the audit.
 → audit: [2026-09-23-f516-coupon-edit-clear-and-kind.md](audit/2026-09-23-f516-coupon-edit-clear-and-kind.md)
 
 **Next backlog pointer** — `F5.9` (proposed: same dialog, last open Batch B item).
+
+## 2026-09-23 — F5.9 coupon cap field ("whole backlog" run begins)
+
+The user asked to run every remaining backlog item. Before starting: the Master
+Backlog JSON still used `NEW-B68-1` / `NEW-B69-1` with no prose — renamed to their
+official IDs B6.8a / B6.9a (discovered_as kept) with prose sections (`dbfea4b`), and
+the counts / pointer / state sections are now regenerated from the JSON after every
+task.
+
+F5.9: the discount-cap field in the coupon dialog (percent coupons only; edit sends 0
+to clear), shown on the card; the page's duplicate `AdminCoupon` type replaced by the
+canonical import. Browser 14/14 (real discount checked via `/coupons/validate`),
+coupon regressions 15/15 + 14/14, tsc/lint/build clean. Level: *browser tested*.
+→ audit: [2026-09-23-f59-coupon-cap-field.md](audit/2026-09-23-f59-coupon-cap-field.md)

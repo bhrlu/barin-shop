@@ -381,6 +381,8 @@ export type AdminCoupon = {
   percent_off: number | null;
   amount_off: number | null;
   min_subtotal: number;
+  /** ceiling (tomans) on a percent-off discount; null = uncapped (AB-BE-03) */
+  max_discount_cap: number | null;
   max_uses: number | null;
   max_uses_per_user: number;
   used_count: number;
@@ -861,12 +863,14 @@ export const api = {
     percent_off: number | null;
     amount_off: number | null;
     min_subtotal: number;
+    max_discount_cap: number | null;
     max_uses: number | null;
     max_uses_per_user: number;
     expires_at: string | null;
   }) => request<CouponValidation>("/coupons", { method: "POST", json: input }),
   // F5.16: null/omitted = unchanged; `expires_at: ""` clears the expiry, `max_uses: 0`
-  // means unlimited; sending one kind (percent_off | amount_off) clears the other
+  // means unlimited, `max_discount_cap: 0` uncapped; sending one kind
+  // (percent_off | amount_off) clears the other
   adminUpdateCoupon: (
     id: string,
     patch: Partial<{
@@ -874,6 +878,7 @@ export const api = {
       percent_off: number | null;
       amount_off: number | null;
       min_subtotal: number;
+      max_discount_cap: number;
       max_uses: number | null;
       max_uses_per_user: number;
       expires_at: string | null;

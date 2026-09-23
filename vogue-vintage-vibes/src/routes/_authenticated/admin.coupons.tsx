@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Check, Copy, Plus, Ticket, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
+import { api, type AdminCoupon } from "@/lib/api";
 import { formatFaDate, formatToman, toFa } from "@/lib/format";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -18,19 +18,6 @@ import {
 export const Route = createFileRoute("/_authenticated/admin/coupons")({
   component: AdminCoupons,
 });
-
-type AdminCoupon = {
-  id: string;
-  code: string;
-  percent_off: number | null;
-  amount_off: number | null;
-  min_subtotal: number;
-  max_uses: number | null;
-  max_uses_per_user: number;
-  used_count: number;
-  expires_at: string | null;
-  active: boolean;
-};
 
 const FILTERS = [
   { key: "all", label: "همه" },
@@ -71,7 +58,9 @@ function CouponCard({ coupon, onEdit }: { coupon: AdminCoupon; onEdit: (c: Admin
     ? Math.min(100, Math.round((coupon.used_count / coupon.max_uses) * 100))
     : 0;
   const valueLabel = coupon.percent_off
-    ? `${toFa(coupon.percent_off)}٪ تخفیف`
+    ? coupon.max_discount_cap
+      ? `${toFa(coupon.percent_off)}٪ تخفیف، حداکثر ${formatToman(coupon.max_discount_cap)} تومان`
+      : `${toFa(coupon.percent_off)}٪ تخفیف`
     : `${formatToman(coupon.amount_off ?? 0)} تومان تخفیف`;
 
   const copyCode = async () => {
@@ -186,6 +175,7 @@ type FormState = {
   percent_off: string;
   amount_off: string;
   min_subtotal: string;
+  max_discount_cap: string; // percent coupons only; "" = uncapped
   max_uses: string;
   max_uses_per_user: string;
   expires_at: string; // date input (yyyy-mm-dd)
@@ -196,6 +186,7 @@ const EMPTY_FORM: FormState = {
   percent_off: "",
   amount_off: "",
   min_subtotal: "",
+  max_discount_cap: "",
   max_uses: "",
   max_uses_per_user: "1",
   expires_at: "",
@@ -226,6 +217,7 @@ function CouponDialog({
             percent_off: editing.percent_off ? String(editing.percent_off) : "",
             amount_off: editing.amount_off ? String(editing.amount_off) : "",
             min_subtotal: editing.min_subtotal ? String(editing.min_subtotal) : "",
+            max_discount_cap: editing.max_discount_cap ? String(editing.max_discount_cap) : "",
             max_uses: editing.max_uses ? String(editing.max_uses) : "",
             max_uses_per_user: String(editing.max_uses_per_user ?? 1),
             expires_at: editing.expires_at ? editing.expires_at.slice(0, 10) : "",
@@ -250,6 +242,8 @@ function CouponDialog({
       const minSubtotal = form.min_subtotal ? Number(form.min_subtotal) : 0;
       const perUser = form.max_uses_per_user ? Number(form.max_uses_per_user) : 1;
       const maxUses = form.max_uses ? Number(form.max_uses) : null;
+      // the ceiling only means something for a percent coupon (AB-BE-03)
+      const cap = percent !== null && form.max_discount_cap ? Number(form.max_discount_cap) : null;
       const expires = form.expires_at
         ? new Date(`${form.expires_at}T23:59:59`).toISOString()
         : null;
@@ -258,7 +252,9 @@ function CouponDialog({
         // its clear encoding (expiry "" → none, total cap 0 → unlimited), and only
         // the chosen kind is sent — the backend clears the other one
         await api.adminUpdateCoupon(editing.id, {
-          ...(percent !== null ? { percent_off: percent } : { amount_off: amount }),
+          ...(percent !== null
+            ? { percent_off: percent, max_discount_cap: cap ?? 0 } // 0 clears it
+            : { amount_off: amount }),
           min_subtotal: minSubtotal,
           max_uses: maxUses ?? 0,
           max_uses_per_user: perUser,
@@ -270,6 +266,7 @@ function CouponDialog({
           percent_off: percent,
           amount_off: amount,
           min_subtotal: minSubtotal,
+          max_discount_cap: cap,
           max_uses: maxUses,
           max_uses_per_user: perUser,
           expires_at: expires,
@@ -334,6 +331,18 @@ function CouponDialog({
                 onChange={set("amount_off")}
                 placeholder="50000"
                 className="h-9 rounded-md border border-input bg-background px-2"
+              />
+            </label>
+            <label className="grid gap-1 text-xs">
+              <span className="text-muted-foreground">سقف تخفیف درصدی (تومان)</span>
+              <input
+                type="number"
+                min={1}
+                value={form.max_discount_cap}
+                onChange={set("max_discount_cap")}
+                disabled={!form.percent_off}
+                placeholder={form.percent_off ? "بدون سقف" : "فقط برای کد درصدی"}
+                className="h-9 rounded-md border border-input bg-background px-2 disabled:cursor-not-allowed disabled:opacity-50"
               />
             </label>
             <label className="grid gap-1 text-xs">
