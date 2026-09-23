@@ -512,7 +512,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "F5.11",
+    "agent_start_task": "F5.17",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -1055,7 +1055,7 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "F5.11",
       "title": "/shop leaks invalid URL params to the API",
       "priority": "P3",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "frontend",
       "depends_on": [],
       "blocks": [],
@@ -1063,7 +1063,10 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "frontend-tasks.md",
       "discovered_as": "NEW-ABFE05-2",
       "discovered_during": "AB-FE-05",
-      "scope": "shop.tsx validateSearch omits rejected keys, so the router's merge over the parent's raw search passes ?page=abc / ?category=hack to GET /products (422 / wrong filter); return rejected keys as explicit undefined, as admin.products.tsx does."
+      "scope": "shop.tsx validateSearch omits rejected keys, so the router's merge over the parent's raw search passes ?page=abc / ?category=hack to GET /products (422 / wrong filter); return rejected keys as explicit undefined, as admin.products.tsx does.",
+      "audit": "plan/audit/2026-09-23-f511-shop-invalid-url-params.md",
+      "verification_level": "browser tested",
+      "completed": "2026-09-23"
     },
     {
       "id": "F5.12",
@@ -1393,12 +1396,12 @@ changes to the file shipped in sequence; the collision is closed.
   ],
   "counts": {
     "total_executable": 56,
-    "done": 41,
-    "open": 15,
+    "done": 42,
+    "open": 14,
     "P0": 0,
     "P1": 0,
     "P2": 0,
-    "P3": 15,
+    "P3": 14,
     "blocked": 0,
     "dropped": 2,
     "obsolete": 1,
@@ -3186,7 +3189,10 @@ and a browser re-run of the AB-FE-05 script as order_manager.
 ## F5.11 — `/shop` leaks invalid URL params to the API
 
 * **Layer:** Frontend
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-f511-shop-invalid-url-params.md`](audit/2026-09-23-f511-shop-invalid-url-params.md)
+* **Verification level:** browser tested
+* **Delivered:** `/shop`'s `validateSearch` returns every key, a rejected one as explicit `undefined`, so invalid `page` / `category` / `sort` / `badge` / `availability` / `maxPrice` (and the list/flag keys) never reach the API. Browser 8/8 (negative control: 6 fail on the old file), F5.8 suite 23/23. Browser tested.
 * **Priority:** P3
 * **Batch:** D
 * **Dependencies:** none
@@ -3655,7 +3661,7 @@ AB-FE-01  (DONE 2026-09-23)
 AB-FE-04  (DONE 2026-09-23)
 F3.5b  (DONE 2026-09-23)
 F5.10  (DONE 2026-09-23)
-F5.11
+F5.11  (DONE 2026-09-23)
 F5.12  (DONE 2026-09-23)
 F5.13  (DONE 2026-09-23)
 F5.14  (DONE 2026-09-22)
@@ -3729,13 +3735,13 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**15** open · **41** DONE · 56 executable in total.
+**14** open · **42** DONE · 56 executable in total.
 29 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
 
-**15** (`B2.1a` additionally needs real provider credentials from the user)
+**14** (`B2.1a` additionally needs real provider credentials from the user)
 
 ### Blocked
 
@@ -3773,8 +3779,8 @@ D1–D9 are resolved.
 | P0        |         0 |
 | P1        |         0 |
 | P2        |         0 |
-| P3        |        15 |
-| **Total** |    **15** |
+| P3        |        14 |
+| **Total** |    **14** |
 
 Generated from the JSON index on 2026-09-23.
 
@@ -3890,11 +3896,11 @@ were freshly executed.
 ## START HERE
 
 ```text
-F5.11
+F5.17
 ```
 
-41 of 56 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. next P3 (Batch D) — /shop leaks invalid URL params to the API
+42 of 56 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. next P3 (Batch D) — admin coupons page is not route-split
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -3998,11 +4004,11 @@ Reconciliation date:
 Current state:
 
 ```text
-15 remaining implementation units (B2.1a, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B2.2b, F5.11, B5.1e, F5.17, B6.18, F5.19, B2.5a)
-41 completed implementation units
+14 remaining implementation units (B2.1a, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B2.2b, B5.1e, F5.17, B6.18, F5.19, B2.5a)
+42 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = F5.11
+NEXT = F5.17
 ```

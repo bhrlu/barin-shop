@@ -2830,3 +2830,14 @@ Verification: browser 11/11 (customer 0 tabs, support 3, order_manager 7, admin 
 desktop and mobile). The old code showed the customer 3 tabs. Level: *browser
 tested*.
 → audit: [2026-09-23-f510-no-admin-tabs-for-non-staff.md](audit/2026-09-23-f510-no-admin-tabs-for-non-staff.md)
+
+## 2026-09-23 — F5.11 /shop ignores invalid URL params
+
+`validateSearch` now returns every key, a rejected one as an explicit `undefined`.
+The router merges validated search over raw search, so omitted keys used to leak.
+`?page=abc`, `?sort=evil` and `?maxPrice=-5` were 422s with an empty page;
+`?category=hack`, `?badge=zzz` and `?availability=never` filtered to nothing.
+
+Verification: browser 8/8 (the old file fails 6), F5.8 suite 23/23. Level:
+*browser tested*.
+→ audit: [2026-09-23-f511-shop-invalid-url-params.md](audit/2026-09-23-f511-shop-invalid-url-params.md)

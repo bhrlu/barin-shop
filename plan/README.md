@@ -99,7 +99,8 @@ plan/
     ├── 2026-09-23-b615-coupon-create-one-kind.md
     ├── 2026-09-23-b51c-audit-log-admin-id-422.md
     ├── 2026-09-23-b620-smoke-contact-inbox-deterministic.md
-    └── 2026-09-23-f510-no-admin-tabs-for-non-staff.md
+    ├── 2026-09-23-f510-no-admin-tabs-for-non-staff.md
+    └── 2026-09-23-f511-shop-invalid-url-params.md
 ```
 
 The two `ADMIN-*.md` files hold the back-office task split (epics [BE-01]… and

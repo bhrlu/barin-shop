@@ -419,12 +419,14 @@ conflict (DESIGN_SYSTEM.md §5).
   the shared `Pager`, skeleton/error/empty states, and an out-of-range page →
   last page. Save, delete and variant changes invalidate it. Browser tested.
   → audit: [2026-09-22-abfe05-admin-products-pagination.md](audit/2026-09-22-abfe05-admin-products-pagination.md)
-- [ ] **F5.11 `/shop` leaks invalid URL params to the API** (`NEW-ABFE05-2`,
+- [x] **F5.11 `/shop` leaks invalid URL params to the API** (`NEW-ABFE05-2`,
   discovered during AB-FE-05) — TanStack Router merges a route's validated search
   over the parent's raw one, so keys `validateSearch` *omits* survive raw:
   `/shop?page=abc` sends `page=abc` (422, retried 3×, no products) and
   `?category=hack` filters on it. Return rejected keys as explicit `undefined`
   (the AB-FE-05 fix in `admin.products.tsx`).
+  Done (2026-09-23): `/shop`'s `validateSearch` returns every key, a rejected one as explicit `undefined`, so invalid `page` / `category` / `sort` / `badge` / `availability` / `maxPrice` (and the list/flag keys) never reach the API. Browser 8/8 (negative control: 6 fail on the old file), F5.8 suite 23/23. Browser tested.
+  → audit: [2026-09-23-f511-shop-invalid-url-params.md](audit/2026-09-23-f511-shop-invalid-url-params.md)
 - [x] **F5.12 Cart provider loads the whole catalogue on every route**
   (`NEW-ABFE05-3`, discovered during AB-FE-05) — `CartProvider` in `__root.tsx`
   runs `catalogQuery` (all products, `include_inactive=true`) on every page, admin

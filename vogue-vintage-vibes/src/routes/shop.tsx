@@ -39,18 +39,20 @@ const SORTS: { key: ProductSort; label: string }[] = [
   { key: "price_desc", label: "گران‌ترین" },
 ];
 
+/** `| undefined` on purpose: `validateSearch` returns every key, a rejected one as
+ * `undefined` (F5.11 — see there). */
 type ShopSearch = {
-  category?: CategoryId;
-  size?: string[];
-  color?: string[];
-  maxPrice?: number;
-  sort?: ProductSort;
-  tag?: string;
-  badge?: ProductBadge;
-  availability?: Availability;
-  onSale?: boolean;
-  q?: string;
-  page?: number;
+  category?: CategoryId | undefined;
+  size?: string[] | undefined;
+  color?: string[] | undefined;
+  maxPrice?: number | undefined;
+  sort?: ProductSort | undefined;
+  tag?: string | undefined;
+  badge?: ProductBadge | undefined;
+  availability?: Availability | undefined;
+  onSale?: boolean | undefined;
+  q?: string | undefined;
+  page?: number | undefined;
 };
 
 const str = (value: unknown): string | undefined =>
@@ -83,22 +85,26 @@ export const Route = createFileRoute("/shop")({
     const maxPrice = Number(search["maxPrice"]);
     const size = list(search["size"]);
     const color = list(search["color"]);
+    const page = Number(search["page"]);
+    // F5.11: every key is returned, a rejected value as an explicit `undefined`. The
+    // router merges this route's validated search over the raw one, so a key that is
+    // merely omitted keeps its raw value (`?page=abc` reached the API as a 422,
+    // `?category=hack` filtered on it) — the AB-FE-05 fix in admin.products.tsx.
     return {
-      ...(categories.some((c) => c.id === category) ? { category: category as CategoryId } : {}),
-      ...(size ? { size } : {}),
-      ...(color ? { color } : {}),
-      ...(Number.isFinite(maxPrice) && maxPrice > 0 ? { maxPrice } : {}),
-      ...(sort && SORTS.some((s) => s.key === sort) ? { sort: sort as ProductSort } : {}),
-      ...(str(search["tag"]) ? { tag: str(search["tag"]) as string } : {}),
-      ...(badge && BADGES.includes(badge as ProductBadge) ? { badge: badge as ProductBadge } : {}),
-      ...(availability && AVAILABILITIES.includes(availability as Availability)
-        ? { availability: availability as Availability }
-        : {}),
-      ...(search["onSale"] === true || search["onSale"] === "true" ? { onSale: true } : {}),
-      ...(str(search["q"]) ? { q: str(search["q"]) as string } : {}),
-      ...(search["page"] != null && Number(search["page"]) > 0
-        ? { page: Number(search["page"]) }
-        : {}),
+      category: categories.some((c) => c.id === category) ? (category as CategoryId) : undefined,
+      size,
+      color,
+      maxPrice: Number.isFinite(maxPrice) && maxPrice > 0 ? maxPrice : undefined,
+      sort: sort && SORTS.some((s) => s.key === sort) ? (sort as ProductSort) : undefined,
+      tag: str(search["tag"]),
+      badge: badge && BADGES.includes(badge as ProductBadge) ? (badge as ProductBadge) : undefined,
+      availability:
+        availability && AVAILABILITIES.includes(availability as Availability)
+          ? (availability as Availability)
+          : undefined,
+      onSale: search["onSale"] === true || search["onSale"] === "true" ? true : undefined,
+      q: str(search["q"]),
+      page: Number.isInteger(page) && page > 0 ? page : undefined,
     };
   },
   head: () => ({
