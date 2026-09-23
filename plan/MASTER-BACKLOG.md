@@ -507,7 +507,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "B5.4b",
+    "agent_start_task": "B6.9a",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -991,7 +991,7 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "B5.4b",
       "title": "include_inactive follows is_admin, not the catalog capability",
       "priority": "P2",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "backend",
       "depends_on": [],
       "blocks": [],
@@ -999,7 +999,10 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "backend-tasks.md",
       "discovered_as": "NEW-ABFE05-1",
       "discovered_during": "AB-FE-05",
-      "scope": "GET /products honours include_inactive only for admin/super_admin; gate it on has_capability(roles, \"catalog\") so order_manager sees and can re-activate inactive products in /admin/products; add a test."
+      "scope": "GET /products honours include_inactive only for admin/super_admin; gate it on has_capability(roles, \"catalog\") so order_manager sees and can re-activate inactive products in /admin/products; add a test.",
+      "audit": "plan/audit/2026-09-23-b54b-include-inactive-catalog.md",
+      "verification_level": "browser tested (+ integration)",
+      "completed": "2026-09-23"
     },
     {
       "id": "F5.11",
@@ -1161,6 +1164,20 @@ changes to the file shipped in sequence; the collision is closed.
       "discovered_as": "NEW-F516-1",
       "discovered_during": "F5.16",
       "scope": "CouponCreate._not_both is a no-op stub, so the API stores a coupon with both percent_off and amount_off (compute_discount then ignores the amount) or with neither (discount 0). Validate exactly one kind on create (422, Persian message); pytest; the admin dialog already blocks it."
+    },
+    {
+      "id": "B6.16",
+      "title": "Startup DDL deadlocks with in-flight requests on every restart",
+      "priority": "P2",
+      "status": "TODO",
+      "layer": "backend_db",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "C",
+      "source": "backend-tasks.md",
+      "discovered_as": "NEW-B54B-1",
+      "discovered_during": "B5.4b",
+      "scope": "startup_ddl() runs ALTER TABLE ... ADD COLUMN IF NOT EXISTS (ACCESS EXCLUSIVE even when the column exists), CREATE INDEX IF NOT EXISTS and backfill UPDATEs on hot tables at every boot and in every seed job; a restart under traffic blocks and can deadlock in-flight queries (reproduced: DeadlockDetectedError -> 500 on GET /products). Check the catalog and run only missing DDL, serialize with an advisory lock, bound with lock_timeout; keep idempotent; Rule 14 clean-env proof."
     }
   ],
   "excluded": [
@@ -1181,8 +1198,8 @@ changes to the file shipped in sequence; the collision is closed.
     }
   ],
   "counts": {
-    "total_executable": 46,
-    "done": 19,
+    "total_executable": 47,
+    "done": 20,
     "open": 27,
     "P0": 0,
     "P1": 0,
@@ -2306,6 +2323,43 @@ login still works. Smoke + clean environment (DDL).
 
 ---
 
+## B6.16 — Startup DDL deadlocks with in-flight requests on every restart
+
+* **Layer:** Backend (DB / startup)
+* **Status:** TODO
+* **Priority:** P2
+* **Batch:** C
+* **Dependencies:** none
+* **Discovered as:** `NEW-B54B-1` during `B5.4b` — legacy discovery ID only;
+  `B6.16` is the executable ID.
+* **Source:** `backend-tasks.md` B6.16
+
+### Problem
+
+`startup_ddl()` runs on every backend boot (and in every `db-init` seed job) and
+issues `ALTER TABLE … ADD COLUMN IF NOT EXISTS` on hot tables (`products`, `orders`,
+`order_items`, `payments`, `coupons`, `refund_requests`, `users`), plus index creation
+and backfill `UPDATE`s. Postgres takes an ACCESS EXCLUSIVE lock for the `ALTER` even
+when the column exists, so a restart under traffic blocks every query on those tables
+and can deadlock with them — reproduced during B5.4b:
+`DeadlockDetectedError` between a `GET /products` (AccessShareLock) and the booting
+backend's DDL (AccessExclusiveLock), answered as a 500.
+
+### Required implementation
+
+Make the steady-state boot lock-free: check the catalog (`information_schema` /
+`pg_attribute` / `pg_indexes`) and run each `ALTER` / `CREATE INDEX` / backfill only
+when it is actually missing; serialize the DDL between processes (advisory lock) and
+bound it with `SET LOCAL lock_timeout`. Keep `startup_ddl()` idempotent and callable
+from the seeds (Rule 14).
+
+### Verification
+
+A test/probe that runs `startup_ddl()` repeatedly while querying `/products` and sees no
+deadlock / no 500; fresh-DB convergence via `down -v && up -d --build` (Rule 14).
+
+---
+
 ## B6.13 — Documented `pytest -q` silently skips every live-DB test
 
 * **Layer:** Backend tests
@@ -2683,7 +2737,10 @@ AB-FE-02 browser flow.
 ## B5.4b — `include_inactive` follows `is_admin`, not the `catalog` capability
 
 * **Layer:** Backend
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-b54b-include-inactive-catalog.md`](audit/2026-09-23-b54b-include-inactive-catalog.md)
+* **Verification level:** browser tested (+ integration)
+* **Delivered:** `include_inactive=true` now follows `has_capability(roles, "catalog")`, so order_manager sees (and can re-activate) inactive products. 7 tests (negative control), browser 3/3. Found on the way: B6.16.
 * **Priority:** P2
 * **Batch:** C
 * **Dependencies:** none
@@ -3003,7 +3060,7 @@ AB-BE-02
 B5.1c
 B5.4a  (DONE 2026-09-23)
 B2.2b
-B5.4b
+B5.4b  (DONE 2026-09-23)
 B5.1d  (DONE 2026-09-23)
 B6.13  (DONE 2026-09-23)
 B6.14  (DONE 2026-09-23)
@@ -3093,8 +3150,8 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**27** open · **19** DONE · 46 executable in total.
-19 units were added by discovery during earlier tasks (see
+**27** open · **20** DONE · 47 executable in total.
+20 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
@@ -3254,11 +3311,11 @@ were freshly executed.
 ## START HERE
 
 ```text
-B5.4b
+B6.9a
 ```
 
-19 of 46 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. **`B5.4b`** (`include_inactive` follows `is_admin`, not the `catalog` capability; P2, Batch C) is next.
+20 of 47 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. **`B6.9a`** (narrow the remaining bare `except Exception` → 409 handlers; P2, Batch E) is next.
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -3362,11 +3419,11 @@ Reconciliation date:
 Current state:
 
 ```text
-27 remaining implementation units (B2.1a, B5.1b, AB-BE-01, AB-BE-02, F5.8, F5.7, F4.3, AB-FE-01, AB-FE-03, AB-FE-04, F3.5b, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B6.9a, B5.1c, F5.10, B2.2b, B5.4b, F5.11, F5.12, B6.15)
-19 completed implementation units
+27 remaining implementation units (B2.1a, B5.1b, AB-BE-01, AB-BE-02, F5.8, F5.7, F4.3, AB-FE-01, AB-FE-03, AB-FE-04, F3.5b, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B6.9a, B5.1c, F5.10, B2.2b, F5.11, F5.12, B6.15, B6.16)
+20 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = B5.4b
+NEXT = B6.9a
 ```

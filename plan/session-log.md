@@ -2369,3 +2369,17 @@ admins demoting each other cannot both pass. 9 tests (negative control), pytest 
 smoke 229/0. Level: *integration tested*. "No holder left" is pinned by pure tests
 only (the dev DB always keeps the seeded admin).
 → audit: [2026-09-23-b54a-role-lockout-guard.md](audit/2026-09-23-b54a-role-lockout-guard.md)
+
+## 2026-09-23 — B5.4b include_inactive follows the catalog capability
+
+`GET /products?include_inactive=true` now follows `has_capability(roles, "catalog")`
+instead of `is_admin`, so an order_manager sees and can re-activate inactive products.
+7 tests (negative control), pytest 186, smoke 229/0, browser 3/3. Level: *browser
+tested*.
+
+**Found and traced** — a one-off 500 in the focused run was reproduced by forcing
+backend hot-reloads mid-test and captured: `startup_ddl()`'s `ALTER TABLE … IF NOT
+EXISTS` takes ACCESS EXCLUSIVE locks on every boot and deadlocks with in-flight
+queries → recorded as **B6.16** (P2). The F5.16 audit's "unexplained" error now points
+to it.
+→ audit: [2026-09-23-b54b-include-inactive-catalog.md](audit/2026-09-23-b54b-include-inactive-catalog.md)

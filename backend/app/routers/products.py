@@ -43,6 +43,7 @@ from app.services.audit import record_audit
 from app.services.catalog_filters import split_multi
 from app.services.pagination import apply_limit_offset, clamp_page_size, count_rows, envelope
 from app.services.recommendations import CO_VOTES_SQL
+from app.services.roles import has_capability
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["products"])
@@ -127,7 +128,7 @@ async def list_products(
     page_size: int = Query(default=0, ge=0, le=100),
     user: OptionalUser = None,
 ) -> list[ProductOut] | dict:
-    """Public list. Admins may pass include_inactive=true with a valid token.
+    """Public list. Staff with the `catalog` capability may pass include_inactive=true.
 
     Bare list by default; pass `page` (and optional `page_size`) to get the
     `{items, total, page, page_size, pages}` envelope (F2.5)."""
@@ -135,8 +136,10 @@ async def list_products(
     conditions: list[str] = []
     params: dict[str, Any] = {}
 
-    is_admin = user is not None and getattr(user, "is_admin", False)
-    if not is_admin or not include_inactive:
+    # B5.4b: whoever may edit the catalog (order_manager included) must also see
+    # the inactive rows — it used to be admin/super_admin only (`is_admin`)
+    can_see_inactive = user is not None and has_capability(user.roles, "catalog")
+    if not can_see_inactive or not include_inactive:
         conditions.append("p.active = true")
 
     if category:

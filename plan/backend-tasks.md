@@ -299,11 +299,13 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   caller's own row, but that is UX only.
   Done (2026-09-23): 409 when a role change would take role management from the caller or leave nobody holding it; `role_lockout_reason` in `services/roles.py`, serialized by an advisory lock. 9 tests (negative control: self-demotion fails on the old code).
   → audit: [2026-09-23-b54a-role-lockout-guard.md](audit/2026-09-23-b54a-role-lockout-guard.md)
-- [ ] **B5.4b `include_inactive` follows `is_admin`, not the `catalog` capability**
+- [x] **B5.4b `include_inactive` follows `is_admin`, not the `catalog` capability**
   (`NEW-ABFE05-1`, discovered during AB-FE-05) — `GET /products` shows inactive
   products only to admin/super_admin, so an `order_manager` (who may edit the
   catalogue) never sees inactive products in `/admin/products` and cannot
   re-activate them. Gate it on `has_capability(roles, "catalog")`, with a test.
+  Done (2026-09-23): `include_inactive=true` now follows `has_capability(roles, "catalog")`, so order_manager sees (and can re-activate) inactive products. 7 tests (negative control), browser 3/3. Found on the way: B6.16.
+  → audit: [2026-09-23-b54b-include-inactive-catalog.md](audit/2026-09-23-b54b-include-inactive-catalog.md)
 
 ## Audit follow-ups (2026-09-22 full-stack audit)
 
@@ -372,6 +374,11 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   Done (2026-09-23): `users.password_changed_at` + `_session_revoked()` in
   `app/auth.py` (whole-second cutoff). 6 tests, two-browser check, clean env.
   → audit: [2026-09-23-b614-reset-ends-sessions.md](audit/2026-09-23-b614-reset-ends-sessions.md)
+- [ ] **B6.16 Startup DDL deadlocks with in-flight requests on every restart**
+  (`NEW-B54B-1`, discovered during B5.4b) — `startup_ddl()`'s `ALTER TABLE … ADD
+  COLUMN IF NOT EXISTS` takes ACCESS EXCLUSIVE locks on hot tables at every boot and
+  in every seed job; reproduced a `DeadlockDetectedError` → 500 on `GET /products`.
+  Run only missing DDL (catalog check), advisory lock + `lock_timeout`; Rule 14.
 - [ ] **B6.15 `POST /coupons` accepts both discount kinds or neither** (`NEW-F516-1`,
   discovered during F5.16) — `CouponCreate._not_both` is a no-op stub; validate
   exactly one kind on create (422). The admin dialog already blocks both cases.
