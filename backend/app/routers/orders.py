@@ -187,7 +187,7 @@ async def patch_order(
         # like POST /cancel: cancel_order_tx flips the status AND restores the
         # stock in the same transaction (spec [BE-05]).
         try:
-            await cancel_order_tx(session, str(order_id), before["status"])
+            await cancel_order_tx(session, str(order_id), before["status"], user.id)
         except CancelError as exc:  # defensive: the transition map already gated it
             raise HTTPException(status.HTTP_409_CONFLICT, exc.message) from exc
         did_cancel = True
@@ -271,7 +271,7 @@ async def cancel_order(order_id: UUID, user: CurrentUser, session: DbSession) ->
     try:
         # flip + stock restore in ONE transaction (spec [BE-05]) — checkout's
         # decrement is transactional, so the give-back must be too
-        await cancel_order_tx(session, str(order_id), order["status"])
+        await cancel_order_tx(session, str(order_id), order["status"], user.id)
     except CancelError as exc:
         await session.rollback()
         if exc.already_cancelled:

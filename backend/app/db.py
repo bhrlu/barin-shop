@@ -141,6 +141,55 @@ CATALOG_DDL = [
         "CREATE UNIQUE INDEX IF NOT EXISTS product_variants_sku_key "
         "ON public.product_variants(sku) WHERE sku IS NOT NULL"
     ),
+    # AB-BE-01 ([BE-01] `inventory_logs`): the stock ledger — one row per stock
+    # movement, written by `services/inventory_log.py` only. No foreign keys, on
+    # purpose: a row keeps the product / variant / order / user ids it was written with
+    # even after those are deleted (history), and a deletion never has to touch the
+    # ledger — FK `SET NULL` cascades from one statement deleting a user and, through
+    # it, their orders collided on the same row. `variant_id` NULL = the product's
+    # aggregate stock.
+    """
+    CREATE TABLE IF NOT EXISTS public.inventory_logs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      product_id TEXT NOT NULL,
+      variant_id UUID,
+      order_id UUID,
+      change_amount INTEGER NOT NULL CHECK (change_amount <> 0),
+      reason TEXT NOT NULL
+        CHECK (reason IN ('purchase', 'restock', 'return', 'manual_adjustment')),
+      created_by UUID,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+    """,
+    (
+        "CREATE INDEX IF NOT EXISTS inventory_logs_product_idx "
+        "ON public.inventory_logs(product_id, created_at DESC)"
+    ),
+    (
+        "CREATE INDEX IF NOT EXISTS inventory_logs_variant_idx "
+        "ON public.inventory_logs(variant_id)"
+    ),
+    "CREATE INDEX IF NOT EXISTS inventory_logs_order_idx ON public.inventory_logs(order_id)",
+    # strictly append-only (like audit_logs, B5.1b, but with nothing to null): every
+    # UPDATE, DELETE and TRUNCATE is refused
+    """
+    CREATE OR REPLACE FUNCTION public.inventory_logs_append_only() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+      RAISE EXCEPTION 'inventory_logs is append-only (% refused)', TG_OP
+        USING ERRCODE = 'insufficient_privilege';
+    END $$
+    """,
+    (
+        "CREATE TRIGGER inventory_logs_no_update_delete BEFORE UPDATE OR DELETE "
+        "ON public.inventory_logs FOR EACH ROW "
+        "EXECUTE FUNCTION public.inventory_logs_append_only()"
+    ),
+    (
+        "CREATE TRIGGER inventory_logs_no_truncate BEFORE TRUNCATE "
+        "ON public.inventory_logs FOR EACH STATEMENT "
+        "EXECUTE FUNCTION public.inventory_logs_append_only()"
+    ),
     # which variant an order line took its stock from (B6.8). NULL on legacy
     # rows and on products without a variant matrix — cancellation then only
     # restores the product aggregate. ON DELETE SET NULL so removing a variant

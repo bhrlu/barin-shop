@@ -45,6 +45,7 @@ from app.schemas import (
 from app.services.audit import record_audit
 from app.services.catalog_filters import split_multi
 from app.services.db_errors import is_unique_violation, violated_constraint
+from app.services.inventory_log import log_stock_change
 from app.services.pagination import apply_limit_offset, clamp_page_size, count_rows, envelope
 from app.services.recommendations import CO_VOTES_SQL
 from app.services.roles import has_capability
@@ -432,6 +433,14 @@ async def create_variant(
                 "color_hex": body.color_hex,
             },
         )
+        await log_stock_change(
+            session,
+            product_id=product_id,
+            variant_id=row["id"],
+            change=body.stock,
+            reason="restock",
+            actor_id=user.id,
+        )
         await session.commit()
     except IntegrityError as exc:
         # only the real duplicate (UNIQUE product_id, size, color) is a 409;
@@ -464,7 +473,10 @@ async def update_variant(
 
     before = (
         await session.execute(
-            text(f"SELECT {_VARIANT_COLS} FROM public.product_variants WHERE id = :vid"),
+            text(
+                f"SELECT {_VARIANT_COLS} FROM public.product_variants "
+                "WHERE id = :vid FOR UPDATE"
+            ),
             {"vid": str(variant_id)},
         )
     ).mappings().first()
@@ -488,6 +500,15 @@ async def update_variant(
                 old_values={k: before[k] for k in params if k != "vid"},
                 new_values={k: row[k] for k in params if k != "vid"},
             )
+            if "stock" in params:
+                await log_stock_change(
+                    session,
+                    product_id=row["product_id"],
+                    variant_id=variant_id,
+                    change=int(row["stock"]) - int(before["stock"]),
+                    reason="manual_adjustment",
+                    actor_id=user.id,
+                )
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
@@ -548,6 +569,10 @@ async def create_product(body: ProductIn, session: DbSession, user: StaffCatalog
             entity_id=pid,
             new_values={"name": body.name, "price": body.price, "stock": body.stock},
         )
+        # AB-BE-01: the opening stock is the product's first ledger entry
+        await log_stock_change(
+            session, product_id=pid, change=body.stock, reason="restock", actor_id=user.id
+        )
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
@@ -569,9 +594,14 @@ async def update_product(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "چیزی برای به‌روزرسانی نیست")
 
     params["pid"] = product_id
+    # locked: a checkout between this read and the UPDATE would make the ledger's
+    # delta (new − old) wrong (AB-BE-01)
     before = (
         await session.execute(
-            text("SELECT name, price, stock, active FROM public.products WHERE id = :pid"),
+            text(
+                "SELECT name, price, stock, active FROM public.products "
+                "WHERE id = :pid FOR UPDATE"
+            ),
             {"pid": product_id},
         )
     ).mappings().first()
@@ -596,6 +626,14 @@ async def update_product(
                     k: params[k] for k in tracked if k in params
                 },
             )
+            if "stock" in params:
+                await log_stock_change(
+                    session,
+                    product_id=product_id,
+                    change=int(params["stock"]) - int(before["stock"]),
+                    reason="manual_adjustment",
+                    actor_id=user.id,
+                )
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()

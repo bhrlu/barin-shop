@@ -8,7 +8,15 @@ from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import text
 
-from app.auth import DbSession, StaffAudit, StaffOrders, StaffRefunds, StaffStats, StaffUsers
+from app.auth import (
+    DbSession,
+    StaffAudit,
+    StaffCatalog,
+    StaffOrders,
+    StaffRefunds,
+    StaffStats,
+    StaffUsers,
+)
 from app.services.audit import record_audit
 from app.services.catalog_filters import split_multi
 from app.services.pagination import clamp_page_size, count_rows, envelope
@@ -432,6 +440,62 @@ async def all_orders(
     if page > 0:
         return envelope(items, total, page, page_size)
     return items
+
+
+@router.get("/inventory/logs")
+async def inventory_logs(
+    user: StaffCatalog,
+    session: DbSession,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=0, ge=0, le=100),
+    product_id: str | None = Query(default=None, max_length=100),
+    variant_id: UUID | None = None,
+    order_id: UUID | None = None,
+    reason: Literal["purchase", "restock", "return", "manual_adjustment"] | None = None,
+) -> dict:
+    """The stock ledger (AB-BE-01), newest first, always as a page envelope. Each row is
+    one movement; `variant_id` NULL means the product's aggregate stock."""
+    conditions: list[str] = []
+    params: dict = {}
+    for column, value in (
+        ("l.product_id", product_id),
+        ("l.variant_id", variant_id),
+        ("l.order_id", order_id),
+        ("l.reason", reason),
+    ):
+        if value is not None:
+            key = column.split(".")[1]
+            conditions.append(f"{column} = :{key}")
+            params[key] = str(value)
+    base_sql = (
+        "SELECT l.id, l.product_id, p.name AS product_name, l.variant_id, "
+        "v.size, v.color, l.order_id, o.order_number, l.change_amount, l.reason, "
+        "l.created_by, u.email AS created_by_email, l.created_at "
+        "FROM public.inventory_logs l "
+        "LEFT JOIN public.products p ON p.id = l.product_id "
+        "LEFT JOIN public.product_variants v ON v.id = l.variant_id "
+        "LEFT JOIN public.orders o ON o.id = l.order_id "
+        "LEFT JOIN public.users u ON u.id = l.created_by"
+    )
+    if conditions:
+        base_sql += " WHERE " + " AND ".join(conditions)
+    page, page_size = clamp_page_size(page, page_size, default_size=25)
+    total = await count_rows(session, base_sql, params)
+    sql = base_sql + " ORDER BY l.created_at DESC, l.id"
+    sql += f" LIMIT {page_size} OFFSET {(page - 1) * page_size}"
+    rows = (await session.execute(text(sql), params)).mappings().all()
+    items = [
+        {
+            **dict(r),
+            "id": str(r["id"]),
+            "variant_id": str(r["variant_id"]) if r["variant_id"] else None,
+            "order_id": str(r["order_id"]) if r["order_id"] else None,
+            "created_by": str(r["created_by"]) if r["created_by"] else None,
+            "created_at": _iso(r["created_at"]),
+        }
+        for r in rows
+    ]
+    return envelope(items, total, page, page_size)
 
 
 @router.get("/inventory")

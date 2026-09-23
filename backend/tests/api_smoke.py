@@ -496,6 +496,21 @@ def main() -> int:
             and stock_after == stock_before + 1,
             f"before={stock_before} after={stock_after}",
         )
+        # AB-BE-01: the live checkout + cancel left a purchase and a return that net to 0
+        ledger = call("GET", f"/admin/inventory/logs?order_id={sm_order_id}", admin).json()
+        moves = [(e["reason"], e["change_amount"]) for e in ledger.get("items", [])]
+        check(
+            "inventory ledger: purchase + return for the cancelled order net to zero",
+            sorted(r for r, _ in moves) == ["purchase", "return"]
+            and sum(c for _, c in moves) == 0,
+            f"{moves}",
+        )
+        hidden = call("GET", "/admin/inventory/logs", support)
+        check(
+            "inventory ledger is catalog staff only (support → 403)",
+            hidden is not None and hidden.status_code == 403,
+            f"{hidden.status_code if hidden else 0}",
+        )
         revived = call("PATCH", f"/orders/{sm_order_id}", admin, json={"status": "processing"})
         check(
             "cancelled order cannot be revived (409)",

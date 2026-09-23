@@ -2722,3 +2722,35 @@ Verification:
 Done before AB-BE-01 so the ledger never records a double return.
 Level: *integration tested + live race probe*.
 → audit: [2026-09-23-b619-cancel-restores-stock-once.md](audit/2026-09-23-b619-cancel-restores-stock-once.md)
+
+## 2026-09-23 — AB-BE-01 inventory ledger
+
+`inventory_logs` is written only by `services/inventory_log.log_stock_change`, in the
+transaction of each movement:
+
+- checkout → `purchase` (−qty per line);
+- cancellation → `return` (+qty, attributed to whoever cancelled), so an order nets
+  to zero;
+- new product / variant → `restock`;
+- staff stock edit → `manual_adjustment`, the delta. Both PATCH paths now lock the
+  row first so the delta is exact.
+
+`GET /admin/inventory/logs` serves it to catalog staff: page envelope, filters,
+joined names.
+
+Design change mid-task: FK `SET NULL` links made one `DELETE FROM users` (cascading
+to that user's orders) fail on the ledger row. Deleting a customer would have
+broken. The ledger now keeps its ids with no FKs, and the append-only trigger refuses
+everything.
+
+Verification:
+
+- 9 tests. Negative control without writers: 8 fail.
+- Smoke: live checkout + cancel nets to zero; support → 403.
+- pytest 255, smoke 245/0.
+- Clean env: 4 stages, schema checked, then the full suites again.
+
+Found: **B6.19** (fixed and pushed first) and **F5.19**, the admin viewer.
+
+Level: *clean-environment tested*.
+→ audit: [2026-09-23-abbe01-inventory-ledger.md](audit/2026-09-23-abbe01-inventory-ledger.md)

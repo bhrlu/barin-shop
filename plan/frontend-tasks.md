@@ -494,6 +494,10 @@ conflict (DESIGN_SYSTEM.md §5).
   subtotal from the `POST /stock/check` quote. Blocks AB-FE-03's price field.
   Done (2026-09-23): The storefront shows the server's prices: `POST /stock/check` gains `unit_prices` (per line, request order, variant override included); a shared `useCartQuote()` replaces the catalogue-based subtotal in cart and checkout (line totals, subtotal, coupon quote; skeleton while loading); the product page shows the selected variant's price. 11 browser checks — the order charged equals what was shown (negative control: 6 fail); F5.12/F3.5b suites re-run green. Browser tested.
   → audit: [2026-09-23-f518-storefront-variant-prices.md](audit/2026-09-23-f518-storefront-variant-prices.md)
+- [ ] **F5.19 Admin inventory ledger viewer** (`NEW-ABBE01-2`, discovered during
+  AB-BE-01) — show `GET /admin/inventory/logs` (reason, signed change, product ×
+  variant, order number, who, when) on `/admin/inventory` with `AdminDataTable`
+  filters and a per-product history link; catalog staff only.
 
 ## Rules reminder
 

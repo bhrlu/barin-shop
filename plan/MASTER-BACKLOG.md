@@ -507,7 +507,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "AB-BE-01",
+    "agent_start_task": "B2.5",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -698,13 +698,16 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "AB-BE-01",
       "title": "Inventory ledger",
       "priority": "P2",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "backend_db",
       "depends_on": ["B6.8"],
       "blocks": [],
       "batch": "C",
       "source": "ADMIN-BACKEND_TASKS.md:BE-01",
-      "scope": "Create inventory_logs and record canonical purchase, restock, return, and manual-adjustment events."
+      "scope": "Create inventory_logs and record canonical purchase, restock, return, and manual-adjustment events.",
+      "audit": "plan/audit/2026-09-23-abbe01-inventory-ledger.md",
+      "verification_level": "clean-environment tested",
+      "completed": "2026-09-23"
     },
     {
       "id": "AB-BE-02",
@@ -1307,6 +1310,20 @@ changes to the file shipped in sequence; the collision is closed.
       "audit": "plan/audit/2026-09-23-b619-cancel-restores-stock-once.md",
       "verification_level": "integration tested + live race probe",
       "completed": "2026-09-23"
+    },
+    {
+      "id": "F5.19",
+      "title": "Admin inventory ledger viewer",
+      "priority": "P3",
+      "status": "TODO",
+      "layer": "frontend",
+      "depends_on": ["AB-BE-01"],
+      "blocks": [],
+      "batch": "D",
+      "source": "frontend-tasks.md",
+      "discovered_as": "NEW-ABBE01-2",
+      "discovered_during": "AB-BE-01",
+      "scope": "Show the stock ledger (GET /admin/inventory/logs: reason, change, product/variant, order number, who, when) on /admin/inventory with AdminDataTable filters (reason, product) and a per-product history link; catalog staff only (the API already 403s others)."
     }
   ],
   "excluded": [
@@ -1327,13 +1344,13 @@ changes to the file shipped in sequence; the collision is closed.
     }
   ],
   "counts": {
-    "total_executable": 53,
-    "done": 35,
+    "total_executable": 54,
+    "done": 36,
     "open": 18,
     "P0": 0,
     "P1": 0,
-    "P2": 2,
-    "P3": 16,
+    "P2": 1,
+    "P3": 17,
     "blocked": 0,
     "dropped": 2,
     "obsolete": 1,
@@ -1936,7 +1953,10 @@ Make `audit_logs` append-only for the application role:
 ## AB-BE-01 — Inventory ledger
 
 * **Layer:** Backend + DB
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-abbe01-inventory-ledger.md`](audit/2026-09-23-abbe01-inventory-ledger.md)
+* **Verification level:** clean-environment tested
+* **Delivered:** `inventory_logs` is the canonical stock history: one row per movement in the same transaction via `services/inventory_log.log_stock_change` — checkout `purchase`, cancellation `return` (an order nets to zero), new product/variant `restock`, staff stock edit `manual_adjustment` (row locked for an exact delta); append-only, no FKs (a first FK version broke deleting a customer); `GET /admin/inventory/logs` for catalog staff. 9 tests (negative control 8 fail), smoke live flow nets to zero, pytest 255, smoke 245/0, clean env. Found B6.19 (fixed first) and F5.19. Clean-environment tested.
 * **Dependencies:** B6.8
 
 ### Required implementation
@@ -3213,6 +3233,41 @@ overrides are unchanged.
 
 ---
 
+## F5.19 — Admin inventory ledger viewer
+
+* **Layer:** Frontend
+* **Status:** TODO
+* **Priority:** P3
+* **Batch:** D
+* **Dependencies:** `AB-BE-01` (DONE)
+* **Discovered as:** `NEW-ABBE01-2` during `AB-BE-01` — legacy discovery ID only;
+  `F5.19` is the executable ID.
+* **Source:** `frontend-tasks.md` F5.19
+
+### Problem
+
+The stock ledger exists (`GET /admin/inventory/logs`: purchases, returns, restocks
+and manual adjustments, with who, when and which order), but no screen shows it.
+
+### Required implementation
+
+Add a history view on `/admin/inventory` built with `AdminDataTable` (F4.3):
+
+- reason chips and a product filter;
+- a signed change;
+- product and size × colour, and the order number;
+- the staff email or customer, and the date;
+- a link from each product to its history.
+
+Catalog staff only; the API already refuses others.
+
+### Verification
+
+Browser: after a checkout and a cancel, the order's two rows appear and net to zero;
+support cannot reach it.
+
+---
+
 ## B2.1a — Activate the real SMS/email providers
 
 * **Layer:** Backend / infra configuration
@@ -3443,7 +3498,7 @@ files.
 
 ```text
 B5.1b  (DONE 2026-09-23)
-AB-BE-01
+AB-BE-01  (DONE 2026-09-23)
 AB-BE-02  (DONE 2026-09-23)
 B5.1c
 B5.4a  (DONE 2026-09-23)
@@ -3479,6 +3534,7 @@ F5.15  (DONE 2026-09-23)
 F5.16  (DONE 2026-09-23)
 F5.17
 F5.18  (DONE 2026-09-23)
+F5.19
 ```
 
 These can mostly run in parallel because they touch different concerns.
@@ -3543,8 +3599,8 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**18** open · **35** DONE · 53 executable in total.
-26 units were added by discovery during earlier tasks (see
+**18** open · **36** DONE · 54 executable in total.
+27 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
@@ -3586,8 +3642,8 @@ D1–D9 are resolved.
 | --------- | --------: |
 | P0        |         0 |
 | P1        |         0 |
-| P2        |         2 |
-| P3        |        16 |
+| P2        |         1 |
+| P3        |        17 |
 | **Total** |    **18** |
 
 Generated from the JSON index on 2026-09-23.
@@ -3704,11 +3760,11 @@ were freshly executed.
 ## START HERE
 
 ```text
-AB-BE-01
+B2.5
 ```
 
-35 of 53 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. P2 — inventory ledger (B6.19 fixed first so no double return is ever logged)
+36 of 54 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. last P2 — webhooks + background jobs (incl. the pending/failed notification delivery sweeper)
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -3812,11 +3868,11 @@ Reconciliation date:
 Current state:
 
 ```text
-18 remaining implementation units (B2.1a, AB-BE-01, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B6.15, B5.1e, F5.17, B6.18)
-35 completed implementation units
+18 remaining implementation units (B2.1a, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B6.15, B5.1e, F5.17, B6.18, F5.19)
+36 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = AB-BE-01
+NEXT = B2.5
 ```

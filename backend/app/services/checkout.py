@@ -24,6 +24,7 @@ from app.services.coupons import (
     record_redemption,
     validate_coupon,
 )
+from app.services.inventory_log import log_stock_change
 from app.services.notifications import notify_order_event
 from app.services.pricing import quote
 from app.services.recommendations import refresh_co_purchases
@@ -249,6 +250,16 @@ async def create_order(
                         }
                     ],
                 )
+        # AB-BE-01: the ledger row for this line, in the same transaction
+        await log_stock_change(
+            session,
+            product_id=line["product_id"],
+            variant_id=line.get("variant_id"),
+            order_id=order_id,
+            change=-line["quantity"],
+            reason="purchase",
+            actor_id=user_id,
+        )
 
     # 8) Co-purchase pairs refreshed in the same transaction (B2.4) so the
     #    recommendation engine learns from this order immediately.

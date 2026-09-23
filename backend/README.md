@@ -122,6 +122,7 @@ Admin:
 | POST/PATCH/DELETE | `/products/{id}/variants` · `/variants/{id}` | variant CRUD: stock, `sku` (unique when set; duplicate → 409), `price_override` (> 0; PATCH `0` clears), `color_hex` (`#rrggbb`; PATCH `""` clears) |
 | GET/PATCH | `/admin/reviews` · `/reviews/{id}` | moderation + seller reply |
 | GET | `/admin/inventory` · `/admin/inventory/low-stock` | stock health / alerts |
+| GET | `/admin/inventory/logs` | stock ledger (AB-BE-01), newest first, page envelope; filters `product_id`, `variant_id`, `order_id`, `reason` (`purchase`/`restock`/`return`/`manual_adjustment`); `catalog` staff only |
 | GET | `/admin/stats` · `/users` · `/orders` · `/payments` · `/refunds` | dashboards (refunds carry the claimant's name/email) |
 
 **Co-purchase recommendations (B2.4):** every multi-item order votes on each
@@ -231,6 +232,15 @@ per **size × color**. When a variant exists for a combination it is
 otherwise the product's aggregate stock applies. Checkout locks rows `FOR UPDATE`
 and decrements with a guarded `UPDATE … WHERE stock >= qty` so nothing can
 oversell. Shared by `POST /stock/check` and checkout via `app/services/variants.py`.
+
+**Stock ledger (AB-BE-01).** `public.inventory_logs` records every stock movement in
+the transaction that makes it, through `services/inventory_log.log_stock_change`:
+checkout → `purchase` (−qty per line), cancellation → `return` (+qty, so an order's
+rows net to zero), a new product / variant → `restock` (opening stock), a staff stock
+edit → `manual_adjustment` (the delta; the row is locked first so the delta is exact).
+`variant_id` NULL = the product's aggregate. Append-only (triggers refuse UPDATE /
+DELETE / TRUNCATE) and without foreign keys, so a row keeps the ids it was written
+with after those rows are deleted. Seeded stock predates the ledger.
 
 **Variant price (AB-BE-02).** A variant may carry `price_override` (NULL = the
 product's price). `variants.variant_price()` resolves a line's unit price from the

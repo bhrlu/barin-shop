@@ -8,9 +8,12 @@ not-yet-shipped order is cancelled (variants first, product aggregate second —
 mirroring checkout's decrement order), inside the caller's transaction.
 """
 
+from uuid import UUID
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.inventory_log import log_stock_change
 from app.services.notifications import notify_order_event
 
 # Shipped orders are physically gone — the store can no longer restock them,
@@ -58,7 +61,9 @@ def assert_transition(old: str, new: str) -> None:
         raise IllegalTransition(old, new)
 
 
-async def restore_stock(session: AsyncSession, order_id: str) -> int:
+async def restore_stock(
+    session: AsyncSession, order_id: str, actor_id: UUID | str | None = None
+) -> int:
     """Return the items of a cancelled order to inventory (spec [BE-05]).
 
     Variant rows are restored first, then the product aggregate — the exact
@@ -105,10 +110,25 @@ async def restore_stock(session: AsyncSession, order_id: str) -> int:
             text("UPDATE public.products SET stock = stock + :qty WHERE id = :pid"),
             {"pid": str(item["product_id"]), "qty": qty},
         )
+        # AB-BE-01: the mirror of the line's `purchase` row — the order nets to zero
+        await log_stock_change(
+            session,
+            product_id=str(item["product_id"]),
+            variant_id=item.get("variant_id") if has_variant_col else None,
+            order_id=order_id,
+            change=qty,
+            reason="return",
+            actor_id=actor_id,
+        )
     return len(items)
 
 
-async def cancel_order_tx(session: AsyncSession, order_id: str, old_status: str) -> None:
+async def cancel_order_tx(
+    session: AsyncSession,
+    order_id: str,
+    old_status: str,
+    actor_id: UUID | str | None = None,
+) -> None:
     """Flip the order to `cancelled` and restore its stock atomically.
 
     Runs on the caller's session/transaction — checkout decrements stock in the
@@ -142,6 +162,6 @@ async def cancel_order_tx(session: AsyncSession, order_id: str, old_status: str)
         if current == "cancelled":
             raise CancelError("این سفارش پیش‌تر لغو شده است", already_cancelled=True)
         raise CancelError(f"سفارش در وضعیت {current} قابل لغو نیست")
-    await restore_stock(session, order_id)
+    await restore_stock(session, order_id, actor_id)
     # B2.1: both cancel paths (customer POST /cancel, staff PATCH) end here
     await notify_order_event(session, order_id, "cancelled")
