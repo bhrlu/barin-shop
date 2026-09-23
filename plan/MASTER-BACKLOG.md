@@ -507,7 +507,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "F5.15",
+    "agent_start_task": "B6.13",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -1081,7 +1081,7 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "F5.15",
       "title": "A failed /auth/me signs the user out",
       "priority": "P2",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "frontend",
       "depends_on": [],
       "blocks": [],
@@ -1089,7 +1089,10 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "frontend-tasks.md",
       "discovered_as": "NEW-B21-6",
       "discovered_during": "B2.1",
-      "scope": "AuthProvider.refresh() clears the token on any api.me() error (network error, backend restart, request interrupted by a full-page navigation), not only 401/403. Clear only on 401/403; otherwise keep the token and retry."
+      "scope": "AuthProvider.refresh() clears the token on any api.me() error (network error, backend restart, request interrupted by a full-page navigation), not only 401/403. Clear only on 401/403; otherwise keep the token and retry.",
+      "audit": "plan/audit/2026-09-23-f515-auth-refresh-keeps-session.md",
+      "verification_level": "browser tested",
+      "completed": "2026-09-23"
     },
     {
       "id": "F5.16",
@@ -1139,11 +1142,11 @@ changes to the file shipped in sequence; the collision is closed.
   ],
   "counts": {
     "total_executable": 45,
-    "done": 11,
-    "open": 34,
+    "done": 12,
+    "open": 33,
     "P0": 0,
     "P1": 0,
-    "P2": 21,
+    "P2": 20,
     "P3": 13,
     "blocked": 0,
     "dropped": 2,
@@ -2147,7 +2150,12 @@ kind.
 ## F5.15 — A failed `/auth/me` signs the user out
 
 * **Layer:** Frontend
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-f515-auth-refresh-keeps-session.md`](audit/2026-09-23-f515-auth-refresh-keeps-session.md)
+* **Verification level:** browser tested — 16/16; the same suite against the old
+  `auth.tsx` fails the 4 transient-error checks (negative control). `refresh()`
+  now clears the token only on 401/403/404 and otherwise keeps it and retries
+  (1 s / 3 s / 10 s).
 * **Priority:** P2
 * **Batch:** D
 * **Dependencies:** none
@@ -2855,7 +2863,7 @@ F5.11
 F5.12
 F5.13
 F5.14  (DONE 2026-09-22)
-F5.15
+F5.15  (DONE 2026-09-23)
 F5.16
 ```
 
@@ -2919,14 +2927,14 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**34** (11 completed: B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02, AB-FE-05, B3.11,
-B2.1, F5.14, F2.3; 18 added by discovery: NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a,
+**33** (12 completed: B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02, AB-FE-05, B3.11,
+B2.1, F5.14, F2.3, F5.15; 18 added by discovery: NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a,
 F5.10, B2.2b, B5.4b, F5.11, F5.12, B2.1a, B5.1d, B6.13, F5.13, F5.14, F5.15, F5.16,
 B6.14)
 
 ### Ready for execution
 
-**34** (`B2.1a` additionally needs real provider credentials from the user)
+**33** (`B2.1a` additionally needs real provider credentials from the user)
 
 ### Blocked
 
@@ -2963,11 +2971,11 @@ D1–D9 are resolved.
 | --------- | --------: |
 | P0        |         0 |
 | P1        |         0 |
-| P2        |        21 |
+| P2        |        20 |
 | P3        |        13 |
-| **Total** |    **34** |
+| **Total** |    **33** |
 
-Recomputed from the JSON index on 2026-09-23 (F2.3).
+Recomputed from the JSON index on 2026-09-23 (F5.15).
 
 Priority is execution guidance, not permission to rewrite requirements.
 
@@ -3081,7 +3089,7 @@ were freshly executed.
 ## START HERE
 
 ```text
-F5.15
+B6.13
 ```
 
 Batch A (`B6.8`, `B6.9`, `AB-BE-03`) is complete — audits
@@ -3101,9 +3109,11 @@ product adjustment: in-app notifications live, SMS/email built but unconfigured.
 `F5.14` is DONE ([audit](audit/2026-09-22-f514-coupon-json-body.md)) and so is
 `F2.3` ([audit](audit/2026-09-23-f23-forgot-password.md)) — **no P1 remains**.
 
-The user asked for this run back to back: `F5.15` → `B6.13` → `B5.1d` →
-`B2.1a` → `F5.13`. **`F5.15`** (a failed `/auth/me` signs the user out; P2,
-Batch D) is next. `B2.1a` will hit its stop condition (no real credentials) —
+`F5.15` is DONE ([audit](audit/2026-09-23-f515-auth-refresh-keeps-session.md)).
+
+The user asked for this run back to back: `F5.15` (DONE) → `B6.13` → `B5.1d` →
+`B2.1a` → `F5.13`. **`B6.13`** (the documented `pytest -q` skips every live-DB
+test; P2, Batch C) is next. `B2.1a` will hit its stop condition (no real credentials) —
 report it, do not fake it.
 
 After each task: update this pointer, the task status, the audit link and the
@@ -3205,17 +3215,18 @@ Reconciliation date:
 Current state:
 
 ```text
-34 remaining implementation units
+33 remaining implementation units
   (17 of the original 27, plus NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10,
-   B2.2b, B5.4b, F5.11, F5.12, B2.1a, B5.1d, B6.13, F5.13, F5.15, F5.16 and
-   B6.14 — the last fifteen discovered as NEW-ABBE03-1, NEW-F55-1, NEW-F56-1,
+   B2.2b, B5.4b, F5.11, F5.12, B2.1a, B5.1d, B6.13, F5.13, F5.16 and B6.14 —
+   the last fourteen discovered as NEW-ABBE03-1, NEW-F55-1, NEW-F56-1,
    NEW-F56-2, NEW-ABFE02-1, NEW-ABFE05-1/2/3, NEW-B21-1…4/6, NEW-F514-1 and
    NEW-F23-1 — found during them)
-11 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02,
-  AB-FE-05, B3.11, B2.1, F5.14, F2.3 — F5.14 itself discovered as NEW-B21-5)
+12 completed implementation units (B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02,
+  AB-FE-05, B3.11, B2.1, F5.14, F2.3, F5.15 — F5.14 and F5.15 themselves
+  discovered as NEW-B21-5 and NEW-B21-6)
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = F5.15
+NEXT = B6.13
 ```

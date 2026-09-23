@@ -444,12 +444,15 @@ conflict (DESIGN_SYSTEM.md §5).
   the expiry keeps the old date; a percent coupon switched to a fixed amount keeps
   `percent_off`; `max_uses` cannot be cleared at all). Define clear semantics in
   `CouponUpdate`, send them from the dialog; pytest + browser.
-- [ ] **F5.15 A failed `/auth/me` signs the user out** (`NEW-B21-6`, discovered
+- [x] **F5.15 A failed `/auth/me` signs the user out** (`NEW-B21-6`, discovered
   during B2.1) — `AuthProvider.refresh()` calls `setToken(null)` on *any* error,
   not only a 401: a network error, a backend restart or a full-page navigation
   that interrupts the request drops a valid session (reproduced: token gone after
   quick successive page loads, identical without the B2.1 bell). Clear the token
   only on 401/403; keep it and retry otherwise.
+  Done (2026-09-23): cleared only on 401/403/404; otherwise kept with retries at
+  1 s / 3 s / 10 s. Browser tested 16/16 (negative control against the old code:
+  4 failures). → audit: [2026-09-23-f515-auth-refresh-keeps-session.md](audit/2026-09-23-f515-auth-refresh-keeps-session.md)
 - [ ] **F5.13 Guest direct-load of a protected route logs a hydration mismatch**
   (`NEW-B21-4`, discovered during B2.1) — opening e.g. `/account/payments` signed
   out renders the `ssr: false` route on the server, then `_authenticated`'s

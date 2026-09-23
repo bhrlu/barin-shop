@@ -194,7 +194,7 @@ Canonical implementations in this repo — use these, do not re-derive them:
 | Customer notifications (in-app + SMS/email outbox), channel switches | `backend/app/services/notifications.py` (`notify_order_event`, `notify_refund_event`, `notify`, `load_switches`); providers only behind it in `notification_providers.py` — never call Kavenegar/SMTP from a router |
 | Startup DDL | `startup_ddl()` in `backend/app/db.py` |
 | All frontend HTTP | `vogue-vintage-vibes/src/lib/api.ts` (the `api` object + `request()`) |
-| Frontend auth/session | `src/lib/auth.tsx` |
+| Frontend auth/session | `src/lib/auth.tsx` (drops the stored token only when `/auth/me` answers 401/403/404; transient failures keep it and retry — F5.15) |
 | Currency/number formatting | `src/lib/format.ts` (`formatPrice`), spec B4.1 |
 
 No frontend file may call `fetch` against the backend directly; it goes through

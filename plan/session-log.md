@@ -2200,3 +2200,27 @@ email after a change.
 → audit: [2026-09-23-f23-forgot-password.md](audit/2026-09-23-f23-forgot-password.md)
 
 **Next backlog pointer** — `F5.15`.
+
+## 2026-09-23 — F5.15 a failed `/auth/me` no longer signs the user out (task 3)
+
+**What was done** — `AuthProvider.refresh()` clears the token only on 401/403/404;
+a network error, an interrupted request or a 5xx keeps the token and the user and
+retries after 1 s / 3 s / 10 s (sign-in/up/out cancel a pending retry).
+
+**Verification** — browser 16/16 (500 → token kept, recovers without reload;
+network failure → kept, recovers; garbage token → cleared; deleted account →
+cleared; UI sign-in/out). Negative control: the same suite against the old file
+fails the 4 transient-error checks. tsc/lint/build clean. Level: *browser tested*.
+
+**My mistake, found and fixed** — the first suite also passed against the old code:
+`/auth/me` fires 2–3 s after load in dev, so a fixed wait checked too early. The
+suite now waits until the mocked endpoint was actually hit. I re-checked that the
+earlier A/B conclusions (F5.13, F5.15 pre-existing) still hold: Vite logged the
+reload of each swapped file and those runs compared real observed outcomes.
+
+**Not done** — no "connection lost" banner; `_authenticated`'s guard still redirects
+to `/auth` on a transient failure (it recovers through the retry).
+
+→ audit: [2026-09-23-f515-auth-refresh-keeps-session.md](audit/2026-09-23-f515-auth-refresh-keeps-session.md)
+
+**Next backlog pointer** — `B6.13`.
