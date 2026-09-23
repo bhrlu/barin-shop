@@ -11,7 +11,9 @@ import logging
 import uuid
 from datetime import timedelta
 
+import urllib3
 from fastapi import APIRouter, HTTPException, status
+from minio.error import MinioException
 from pydantic import BaseModel, Field
 
 from app.auth import AdminUser, CurrentUser
@@ -64,6 +66,12 @@ def _client():
     )
 
 
+# what MinIO / the network may raise; anything else is a bug and must surface as a
+# 500 instead of a 502 or a silent `url: null` (B6.9a — the `expires` int bug noted
+# below used to hide behind the broad `except Exception`)
+_STORAGE_ERRORS = (MinioException, urllib3.exceptions.HTTPError, OSError)
+
+
 @router.post("/upload-url", response_model=UploadUrlOut)
 async def create_upload_url(body: UploadUrlIn, user: AdminUser) -> UploadUrlOut:
     ext = body.filename.rsplit(".", 1)[-1].lower() if "." in body.filename else "jpg"
@@ -77,7 +85,7 @@ async def create_upload_url(body: UploadUrlIn, user: AdminUser) -> UploadUrlOut:
         url = client.presigned_put_object(
             settings.minio_bucket, path, expires=timedelta(hours=1)
         )
-    except Exception as exc:
+    except _STORAGE_ERRORS as exc:
         log.exception("presign failed")
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "خطا در ساخت لینک آپلود") from exc
 
@@ -101,7 +109,8 @@ async def sign_paths(body: SignRequestIn, user: CurrentUser) -> list[SignedUrlOu
             url = client.presigned_get_object(
                 settings.minio_bucket, path, expires=timedelta(days=7)
             )
-        except Exception:
+        except _STORAGE_ERRORS:
+            log.warning("signing %s failed", path, exc_info=True)
             out.append(SignedUrlOut(path=path, url=None))
             continue
         out.append(SignedUrlOut(path=path, url=url))

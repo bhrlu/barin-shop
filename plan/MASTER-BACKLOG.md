@@ -507,7 +507,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "B6.9a",
+    "agent_start_task": "B5.1b",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -901,7 +901,7 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "B6.9a",
       "title": "Narrow the remaining bare except Exception handlers in products/storage routers",
       "priority": "P2",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "backend",
       "depends_on": [],
       "blocks": [],
@@ -909,7 +909,10 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "backend-tasks.md",
       "scope": "routers/products.py turns any failure in four CRUD handlers into a 409 duplicate message, and routers/storage.py has two broad handlers to review; apply the B6.9 shape (IntegrityError + SQLSTATE 23505 only, re-raise the rest).",
       "discovered_as": "NEW-B69-1",
-      "discovered_during": "B6.9"
+      "discovered_during": "B6.9",
+      "audit": "plan/audit/2026-09-23-b69a-narrow-catalog-storage-handlers.md",
+      "verification_level": "integration tested",
+      "completed": "2026-09-23"
     },
     {
       "id": "F5.9",
@@ -1202,11 +1205,11 @@ changes to the file shipped in sequence; the collision is closed.
   ],
   "counts": {
     "total_executable": 47,
-    "done": 21,
-    "open": 26,
+    "done": 22,
+    "open": 25,
     "P0": 0,
     "P1": 0,
-    "P2": 13,
+    "P2": 12,
     "P3": 13,
     "blocked": 0,
     "dropped": 2,
@@ -2409,7 +2412,10 @@ it is down.
 ## B6.9a — Narrow the remaining bare `except Exception` handlers
 
 * **Layer:** Backend
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-b69a-narrow-catalog-storage-handlers.md`](audit/2026-09-23-b69a-narrow-catalog-storage-handlers.md)
+* **Verification level:** integration tested
+* **Delivered:** only SQLSTATE 23505 keeps the duplicate answers in the four product/variant handlers and only MinIO/network errors keep the storage 502/`null`; everything else surfaces as a 500. Shared `services/db_errors.is_unique_violation`. 7 tests (negative control: 4 fail).
 * **Priority:** P2
 * **Batch:** E
 * **Dependencies:** none
@@ -3102,7 +3108,7 @@ These can mostly run in parallel because they touch different concerns.
 
 ```text
 AB-FE-03
-B6.9a
+B6.9a  (DONE 2026-09-23)
 ```
 
 Start after `AB-BE-02`.
@@ -3156,13 +3162,13 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**26** open · **21** DONE · 47 executable in total.
+**25** open · **22** DONE · 47 executable in total.
 20 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
 
-**26** (`B2.1a` additionally needs real provider credentials from the user)
+**25** (`B2.1a` additionally needs real provider credentials from the user)
 
 ### Blocked
 
@@ -3199,9 +3205,9 @@ D1–D9 are resolved.
 | --------- | --------: |
 | P0        |         0 |
 | P1        |         0 |
-| P2        |        13 |
+| P2        |        12 |
 | P3        |        13 |
-| **Total** |    **26** |
+| **Total** |    **25** |
 
 Generated from the JSON index on 2026-09-23.
 
@@ -3317,11 +3323,11 @@ were freshly executed.
 ## START HERE
 
 ```text
-B6.9a
+B5.1b
 ```
 
-21 of 47 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. **`B6.9a`** (narrow the remaining bare `except Exception` → 409 handlers; P2, Batch E) is next.
+22 of 47 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. **`B5.1b`** (audit-log DB tamper resistance; P2, Batch C) is next.
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -3425,11 +3431,11 @@ Reconciliation date:
 Current state:
 
 ```text
-26 remaining implementation units (B2.1a, B5.1b, AB-BE-01, AB-BE-02, F5.8, F5.7, F4.3, AB-FE-01, AB-FE-03, AB-FE-04, F3.5b, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B6.9a, B5.1c, F5.10, B2.2b, F5.11, F5.12, B6.15)
-21 completed implementation units
+25 remaining implementation units (B2.1a, B5.1b, AB-BE-01, AB-BE-02, F5.8, F5.7, F4.3, AB-FE-01, AB-FE-03, AB-FE-04, F3.5b, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, F5.12, B6.15)
+22 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = B6.9a
+NEXT = B5.1b
 ```

@@ -2394,3 +2394,13 @@ off → 2 fail); reproduction probe 300 requests / 12 reloads / 0 failures (was 
 deadlock within ~80); pytest 190; smoke 229/0; clean environment with a schema
 identical to the pre-change snapshot. Level: *fully verified*.
 → audit: [2026-09-23-b616-lock-free-startup-ddl.md](audit/2026-09-23-b616-lock-free-startup-ddl.md)
+
+## 2026-09-23 — B6.9a narrow the broad catalog/storage handlers
+
+Only SQLSTATE 23505 keeps the duplicate 409/400 in the four product/variant handlers
+and only MinIO/network errors keep the storage 502/`null`; anything else surfaces as a
+500 (including a failed audit insert since B5.1d, which used to read as "duplicate").
+`is_unique_violation` moved to `services/db_errors.py` (orders keeps an alias). 7 tests
+with trigger-injected SQLSTATEs + a fake MinIO client (negative control: 4 fail);
+pytest 197; smoke 229/0. Level: *integration tested*.
+→ audit: [2026-09-23-b69a-narrow-catalog-storage-handlers.md](audit/2026-09-23-b69a-narrow-catalog-storage-handlers.md)

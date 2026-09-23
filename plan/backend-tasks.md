@@ -359,10 +359,12 @@ architecture (FastAPI, own JWT, no Supabase) is binding (Rule 0.2).
   re-raised, so a genuine database fault surfaces as a 500 instead of a false
   "a refund was already requested". Success/duplicate contracts are unchanged.
   → audit: [2026-09-22-b69-refund-exception-handling.md](audit/2026-09-22-b69-refund-exception-handling.md)
-- [ ] **B6.9a Narrow the remaining bare `except Exception` → 409 handlers**
+- [x] **B6.9a Narrow the remaining bare `except Exception` → 409 handlers**
   (`NEW-B69-1`, discovered during B6.9) — `routers/products.py` has four (variant
   and product CRUD) that report any failure as «این ترکیب سایز و رنگ قبلاً ثبت شده
   است»; `routers/storage.py` has two to review. Same fix shape as B6.9.
+  Done (2026-09-23): only SQLSTATE 23505 keeps the duplicate answers in the four product/variant handlers and only MinIO/network errors keep the storage 502/`null`; everything else surfaces as a 500. Shared `services/db_errors.is_unique_violation`. 7 tests (negative control: 4 fail).
+  → audit: [2026-09-23-b69a-narrow-catalog-storage-handlers.md](audit/2026-09-23-b69a-narrow-catalog-storage-handlers.md)
 - [x] **F2.3 backend part — password reset tokens + endpoints** (task tracked in
   `frontend-tasks.md` F2.3): `password_reset_tokens`, `services/password_reset.py`,
   `POST /auth/password/forgot|reset`, `notifications.queue_private_email`.

@@ -29,6 +29,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from app.auth import CurrentUser, DbSession, OptionalUser, StaffCatalog
 from app.schemas import (
@@ -41,6 +42,7 @@ from app.schemas import (
 )
 from app.services.audit import record_audit
 from app.services.catalog_filters import split_multi
+from app.services.db_errors import is_unique_violation
 from app.services.pagination import apply_limit_offset, clamp_page_size, count_rows, envelope
 from app.services.recommendations import CO_VOTES_SQL
 from app.services.roles import has_capability
@@ -381,9 +383,13 @@ async def create_variant(
             },
         )
         await session.commit()
-    except Exception as exc:
+    except IntegrityError as exc:
+        # only the real duplicate (UNIQUE product_id, size, color) is a 409;
+        # anything else is a fault and surfaces as a 500 (B6.9a)
         await session.rollback()
-        log.exception("variant insert failed")
+        if not is_unique_violation(exc):
+            log.exception("variant insert failed with an unexpected integrity error")
+            raise
         raise HTTPException(
             status.HTTP_409_CONFLICT, "این ترکیب سایز و رنگ قبلاً ثبت شده است"
         ) from exc
@@ -431,9 +437,11 @@ async def update_variant(
                 new_values={k: row[k] for k in params if k != "vid"},
             )
         await session.commit()
-    except Exception as exc:
+    except IntegrityError as exc:
         await session.rollback()
-        log.exception("variant update failed")
+        if not is_unique_violation(exc):
+            log.exception("variant update failed with an unexpected integrity error")
+            raise
         raise HTTPException(
             status.HTTP_409_CONFLICT, "به‌روزرسانی تنوع ناموفق بود"
         ) from exc
@@ -491,9 +499,11 @@ async def create_product(body: ProductIn, session: DbSession, user: StaffCatalog
             new_values={"name": body.name, "price": body.price, "stock": body.stock},
         )
         await session.commit()
-    except Exception as exc:
+    except IntegrityError as exc:
         await session.rollback()
-        log.exception("product insert failed")
+        if not is_unique_violation(exc):
+            log.exception("product insert failed with an unexpected integrity error")
+            raise
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "ذخیره محصول ناموفق بود") from exc
     product = await _fetch_product(session, pid)
     assert product is not None
@@ -537,9 +547,11 @@ async def update_product(
                 },
             )
         await session.commit()
-    except Exception as exc:
+    except IntegrityError as exc:
         await session.rollback()
-        log.exception("product update failed")
+        if not is_unique_violation(exc):
+            log.exception("product update failed with an unexpected integrity error")
+            raise
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "به‌روزرسانی محصول ناموفق بود") from exc
     product = await _fetch_product(session, product_id)
     if product is None:

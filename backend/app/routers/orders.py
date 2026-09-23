@@ -21,6 +21,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.auth import CurrentUser, DbSession, StaffOrders, StaffRefunds
 from app.services.audit import record_audit
+from app.services.db_errors import is_unique_violation
 from app.services.notifications import notify_order_event, notify_refund_event
 from app.services.order_lifecycle import (
     CancelError,
@@ -292,13 +293,9 @@ async def cancel_order(order_id: UUID, user: CurrentUser, session: DbSession) ->
     )
 
 
-def _is_unique_violation(exc: IntegrityError) -> bool:
-    """True only for Postgres `unique_violation` (SQLSTATE 23505).
-
-    Everything else IntegrityError covers — foreign-key, not-null and check
-    violations — is an unexpected failure, not a duplicate request.
-    """
-    return getattr(exc.orig, "sqlstate", None) == "23505"
+# the SQLSTATE 23505 check moved to app/services/db_errors.py (B6.9a); the old
+# name stays importable for the B6.9 tests
+_is_unique_violation = is_unique_violation
 
 
 @router.post("/orders/{order_id}/refunds", response_model=RefundRequestOut, status_code=201)

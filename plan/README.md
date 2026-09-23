@@ -79,7 +79,8 @@ plan/
     ├── 2026-09-23-f59-coupon-cap-field.md
     ├── 2026-09-23-b54a-role-lockout-guard.md
     ├── 2026-09-23-b54b-include-inactive-catalog.md
-    └── 2026-09-23-b616-lock-free-startup-ddl.md
+    ├── 2026-09-23-b616-lock-free-startup-ddl.md
+    └── 2026-09-23-b69a-narrow-catalog-storage-handlers.md
 ```
 
 The two `ADMIN-*.md` files hold the back-office task split (epics [BE-01]… and
