@@ -23,7 +23,7 @@ async def load_variants(
     if not product_ids:
         return {}
     sql = (
-        "SELECT id, product_id, size, color, stock, active "
+        "SELECT id, product_id, size, color, stock, active, price_override "
         "FROM public.product_variants WHERE product_id = ANY(:ids)"
     )
     if for_update:
@@ -43,3 +43,12 @@ def variant_stock(product_row, variant: dict | None) -> tuple[int, bool]:
     if variant is None:
         return int(product_row["stock"]), True
     return int(variant["stock"]), bool(variant["active"])
+
+
+def variant_price(product_row, variant: dict | None) -> int:
+    """Unit price for a line (AB-BE-02): the variant's `price_override` when set,
+    else the product's price. Always from the database rows — never from the request —
+    and shared by `POST /stock/check` and checkout so the quote and the order agree."""
+    if variant is not None and variant.get("price_override") is not None:
+        return int(variant["price_override"])
+    return int(product_row["price"])

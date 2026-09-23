@@ -2576,3 +2576,35 @@ Verification:
 
 Not done: server-side size/type limits (B6.18). Level: *integration + browser tested*.
 → audit: [2026-09-23-b617-storage-upload-catalog-capability.md](audit/2026-09-23-b617-storage-upload-catalog-capability.md)
+
+## 2026-09-23 — AB-BE-02 variant SKU / price override / colour
+
+`product_variants` gains three things:
+
+- **`price_override`** (INTEGER > 0). Money stays integer tomans, not the spec's
+  NUMERIC.
+- **`color_hex`** (`#rrggbb`).
+- **A unique SKU when set:** a partial unique index. Two guarded `UPDATE`s first turn
+  blank SKUs into NULL and give a duplicate SKU only to its earliest row, so the index
+  can always be built.
+
+`variants.variant_price()` is now the one unit-price rule for `/stock/check` and
+checkout, read from the locked rows; a checkout line's own `price` field is ignored.
+Coupons and shipping follow the overridden subtotal. PATCH clears a field with
+`""`/`0` (F5.16 convention). A duplicate SKU returns a 409 whose message comes from
+the violated constraint. Seed SKUs were `hash()`-based, which is random per process
+and could collide under the new index; they are now deterministic.
+
+Verification:
+
+- 13 tests, including an injected price, a coupon on an overridden line, and a
+  migration replay. Negative controls: product-only pricing → 2 fail, no SKU message
+  → 1 fails.
+- pytest 229, smoke 235/0.
+- Clean env: 4 seed stages, schema checked in psql, `seed_mock` run twice.
+
+Found: **F5.18**, the storefront does not display overrides. AB-FE-03 now depends
+on it.
+
+Level: *clean-environment tested*.
+→ audit: [2026-09-23-abbe02-variant-sku-price-color.md](audit/2026-09-23-abbe02-variant-sku-price-color.md)

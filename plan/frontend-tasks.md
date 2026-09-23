@@ -484,6 +484,12 @@ conflict (DESIGN_SYSTEM.md §5).
   TanStack's automatic route splitting, and the production build shows the whole
   coupons page (list, card, dialog) inlined in the shared `index-*.js` every
   storefront visitor downloads. Drop the export; verify the page gets its own chunk.
+- [ ] **F5.18 Storefront shows variant price overrides** (`NEW-ABBE02-1`, discovered
+  during AB-BE-02) — the server now prices a line with the variant's
+  `price_override`, but the product page shows `products.price` and the cart /
+  checkout subtotal (`useCartSubtotal`) uses catalogue prices (also sent to
+  `/coupons/validate`). Show the selected variant's price; take the cart/checkout
+  subtotal from the `POST /stock/check` quote. Blocks AB-FE-03's price field.
 
 ## Rules reminder
 

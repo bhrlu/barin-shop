@@ -27,7 +27,7 @@ from app.services.coupons import (
 from app.services.notifications import notify_order_event
 from app.services.pricing import quote
 from app.services.recommendations import refresh_co_purchases
-from app.services.variants import load_variants, variant_stock
+from app.services.variants import load_variants, variant_price, variant_stock
 
 log = logging.getLogger(__name__)
 
@@ -117,7 +117,7 @@ async def create_order(
                 }
             )
             continue
-        line["price"] = int(p["price"])
+        line["price"] = variant_price(p, variant)
         line["name"] = p["name"]
         line["image"] = _line_image(p["images"])
         line["variant_id"] = variant["id"] if variant else None

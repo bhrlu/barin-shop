@@ -182,6 +182,7 @@ Canonical implementations in this repo — use these, do not re-derive them:
 | Roles & capabilities | `backend/app/services/roles.py` (`STAFF_ROLES`, `resolve_roles`, `has_capability`) + the `Staff*` aliases in `auth.py` |
 | Password hashing / JWT | `backend/app/security.py` |
 | Totals, shipping, discount | `backend/app/services/pricing.py` (`shipping_fee`, `quote`) |
+| Line unit price (variant `price_override` or product price) | `backend/app/services/variants.py` (`variant_price`, shared by `POST /stock/check` and checkout — AB-BE-02) |
 | Coupon lookup / normalisation / limits | `backend/app/services/coupons.py` |
 | Checkout & stock decrement | `backend/app/services/checkout.py` |
 | Order transitions, cancel, stock restore | `backend/app/services/order_lifecycle.py` (`ALLOWED_STATUS_TRANSITIONS`, `CANCELLABLE_STATUSES`, `assert_transition`, `restore_stock`, `cancel_order_tx`) |

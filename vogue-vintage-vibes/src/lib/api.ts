@@ -234,6 +234,10 @@ export type ProductVariant = {
   sku: string | null;
   stock: number;
   active: boolean;
+  /** AB-BE-02: the variant's own price (null = the product's); the server prices with it */
+  price_override: number | null;
+  /** AB-BE-02: swatch colour, `#rrggbb` */
+  color_hex: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -244,6 +248,10 @@ export type ProductVariantInput = {
   sku?: string | null;
   stock?: number;
   active?: boolean;
+  /** create: omit or null = none; update: 0 clears */
+  price_override?: number | null;
+  /** `#rrggbb`; update: "" clears */
+  color_hex?: string | null;
 };
 
 export type Review = {

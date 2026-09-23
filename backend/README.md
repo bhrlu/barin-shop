@@ -88,7 +88,7 @@ Public / customer:
 | GET | `/products/compare?ids=` | – | side-by-side comparison |
 | GET | `/products/{id}` | – | one product (with `avg_rating`, `review_count`) |
 | GET | `/products/{id}/related` · `/recommendations` | – | discovery |
-| GET | `/products/{id}/variants` | – | per size×color stock |
+| GET | `/products/{id}/variants` | – | per size×color stock, `sku`, `price_override`, `color_hex` (AB-BE-02) |
 | GET/POST | `/products/{id}/reviews` | – / user | reviews + rating summary |
 | DELETE | `/reviews/{id}` | user | delete own review |
 | POST | `/products/{id}/view` · GET `/recently-viewed` | user | view tracking |
@@ -119,7 +119,7 @@ Admin:
 | Method | Path | Purpose |
 |---|---|---|
 | POST/PATCH/DELETE | `/products` · `/products/{id}` | product CRUD (soft-delete if ordered) |
-| POST/PATCH/DELETE | `/products/{id}/variants` · `/variants/{id}` | variant stock CRUD |
+| POST/PATCH/DELETE | `/products/{id}/variants` · `/variants/{id}` | variant CRUD: stock, `sku` (unique when set; duplicate → 409), `price_override` (> 0; PATCH `0` clears), `color_hex` (`#rrggbb`; PATCH `""` clears) |
 | GET/PATCH | `/admin/reviews` · `/reviews/{id}` | moderation + seller reply |
 | GET | `/admin/inventory` · `/admin/inventory/low-stock` | stock health / alerts |
 | GET | `/admin/stats` · `/users` · `/orders` · `/payments` · `/refunds` | dashboards (refunds carry the claimant's name/email) |
@@ -224,6 +224,12 @@ per **size × color**. When a variant exists for a combination it is
 otherwise the product's aggregate stock applies. Checkout locks rows `FOR UPDATE`
 and decrements with a guarded `UPDATE … WHERE stock >= qty` so nothing can
 oversell. Shared by `POST /stock/check` and checkout via `app/services/variants.py`.
+
+**Variant price (AB-BE-02).** A variant may carry `price_override` (NULL = the
+product's price). `variants.variant_price()` resolves a line's unit price from the
+locked database rows, never from the request, for both the stock-check quote and
+the order (`order_items.price`), so coupon discounts and shipping use the overridden
+subtotal. The storefront does not display overrides yet (F5.18).
 
 Each order line records the variant it drew from in `order_items.variant_id`, so
 cancelling an order (`POST /orders/{id}/cancel` or an admin `PATCH` to

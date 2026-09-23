@@ -13,7 +13,7 @@ from sqlalchemy import text
 from app.auth import DbSession
 from app.schemas import StockCheckLine, StockCheckOut, StockIssue
 from app.services.availability import availability_issue
-from app.services.variants import load_variants, variant_stock
+from app.services.variants import load_variants, variant_price, variant_stock
 
 router = APIRouter(prefix="/stock", tags=["stock"])
 
@@ -82,6 +82,6 @@ async def check(body: list[StockCheckLine], session: DbSession) -> StockCheckOut
                 )
             )
             continue
-        subtotal += int(p["price"]) * line.quantity
+        subtotal += variant_price(p, variant) * line.quantity
 
     return StockCheckOut(ok=not issues, subtotal=subtotal, issues=issues)

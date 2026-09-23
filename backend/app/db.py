@@ -114,6 +114,33 @@ CATALOG_DDL = [
         "CREATE INDEX IF NOT EXISTS product_variants_product_idx "
         "ON public.product_variants(product_id)"
     ),
+    # AB-BE-02 ([BE-01]): a variant may carry its own price (NULL = the product's
+    # price; read from here only, never from a request) and a swatch colour
+    (
+        "ALTER TABLE public.product_variants ADD COLUMN IF NOT EXISTS price_override "
+        "INTEGER CHECK (price_override > 0)"
+    ),
+    (
+        "ALTER TABLE public.product_variants ADD COLUMN IF NOT EXISTS color_hex "
+        "TEXT CHECK (color_hex ~ '^#[0-9a-fA-F]{6}$')"
+    ),
+    # SKUs are unique when set. Blank ones become NULL and a later duplicate loses its
+    # SKU (the earliest row keeps it), so the unique index can always be built. Both
+    # are no-ops once the API normalises input.
+    (
+        "UPDATE public.product_variants SET sku = NULLIF(btrim(sku), '') "
+        "WHERE sku IS DISTINCT FROM NULLIF(btrim(sku), '')"
+    ),
+    (
+        "UPDATE public.product_variants SET sku = NULL WHERE id IN ("
+        "  SELECT id FROM (SELECT id, row_number() OVER ("
+        "    PARTITION BY sku ORDER BY created_at, id) AS n"
+        "    FROM public.product_variants WHERE sku IS NOT NULL) d WHERE n > 1)"
+    ),
+    (
+        "CREATE UNIQUE INDEX IF NOT EXISTS product_variants_sku_key "
+        "ON public.product_variants(sku) WHERE sku IS NOT NULL"
+    ),
     # which variant an order line took its stock from (B6.8). NULL on legacy
     # rows and on products without a variant matrix — cancellation then only
     # restores the product aggregate. ON DELETE SET NULL so removing a variant

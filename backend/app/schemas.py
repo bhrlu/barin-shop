@@ -301,20 +301,46 @@ class ProductFacets(BaseModel):
 # --- product variants --------------------------------------------------------------
 
 
+HEX_COLOR = r"^#[0-9a-fA-F]{6}$"
+
+
+def _strip_sku(value: str | None) -> str | None:
+    """SKUs are unique when set (AB-BE-02); surrounding spaces are not part of one."""
+    return value.strip() if isinstance(value, str) else value
+
+
 class ProductVariantIn(BaseModel):
     size: str = Field(min_length=1, max_length=40)
     color: str = Field(min_length=1, max_length=60)
     sku: str | None = Field(default=None, max_length=80)
     stock: int = Field(default=0, ge=0)
     active: bool = True
+    # AB-BE-02: NULL = the product's price; the only place a variant price comes from
+    price_override: int | None = Field(default=None, gt=0)
+    color_hex: str | None = Field(default=None, pattern=HEX_COLOR)
+
+    @field_validator("sku")
+    @classmethod
+    def _blank_sku_is_none(cls, value: str | None) -> str | None:
+        return _strip_sku(value) or None
 
 
 class ProductVariantUpdateIn(BaseModel):
+    """PATCH: omitted / null = unchanged. To clear (F5.16 convention): `sku: ""`,
+    `price_override: 0`, `color_hex: ""`."""
+
     size: str | None = Field(default=None, min_length=1, max_length=40)
     color: str | None = Field(default=None, min_length=1, max_length=60)
     sku: str | None = Field(default=None, max_length=80)
     stock: int | None = Field(default=None, ge=0)
     active: bool | None = None
+    price_override: int | None = Field(default=None, ge=0)
+    color_hex: str | None = Field(default=None, pattern=r"^(#[0-9a-fA-F]{6})?$")
+
+    @field_validator("sku")
+    @classmethod
+    def _strip(cls, value: str | None) -> str | None:
+        return _strip_sku(value)
 
 
 class ProductVariantOut(BaseModel):
@@ -325,6 +351,8 @@ class ProductVariantOut(BaseModel):
     sku: str | None
     stock: int
     active: bool
+    price_override: int | None = None
+    color_hex: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
 

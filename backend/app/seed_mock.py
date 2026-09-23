@@ -499,7 +499,7 @@ async def _seed_variants(conn) -> None:
         if not await _exists(conn, "SELECT 1 FROM public.products WHERE id = :pid",
                              {"pid": product_id}):
             continue
-        for size, color, stock in rows:
+        for index, (size, color, stock) in enumerate(rows, start=1):
             await conn.execute(
                 text(
                     "INSERT INTO public.product_variants "
@@ -511,7 +511,9 @@ async def _seed_variants(conn) -> None:
                     "pid": product_id,
                     "size": size,
                     "color": color,
-                    "sku": f"{product_id.upper()}-{size}-{abs(hash(color)) % 1000:03d}",
+                    # unique per product row: SKUs are globally unique since AB-BE-02,
+                    # and `hash(color)` changed every run and could collide
+                    "sku": f"{product_id.upper()}-{size}-{index:02d}",
                     "stock": stock,
                     # a sold-out variant stays visible but inactive
                     "active": stock > 0,

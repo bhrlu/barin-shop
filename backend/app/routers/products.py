@@ -44,7 +44,7 @@ from app.schemas import (
 )
 from app.services.audit import record_audit
 from app.services.catalog_filters import split_multi
-from app.services.db_errors import is_unique_violation
+from app.services.db_errors import is_unique_violation, violated_constraint
 from app.services.pagination import apply_limit_offset, clamp_page_size, count_rows, envelope
 from app.services.recommendations import CO_VOTES_SQL
 from app.services.roles import has_capability
@@ -67,8 +67,17 @@ _PRODUCT_COLS = (
 _SELECT = f"SELECT {_PRODUCT_COLS} FROM public.products p"
 
 _VARIANT_COLS = (
-    "id, product_id, size, color, sku, stock, active, created_at, updated_at"
+    "id, product_id, size, color, sku, stock, active, price_override, color_hex, "
+    "created_at, updated_at"
 )
+_SKU_TAKEN = "این SKU قبلاً برای تنوع دیگری ثبت شده است"
+
+
+def _variant_conflict(exc: IntegrityError, fallback: str) -> HTTPException:
+    """409 for a duplicate; which rule was hit decides the message (AB-BE-02)."""
+    if violated_constraint(exc) == "product_variants_sku_key":
+        return HTTPException(status.HTTP_409_CONFLICT, _SKU_TAKEN)
+    return HTTPException(status.HTTP_409_CONFLICT, fallback)
 
 SortKey = Literal["new", "price_asc", "price_desc", "popular", "rating"]
 
@@ -391,8 +400,8 @@ async def create_variant(
             await session.execute(
                 text(
                     "INSERT INTO public.product_variants "
-                    "(product_id, size, color, sku, stock, active) "
-                    "VALUES (:pid, :size, :color, :sku, :stock, :active) "
+                    "(product_id, size, color, sku, stock, active, price_override, color_hex) "
+                    "VALUES (:pid, :size, :color, :sku, :stock, :active, :price, :hex) "
                     f"RETURNING {_VARIANT_COLS}"
                 ),
                 {
@@ -402,6 +411,8 @@ async def create_variant(
                     "sku": body.sku,
                     "stock": body.stock,
                     "active": body.active,
+                    "price": body.price_override,
+                    "hex": body.color_hex,
                 },
             )
         ).mappings().first()
@@ -416,6 +427,9 @@ async def create_variant(
                 "size": body.size,
                 "color": body.color,
                 "stock": body.stock,
+                "sku": body.sku,
+                "price_override": body.price_override,
+                "color_hex": body.color_hex,
             },
         )
         await session.commit()
@@ -426,9 +440,7 @@ async def create_variant(
         if not is_unique_violation(exc):
             log.exception("variant insert failed with an unexpected integrity error")
             raise
-        raise HTTPException(
-            status.HTTP_409_CONFLICT, "این ترکیب سایز و رنگ قبلاً ثبت شده است"
-        ) from exc
+        raise _variant_conflict(exc, "این ترکیب سایز و رنگ قبلاً ثبت شده است") from exc
     return _variant_to_out(row)
 
 
@@ -438,11 +450,15 @@ async def update_variant(
 ) -> ProductVariantOut:
     sets: list[str] = []
     params: dict[str, Any] = {"vid": str(variant_id)}
-    for field in ("size", "color", "sku", "stock", "active"):
+    for field in ("size", "color", "sku", "stock", "active", "price_override", "color_hex"):
         value = getattr(body, field)
         if value is not None:
             sets.append(f"{field} = :{field}")
-            params[field] = value
+            # the clear values (F5.16 convention) store NULL
+            cleared = value == "" if field in ("sku", "color_hex") else (
+                field == "price_override" and value == 0
+            )
+            params[field] = None if cleared else value
     if not sets:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "چیزی برای به‌روزرسانی نیست")
 
@@ -478,9 +494,7 @@ async def update_variant(
         if not is_unique_violation(exc):
             log.exception("variant update failed with an unexpected integrity error")
             raise
-        raise HTTPException(
-            status.HTTP_409_CONFLICT, "به‌روزرسانی تنوع ناموفق بود"
-        ) from exc
+        raise _variant_conflict(exc, "این ترکیب سایز و رنگ قبلاً ثبت شده است") from exc
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "تنوع پیدا نشد")
     return _variant_to_out(row)

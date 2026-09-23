@@ -16,3 +16,16 @@ def is_unique_violation(exc: IntegrityError) -> bool:
     violations — is an unexpected failure, not a duplicate request.
     """
     return getattr(exc.orig, "sqlstate", None) == "23505"
+
+
+def violated_constraint(exc: IntegrityError) -> str | None:
+    """Name of the constraint / unique index Postgres reported, when it did.
+
+    Lets a handler tell two unique rules on one table apart (AB-BE-02: a variant's
+    size×colour vs its SKU) without parsing the message.
+    """
+    for candidate in (exc.orig, getattr(exc.orig, "__cause__", None)):
+        name = getattr(candidate, "constraint_name", None)
+        if name:
+            return name
+    return None

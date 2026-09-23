@@ -507,7 +507,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "AB-BE-02",
+    "agent_start_task": "F5.18",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -710,13 +710,16 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "AB-BE-02",
       "title": "Variant SKU / price / color fields",
       "priority": "P2",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "backend_db_api",
       "depends_on": [],
       "blocks": ["AB-FE-03"],
       "batch": "C",
       "source": "ADMIN-BACKEND_TASKS.md:BE-01",
-      "scope": "Add unique SKU, nullable price_override, color_hex, schemas, CRUD support, and idempotent DDL."
+      "scope": "Add unique SKU, nullable price_override, color_hex, schemas, CRUD support, and idempotent DDL.",
+      "audit": "plan/audit/2026-09-23-abbe02-variant-sku-price-color.md",
+      "verification_level": "clean-environment tested",
+      "completed": "2026-09-23"
     },
     {
       "id": "F5.8",
@@ -781,7 +784,7 @@ changes to the file shipped in sequence; the collision is closed.
       "priority": "P2",
       "status": "TODO",
       "layer": "frontend",
-      "depends_on": ["AB-BE-02"],
+      "depends_on": ["AB-BE-02", "F5.18"],
       "blocks": [],
       "batch": "E",
       "source": "ADMIN-FRONTEND_TASKS.md:FE-04",
@@ -1264,6 +1267,20 @@ changes to the file shipped in sequence; the collision is closed.
       "discovered_as": "NEW-ABFE04-2",
       "discovered_during": "AB-FE-04",
       "scope": "The presigned PUT from /storage/upload-url signs no content-type or length: 200 kB of random bytes as text/plain were accepted. The 5 MB / image-type rule is client-side only. Switch to a presigned POST policy (content-length-range <= 5 MB, Content-Type starts-with image/) and move api.uploadImage to a multipart POST (keeping progress), or equivalent server-side enforcement; tests + browser upload."
+    },
+    {
+      "id": "F5.18",
+      "title": "Storefront shows variant price overrides",
+      "priority": "P2",
+      "status": "TODO",
+      "layer": "frontend",
+      "depends_on": ["AB-BE-02"],
+      "blocks": ["AB-FE-03"],
+      "batch": "D",
+      "source": "frontend-tasks.md",
+      "discovered_as": "NEW-ABBE02-1",
+      "discovered_during": "AB-BE-02",
+      "scope": "The server prices a line with the variant's price_override (AB-BE-02), but the product page shows products.price for every variant and the cart/checkout subtotal (useCartSubtotal) uses catalogue prices, which the cart also sends to /coupons/validate. Show the selected variant's price on the product page, and take the cart/checkout subtotal from the POST /stock/check quote the cart already makes (server-authoritative); browser-test with an override."
     }
   ],
   "excluded": [
@@ -1284,8 +1301,8 @@ changes to the file shipped in sequence; the collision is closed.
     }
   ],
   "counts": {
-    "total_executable": 51,
-    "done": 30,
+    "total_executable": 52,
+    "done": 31,
     "open": 21,
     "P0": 0,
     "P1": 0,
@@ -1941,7 +1958,10 @@ Pytest + live stock mutation flow.
 ## AB-BE-02 — Variant SKU / price / color fields
 
 * **Layer:** Backend + DB + API
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-abbe02-variant-sku-price-color.md`](audit/2026-09-23-abbe02-variant-sku-price-color.md)
+* **Verification level:** clean-environment tested
+* **Delivered:** Variants gain a unique SKU (partial unique index; duplicate → 409 with its own message; blank → none), `price_override` (INTEGER > 0, honoured by `/stock/check` and checkout via one `variant_price()`, from the DB only) and `color_hex` (`#rrggbb`); PATCH clears with ``""``/`0`; idempotent guarded DDL with SKU normalisation; deterministic seed SKUs. 13 tests (negative controls), pytest 229, smoke 235/0, clean env (4 stages, seed_mock ×2). Found: F5.18. Clean-environment tested.
 * **Dependencies:** none
 * **Blocks:** AB-FE-03
 
@@ -2092,7 +2112,8 @@ Desktop + mobile + multiple role scenarios.
 
 * **Layer:** Frontend
 * **Status:** TODO
-* **Dependencies:** AB-BE-02
+* **Dependencies:** AB-BE-02 (DONE), F5.18 (added by AB-BE-02: do not expose
+  `price_override` in the editor before the storefront shows overrides)
 
 ### Required implementation
 
@@ -3078,6 +3099,49 @@ coupon browser flows still pass.
 
 ---
 
+## F5.18 — Storefront shows variant price overrides
+
+* **Layer:** Frontend
+* **Status:** TODO
+* **Priority:** P2
+* **Batch:** D
+* **Dependencies:** `AB-BE-02` (DONE)
+* **Blocks:** `AB-FE-03` (its editor must not expose `price_override` before the
+  storefront shows it)
+* **Discovered as:** `NEW-ABBE02-1` during `AB-BE-02` — legacy discovery ID only;
+  `F5.18` is the executable ID.
+* **Source:** `frontend-tasks.md` F5.18
+
+### Problem
+
+Since AB-BE-02 the server prices a line with the variant's `price_override`, in
+`POST /stock/check`, `POST /checkout` and `order_items.price`. The storefront does
+not know about it:
+
+- the product page shows `products.price` whatever size or colour is selected;
+- the cart and checkout subtotal (`useCartSubtotal`, F5.12) multiplies catalogue
+  prices;
+- the cart sends that display subtotal to `POST /coupons/validate`.
+
+The displayed total would differ from the charged one. Today no UI can set an
+override (API only).
+
+### Required implementation
+
+- Product page: show the selected variant's price when it has an override (the
+  variant list is already fetched and now carries `price_override`).
+- Cart and checkout: show the subtotal from the `POST /stock/check` quote the cart
+  already requests (server-authoritative, R11), and use it for the coupon quote.
+  Keep a sensible loading state.
+
+### Verification
+
+Browser: a variant with an override shows its price on the product page. The cart,
+coupon and checkout totals equal the created order's total. Products without
+overrides are unchanged.
+
+---
+
 ## B2.1a — Activate the real SMS/email providers
 
 * **Layer:** Backend / infra configuration
@@ -3309,7 +3373,7 @@ files.
 ```text
 B5.1b  (DONE 2026-09-23)
 AB-BE-01
-AB-BE-02
+AB-BE-02  (DONE 2026-09-23)
 B5.1c
 B5.4a  (DONE 2026-09-23)
 B2.2b
@@ -3342,6 +3406,7 @@ F5.14  (DONE 2026-09-22)
 F5.15  (DONE 2026-09-23)
 F5.16  (DONE 2026-09-23)
 F5.17
+F5.18
 ```
 
 These can mostly run in parallel because they touch different concerns.
@@ -3406,8 +3471,8 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**21** open · **30** DONE · 51 executable in total.
-24 units were added by discovery during earlier tasks (see
+**21** open · **31** DONE · 52 executable in total.
+25 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
@@ -3567,11 +3632,11 @@ were freshly executed.
 ## START HERE
 
 ```text
-AB-BE-02
+F5.18
 ```
 
-30 of 51 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. next P2 — variant SKU / price / color fields (unblocks AB-FE-03)
+31 of 52 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. P2 found in AB-BE-02 — the storefront must show variant price overrides before AB-FE-03 exposes them
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -3675,11 +3740,11 @@ Reconciliation date:
 Current state:
 
 ```text
-21 remaining implementation units (B2.1a, AB-BE-01, AB-BE-02, F4.3, AB-FE-03, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B6.15, B5.1e, F5.17, B6.18)
-30 completed implementation units
+21 remaining implementation units (B2.1a, AB-BE-01, F4.3, AB-FE-03, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B6.15, B5.1e, F5.17, B6.18, F5.18)
+31 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = AB-BE-02
+NEXT = F5.18
 ```
