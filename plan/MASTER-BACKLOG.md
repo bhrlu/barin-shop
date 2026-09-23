@@ -884,7 +884,7 @@ changes to the file shipped in sequence; the collision is closed.
       "scope": "Allow preorder checkout, persist preorder marker, avoid physical stock decrement, expose preorder state to admin, and integrate applicable notifications."
     },
     {
-      "id": "NEW-B68-1",
+      "id": "B6.8a",
       "title": "Drop the redundant information_schema probe in restore_stock()",
       "priority": "P3",
       "status": "TODO",
@@ -892,11 +892,13 @@ changes to the file shipped in sequence; the collision is closed.
       "depends_on": ["B6.8"],
       "blocks": [],
       "batch": "F",
-      "source": "discovered-during-B6.8",
-      "scope": "order_items.variant_id is now always created by startup_ddl(), so the per-cancellation column-existence query in order_lifecycle.restore_stock() can be removed once every deployed stack has run the new DDL."
+      "source": "backend-tasks.md",
+      "scope": "order_items.variant_id is now always created by startup_ddl(), so the per-cancellation column-existence query in order_lifecycle.restore_stock() can be removed once every deployed stack has run the new DDL.",
+      "discovered_as": "NEW-B68-1",
+      "discovered_during": "B6.8"
     },
     {
-      "id": "NEW-B69-1",
+      "id": "B6.9a",
       "title": "Narrow the remaining bare except Exception handlers in products/storage routers",
       "priority": "P2",
       "status": "TODO",
@@ -904,8 +906,10 @@ changes to the file shipped in sequence; the collision is closed.
       "depends_on": [],
       "blocks": [],
       "batch": "E",
-      "source": "discovered-during-B6.9",
-      "scope": "routers/products.py turns any failure in four CRUD handlers into a 409 duplicate message, and routers/storage.py has two broad handlers to review; apply the B6.9 shape (IntegrityError + SQLSTATE 23505 only, re-raise the rest)."
+      "source": "backend-tasks.md",
+      "scope": "routers/products.py turns any failure in four CRUD handlers into a 409 duplicate message, and routers/storage.py has two broad handlers to review; apply the B6.9 shape (IntegrityError + SQLSTATE 23505 only, re-raise the rest).",
+      "discovered_as": "NEW-B69-1",
+      "discovered_during": "B6.9"
     },
     {
       "id": "F5.9",
@@ -2333,6 +2337,34 @@ it is down.
 
 ---
 
+## B6.9a — Narrow the remaining bare `except Exception` handlers
+
+* **Layer:** Backend
+* **Status:** TODO
+* **Priority:** P2
+* **Batch:** E
+* **Dependencies:** none
+* **Discovered as:** `NEW-B69-1` during `B6.9` — legacy discovery ID only;
+  `B6.9a` is the executable ID.
+* **Source:** `backend-tasks.md` B6.9a
+
+### Problem
+
+`routers/products.py` turns any failure in four CRUD handlers (variant and product)
+into a 409 «این ترکیب سایز و رنگ قبلاً ثبت شده است»; `routers/storage.py` has two
+broad handlers to review. A real database fault is disguised as a duplicate.
+
+### Required implementation
+
+Apply the B6.9 shape: catch `IntegrityError` and answer 409 only for SQLSTATE
+`23505`; log and re-raise everything else. Keep the success and duplicate contracts.
+
+### Verification
+
+pytest per handler: real duplicate → 409, other integrity error → 500 (not 409).
+
+---
+
 # P3 — Future
 
 ## B2.3 — PDF invoices
@@ -2795,6 +2827,35 @@ Headless browser: guest direct-load of `/account`, `/account/orders`,
 
 ---
 
+## B6.8a — Drop the redundant `information_schema` probe in `restore_stock()`
+
+* **Layer:** Backend
+* **Status:** TODO
+* **Priority:** P3
+* **Batch:** F
+* **Dependencies:** `B6.8` (DONE)
+* **Discovered as:** `NEW-B68-1` during `B6.8` — legacy discovery ID only;
+  `B6.8a` is the executable ID.
+* **Source:** `backend-tasks.md` B6.8a
+
+### Problem
+
+`order_lifecycle.restore_stock()` queries `information_schema` on every
+cancellation to see whether `order_items.variant_id` exists; `startup_ddl()` always
+creates it now (and every seed job runs the DDL), so the probe is dead weight.
+
+### Required implementation
+
+Remove the probe and select `variant_id` directly; keep the variant-then-aggregate
+restore order and the legacy NULL-`variant_id` behaviour.
+
+### Verification
+
+`tests/test_order_lifecycle_stock.py` + full pytest + smoke (cancellation restores
+stock).
+
+---
+
 # 8. Explicitly not executable
 
 ## B4.8 — Product model dimension
@@ -2966,6 +3027,7 @@ These can mostly run in parallel because they touch different concerns.
 
 ```text
 AB-FE-03
+B6.9a
 ```
 
 Start after `AB-BE-02`.
@@ -2984,6 +3046,7 @@ B2.5
 B2.2a
 B4.13
 B2.1a  (needs real credentials)
+B6.8a
 F3.4b
 F4.3
 AB-FE-06
@@ -3020,7 +3083,7 @@ After resolving the decisions:
 
 **29** (17 completed: B6.8, B6.9, AB-BE-03, F5.5, F5.6, AB-FE-02, AB-FE-05, B3.11,
 B2.1, F5.14, F2.3, F5.15, B6.13, B5.1d, F5.13, B6.14, F5.16; 19 added by discovery:
-NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10, B2.2b, B5.4b, F5.11, F5.12, B2.1a,
+B6.8a, B6.9a, F5.9, B5.1c, B5.4a, F5.10, B2.2b, B5.4b, F5.11, F5.12, B2.1a,
 B5.1d, B6.13, F5.13, F5.14, F5.15, F5.16, B6.14, B6.15)
 
 ### Ready for execution
@@ -3318,7 +3381,7 @@ Current state:
 
 ```text
 29 remaining implementation units
-  (17 of the original 27, plus NEW-B68-1, NEW-B69-1, F5.9, B5.1c, B5.4a, F5.10,
+  (17 of the original 27, plus B6.8a, B6.9a, F5.9, B5.1c, B5.4a, F5.10,
    B2.2b, B5.4b, F5.11, F5.12, B2.1a and B6.15 —
    the last ten discovered as NEW-ABBE03-1, NEW-F55-1, NEW-F56-1,
    NEW-F56-2, NEW-ABFE02-1, NEW-ABFE05-1/2/3, NEW-B21-1…4/6, NEW-F514-1 and
