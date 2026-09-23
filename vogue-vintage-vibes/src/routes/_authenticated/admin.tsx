@@ -1,7 +1,10 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
+  Bell,
+  ChevronLeft,
+  ExternalLink,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -15,6 +18,7 @@ import {
   Star,
   Store,
   Tag,
+  UserRound,
   Users,
 } from "lucide-react";
 import { api, type KpiRange } from "@/lib/api";
@@ -22,6 +26,23 @@ import { useAuth } from "@/lib/auth";
 import { toFa } from "@/lib/format";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
@@ -136,11 +157,43 @@ const ROLE_TAB_KEYS: Record<string, TabKey[]> = {
 
 const KPI_RANGE: KpiRange = "all";
 
+/** Up to two initials for the staff avatar: from the name's words, else the email. */
+function initials(name: string | null | undefined, email: string | null | undefined): string {
+  const words = (name ?? "").trim().split(/\s+/).filter(Boolean);
+  if (words.length)
+    return words
+      .slice(0, 2)
+      .map((word) => word[0])
+      .join("");
+  return (email ?? "?").trim().charAt(0).toUpperCase() || "?";
+}
+
 function AdminLayout() {
   const { user, isAdmin, loading, signOut } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [quickSearch, setQuickSearch] = useState("");
+  const desktopSearch = useRef<HTMLInputElement>(null);
+  const mobileSearch = useRef<HTMLInputElement>(null);
+
+  // Ctrl+K / ⌘K focuses the quick search the placeholder advertises (spec [FE-01].2).
+  // `code` rather than `key`: with the Persian layout the K key types «ن».
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== "KeyK" || !(event.ctrlKey || event.metaKey)) return;
+      if (event.altKey || event.shiftKey) return;
+      // whichever box is on screen: the header one from lg up, the in-page one below
+      const input = [desktopSearch.current, mobileSearch.current].find(
+        (element) => element && element.offsetParent !== null,
+      );
+      if (!input) return;
+      event.preventDefault();
+      input.focus();
+      input.select();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const role = user?.role ?? "customer";
   const roleLabel = ROLE_LABELS[role] ?? ROLE_LABELS["customer"];
@@ -250,9 +303,37 @@ function AdminLayout() {
             </SheetContent>
           </Sheet>
 
+          {/* breadcrumbs: panel › current section (the root crumb hides on phones) */}
+          <Breadcrumb aria-label="مسیر صفحه" className="min-w-0 shrink">
+            <BreadcrumbList className="flex-nowrap">
+              <BreadcrumbItem className="hidden sm:inline-flex">
+                {/* a Link marks itself aria-current when active, and without `exact`
+                    /admin is active on every admin page — one crumb only may be current */}
+                {currentTab?.key === "dashboard" ? (
+                  <span>پنل مدیریت</span>
+                ) : (
+                  <BreadcrumbLink asChild>
+                    <Link to="/admin" activeOptions={{ exact: true }}>
+                      پنل مدیریت
+                    </Link>
+                  </BreadcrumbLink>
+                )}
+              </BreadcrumbItem>
+              <BreadcrumbSeparator className="hidden sm:block">
+                <ChevronLeft />
+              </BreadcrumbSeparator>
+              <BreadcrumbItem className="min-w-0">
+                <BreadcrumbPage className="truncate">
+                  {currentTab?.label ?? "پنل مدیریت"}
+                </BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+
           {/* global quick search (desktop) */}
           <form onSubmit={submitQuickSearch} className="hidden max-w-md flex-1 lg:block">
             <input
+              ref={desktopSearch}
               type="search"
               value={quickSearch}
               onChange={(event) => setQuickSearch(event.target.value)}
@@ -264,10 +345,59 @@ function AdminLayout() {
 
           <div className="flex-1" />
 
-          {/* role badge + logout */}
-          <span className="rounded-full border border-sage-deep/40 px-3 py-1 text-[11px] text-sage-deep">
+          {/* storefront preview — a new tab, so the admin keeps their place */}
+          <a
+            href="/"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="مشاهدهٔ فروشگاه در زبانهٔ تازه"
+            className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+            <span className="hidden md:inline">مشاهدهٔ فروشگاه</span>
+          </a>
+
+          {/* role badge (in the avatar menu on phones) + avatar menu + logout */}
+          <span className="hidden rounded-full border border-sage-deep/40 px-3 py-1 text-[11px] text-sage-deep sm:inline">
             {roleLabel}
           </span>
+          <DropdownMenu dir="rtl">
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="منوی حساب کارمند"
+                className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-terracotta/40"
+              >
+                <Avatar className="h-9 w-9 border border-border/70">
+                  <AvatarFallback className="bg-terracotta/10 text-xs font-semibold text-terracotta">
+                    {initials(user?.full_name, user?.email)}
+                  </AvatarFallback>
+                </Avatar>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-60">
+              <DropdownMenuLabel className="font-normal">
+                <p className="truncate text-sm text-foreground">{user?.full_name || "کارمند"}</p>
+                <p className="truncate text-right text-xs text-muted-foreground" dir="ltr">
+                  {user?.email}
+                </p>
+                <p className="mt-1 text-[11px] text-sage-deep">{roleLabel}</p>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link to="/account" className="gap-2">
+                  <UserRound className="h-4 w-4" aria-hidden />
+                  حساب کاربری من
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to="/account/notifications" className="gap-2">
+                  <Bell className="h-4 w-4" aria-hidden />
+                  اعلان‌ها
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button
             variant="ghost"
             size="icon"
@@ -306,6 +436,7 @@ function AdminLayout() {
               <div className="mb-6 lg:hidden">
                 <form onSubmit={submitQuickSearch}>
                   <input
+                    ref={mobileSearch}
                     type="search"
                     value={quickSearch}
                     onChange={(event) => setQuickSearch(event.target.value)}

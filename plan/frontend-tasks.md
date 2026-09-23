@@ -478,6 +478,12 @@ conflict (DESIGN_SYSTEM.md §5).
   once after mount to the URL captured on first render. 7 → 0 hydration failures;
   browser tested (20/20 + 58/58 + 16/16 + 54/54).
   → audit: [2026-09-23-f513-guard-redirect-after-mount.md](audit/2026-09-23-f513-guard-redirect-after-mount.md)
+- [ ] **F5.17 Admin coupons page is not route-split** (`NEW-ABFE01-1`, discovered
+  during AB-FE-01) — `admin.coupons.tsx` exports its page component
+  (`export function AdminCoupons`), which nothing imports; the export stops
+  TanStack's automatic route splitting, and the production build shows the whole
+  coupons page (list, card, dialog) inlined in the shared `index-*.js` every
+  storefront visitor downloads. Drop the export; verify the page gets its own chunk.
 
 ## Rules reminder
 

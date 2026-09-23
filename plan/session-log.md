@@ -2494,3 +2494,27 @@ byte-identical to the baseline.
 
 Level: *measured on the production build, no code change*.
 → audit: [2026-09-23-f57-admin-chart-bundle-measurement.md](audit/2026-09-23-f57-admin-chart-bundle-measurement.md)
+
+## 2026-09-23 — AB-FE-01 admin topbar completion
+
+These were added to the F4.2 shell in `admin.tsx`, with no rewrite:
+
+- **Breadcrumbs.** Only the section crumb is `aria-current`. TanStack's `Link` marks
+  itself current, and without `exact` the `/admin` root is active everywhere; the
+  browser test caught two current crumbs before that fix.
+- **Avatar menu.** An initials avatar opens a profile menu (`DropdownMenu dir="rtl"`)
+  with the name, email and role, plus account and notification links.
+- **Storefront preview** in a new tab.
+- **Ctrl/⌘+K.** The placeholder had advertised it since F4.2, but nothing listened.
+  It matches `event.code`, so it works on the Persian layout (`«ن»`).
+- **Phones:** the role badge folds into the menu.
+
+Verification: 70 browser checks over three staff roles at two widths, plus a
+customer. Screenshots reviewed.
+
+Found: **F5.17**. `admin.coupons.tsx` exports its page component, which defeats
+route splitting; the production build shows the whole coupons page in the shared
+entry chunk.
+
+Level: *browser tested*.
+→ audit: [2026-09-23-abfe01-admin-topbar.md](audit/2026-09-23-abfe01-admin-topbar.md)

@@ -507,7 +507,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "AB-FE-01",
+    "agent_start_task": "AB-FE-04",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -764,13 +764,16 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "AB-FE-01",
       "title": "Admin topbar completion",
       "priority": "P2",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "frontend",
       "depends_on": [],
       "blocks": [],
       "batch": "D",
       "source": "ADMIN-FRONTEND_TASKS.md:FE-01",
-      "scope": "Complete breadcrumbs, profile/avatar actions, command/quick actions, storefront preview, and responsive details without rewriting the existing shell."
+      "scope": "Complete breadcrumbs, profile/avatar actions, command/quick actions, storefront preview, and responsive details without rewriting the existing shell.",
+      "audit": "plan/audit/2026-09-23-abfe01-admin-topbar.md",
+      "verification_level": "browser tested",
+      "completed": "2026-09-23"
     },
     {
       "id": "AB-FE-03",
@@ -1213,6 +1216,20 @@ changes to the file shipped in sequence; the collision is closed.
       "discovered_as": "NEW-B51B-1",
       "discovered_during": "B5.1b",
       "scope": "The backend connects as the schema owner and (compose) a superuser, so any path can drop tables, disable triggers or rewrite the audit trail. Split a migrator role (owns schema, runs startup_ddl/seeds) from a DML-only app role the backend uses; clean-env proof that the app role cannot ALTER/DROP/disable triggers."
+    },
+    {
+      "id": "F5.17",
+      "title": "Admin coupons page is not route-split (exported component)",
+      "priority": "P3",
+      "status": "TODO",
+      "layer": "frontend",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "D",
+      "source": "frontend-tasks.md",
+      "discovered_as": "NEW-ABFE01-1",
+      "discovered_during": "AB-FE-01",
+      "scope": "admin.coupons.tsx exports its page component (export function AdminCoupons), which nothing imports; the export stops TanStack's automatic route splitting, so the whole coupons page (list, card, dialog) ships in the shared index-*.js every storefront visitor downloads. Drop the export (or move the component to a non-route file); verify with the production build that the page gets its own chunk and the entry shrinks."
     }
   ],
   "excluded": [
@@ -1233,13 +1250,13 @@ changes to the file shipped in sequence; the collision is closed.
     }
   ],
   "counts": {
-    "total_executable": 48,
-    "done": 27,
+    "total_executable": 49,
+    "done": 28,
     "open": 21,
     "P0": 0,
     "P1": 0,
-    "P2": 7,
-    "P3": 14,
+    "P2": 6,
+    "P3": 15,
     "blocked": 0,
     "dropped": 2,
     "obsolete": 1,
@@ -2011,7 +2028,10 @@ Use the component in multiple real admin screens.
 ## AB-FE-01 — Admin topbar completion
 
 * **Layer:** Frontend
-* **Status:** TODO
+* **Status:** DONE (2026-09-23)
+* **Audit:** [`plan/audit/2026-09-23-abfe01-admin-topbar.md`](audit/2026-09-23-abfe01-admin-topbar.md)
+* **Verification level:** browser tested
+* **Delivered:** Breadcrumbs «پنل مدیریت › section» (single `aria-current`), initials avatar with an RTL profile menu (name/email/role, account + notifications links), storefront preview in a new tab, and a working Ctrl/⌘+K (layout-independent `code`) that focuses the visible quick search; role badge folds into the menu on phones. 70 browser checks over admin / order_manager / support at 1366 and 390 px + customer. Found: F5.17. Browser tested.
 * **Dependencies:** none
 
 ### Required implementation
@@ -2911,6 +2931,43 @@ stock-issue flows re-tested.
 
 ---
 
+## F5.17 — Admin coupons page is not route-split
+
+* **Layer:** Frontend
+* **Status:** TODO
+* **Priority:** P3
+* **Batch:** D
+* **Dependencies:** none
+* **Discovered as:** `NEW-ABFE01-1` during `AB-FE-01` — legacy discovery ID only;
+  `F5.17` is the executable ID.
+* **Source:** `frontend-tasks.md` F5.17
+
+### Problem
+
+`routes/_authenticated/admin.coupons.tsx` has `export function AdminCoupons()`.
+Nothing imports it, but TanStack Router cannot split a route component that the
+route file also exports. The dev server warns: «These exports … will not be
+code-split and will increase your bundle size: AdminCoupons».
+
+The production build confirms it:
+
+- the coupons page's list, card and create/edit dialog are inlined in the shared
+  `index-*.js`, so every storefront page downloads them;
+- every other admin page is a lazy `import()`.
+
+### Required implementation
+
+Remove the export, or move the component to a non-route module. Keep behaviour
+identical.
+
+### Verification
+
+Production build: the coupons page has its own chunk, `index-*.js` no longer
+contains its strings (e.g. «کد جدید»), and the entry shrinks. The F5.14/F5.16/F5.9
+coupon browser flows still pass.
+
+---
+
 ## B2.1a — Activate the real SMS/email providers
 
 * **Layer:** Backend / infra configuration
@@ -3162,7 +3219,7 @@ B6.15
 ```text
 F5.8  (DONE 2026-09-23)
 F5.7  (DONE 2026-09-23)
-AB-FE-01
+AB-FE-01  (DONE 2026-09-23)
 AB-FE-04
 F3.5b  (DONE 2026-09-23)
 F5.10
@@ -3172,6 +3229,7 @@ F5.13  (DONE 2026-09-23)
 F5.14  (DONE 2026-09-22)
 F5.15  (DONE 2026-09-23)
 F5.16  (DONE 2026-09-23)
+F5.17
 ```
 
 These can mostly run in parallel because they touch different concerns.
@@ -3236,8 +3294,8 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**21** open · **27** DONE · 48 executable in total.
-21 units were added by discovery during earlier tasks (see
+**21** open · **28** DONE · 49 executable in total.
+22 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
@@ -3279,8 +3337,8 @@ D1–D9 are resolved.
 | --------- | --------: |
 | P0        |         0 |
 | P1        |         0 |
-| P2        |         7 |
-| P3        |        14 |
+| P2        |         6 |
+| P3        |        15 |
 | **Total** |    **21** |
 
 Generated from the JSON index on 2026-09-23.
@@ -3397,11 +3455,11 @@ were freshly executed.
 ## START HERE
 
 ```text
-AB-FE-01
+AB-FE-04
 ```
 
-27 of 48 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. next P2 in Batch D — admin topbar completion
+28 of 49 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section. next P2 in Batch D — product image gallery manager
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -3505,11 +3563,11 @@ Reconciliation date:
 Current state:
 
 ```text
-21 remaining implementation units (B2.1a, AB-BE-01, AB-BE-02, F4.3, AB-FE-01, AB-FE-03, AB-FE-04, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B6.15, B5.1e)
-27 completed implementation units
+21 remaining implementation units (B2.1a, AB-BE-01, AB-BE-02, F4.3, AB-FE-03, AB-FE-04, B2.5, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.8a, B5.1c, F5.10, B2.2b, F5.11, B6.15, B5.1e, F5.17)
+28 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = AB-FE-01
+NEXT = AB-FE-04
 ```
