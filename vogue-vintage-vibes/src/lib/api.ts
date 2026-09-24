@@ -375,6 +375,40 @@ export type LowStockReport = {
   variants: LowStockVariant[];
 };
 
+/** Mirrors `REASONS` in backend/app/services/inventory_log.py (F5.19). */
+export type InventoryReason = "purchase" | "restock" | "return" | "manual_adjustment";
+
+/**
+ * One row of the append-only stock ledger (AB-BE-01): a `change_amount` signed by
+ * movement. `variant_id` null means the product's aggregate stock; the joined
+ * name / size / colour / order number are null too when that row has been deleted
+ * (the ledger keeps no foreign keys, so it survives its referents).
+ */
+export type InventoryLogEntry = {
+  id: string;
+  product_id: string;
+  product_name: string | null;
+  variant_id: string | null;
+  size: string | null;
+  color: string | null;
+  order_id: string | null;
+  order_number: string | null;
+  change_amount: number;
+  reason: InventoryReason;
+  created_by: string | null;
+  created_by_email: string | null;
+  created_at: string | null;
+};
+
+export type InventoryLogQuery = {
+  page?: number | undefined;
+  pageSize?: number | undefined;
+  productId?: string | undefined;
+  variantId?: string | undefined;
+  orderId?: string | undefined;
+  reason?: InventoryReason | undefined;
+};
+
 export type Address = {
   id: string;
   title: string;
@@ -1077,6 +1111,18 @@ export const api = {
         ? `/admin/inventory/low-stock?threshold=${threshold}`
         : "/admin/inventory/low-stock",
     ),
+  /** The stock ledger, newest first; always a `Page` (F5.19). Catalog staff only. */
+  inventoryLogs: (query: InventoryLogQuery = {}) => {
+    const qs = new URLSearchParams();
+    if (query.page) qs.set("page", String(query.page));
+    if (query.pageSize) qs.set("page_size", String(query.pageSize));
+    if (query.productId) qs.set("product_id", query.productId);
+    if (query.variantId) qs.set("variant_id", query.variantId);
+    if (query.orderId) qs.set("order_id", query.orderId);
+    if (query.reason) qs.set("reason", query.reason);
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return request<Page<InventoryLogEntry>>(`/admin/inventory/logs${suffix}`);
+  },
   adminReviews: (status?: "published" | "hidden", page?: number, pageSize?: number) => {
     const qs = new URLSearchParams();
     if (status) qs.set("status", status);
