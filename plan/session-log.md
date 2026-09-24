@@ -3262,3 +3262,25 @@ JSON + prose + Batch F listing + counts (50 DONE / 8 TODO of 58) +
 it), no browser automation (D10).
 
 → audit: [2026-09-25-f34b-guest-recently-viewed.md](audit/2026-09-25-f34b-guest-recently-viewed.md)
+
+## 2026-09-25 — Continuous backlog execution: B2.2a
+
+**What was done** — second task of the continuous run (JSON index → B2.2a
+after F3.4b). Implemented CSV product import per D3: canonical service
+`services/csv_import.py` (valid-UUID `product_id` key with no name fallback,
+else normalized `name+category`; only supplied columns update; in-file
+duplicate keys 422 before anything writes; whole file in one transaction so a
+retry is safe; ledger rows via the canonical `log_stock_change` — opening
+stock `restock`, changed stock `manual_adjustment` delta, zero delta writes
+nothing, so re-importing the same file is a no-op); endpoint `POST
+/products/import` (multipart, catalog staff, one `import_products` audit row
+with counts); 11 focused tests. The tests caught a real draft bug
+(`products.id`/`inventory_logs.product_id` are TEXT — no UUID casts) before
+any commit. Verified: pytest 364 (incl. the 11 new), ruff clean, smoke 257/0.
+Backlog synced: counts 51 DONE / 7 TODO of 58, `agent_start_task`/START HERE
+→ **B4.13**. Committed and pushed.
+
+**What was NOT done** — no frontend upload control (backend-only task; a new
+checkbox if wanted), no locale-date parsing (ISO-8601 as the manual editor).
+
+→ audit: [2026-09-25-b22a-csv-product-import.md](audit/2026-09-25-b22a-csv-product-import.md)

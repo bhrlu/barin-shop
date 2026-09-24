@@ -65,8 +65,18 @@ Legend: `[ ]` todo · `[x]` done (audit file required) · audit links in `plan/a
   (daily/monthly revenue excluding cancelled, top-10 best-sellers). openpyxl added;
   backend image rebuilt. CSV product *import* split out — see new checkbox below.
   → audit: [2026-09-22-b22-reports-exports.md](audit/2026-09-22-b22-reports-exports.md)
-- [ ] **B2.2a CSV product import** — bulk upsert from CSV; needs an overwrite/
+- [x] **B2.2a CSV product import** — bulk upsert from CSV; needs an overwrite/
   skip policy decision (idempotency key: product id vs name+category) before building
+  Done (2026-09-25, decision D3): `services/csv_import.py` + `POST
+  /products/import` (catalog staff, one transaction per file, one
+  `import_products` audit row). Key: valid `product_id` (no name fallback;
+  bogus id = 422) else normalized `name+category`; only supplied columns
+  update; in-file duplicates 422 before anything writes; ledger rows follow
+  the manual-edit rules (`restock` opening stock, `manual_adjustment` delta,
+  zero delta writes nothing → re-import idempotent). 11 tests incl. live-DB
+  insert/update-by-id/update-by-name, rollback on a bad cell, 403 support.
+  pytest 364, ruff clean, smoke 257/0. Integration tested.
+  → audit: [2026-09-25-b22a-csv-product-import.md](audit/2026-09-25-b22a-csv-product-import.md)
 - [x] **B2.2b Export date/encoding correctness** (`NEW-ABFE02-1`, discovered during
   AB-FE-02) — (1) `services/exports.py::parse_range` uses `.replace(tzinfo=UTC)`,
   so `from=2026-09-22T00:00:00+03:30` is read as UTC midnight: honour the offset

@@ -27,7 +27,7 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, UploadFile, status
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
@@ -42,6 +42,7 @@ from app.schemas import (
     ProductVariantOut,
     ProductVariantUpdateIn,
 )
+from app.services import csv_import
 from app.services.audit import record_audit
 from app.services.catalog_filters import split_multi
 from app.services.db_errors import is_unique_violation, violated_constraint
@@ -538,6 +539,39 @@ async def delete_variant(variant_id: UUID, session: DbSession, user: StaffCatalo
     await session.commit()
     if result.rowcount == 0:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "تنوع پیدا نشد")
+
+
+@router.post("/products/import", status_code=status.HTTP_200_OK)
+async def import_products_csv(
+    session: DbSession,
+    user: StaffCatalog,
+    file: UploadFile,
+) -> dict[str, int]:
+    """Bulk upsert from a CSV file (B2.2a, decision D3).
+
+    The canonical key is a valid `product_id` when the file supplies one,
+    otherwise the normalized `name + category`. Only supplied columns update;
+    in-file duplicate keys and malformed cells are a 422 before anything is
+    written; the whole file lands in one transaction, so a retried import is
+    safe to repeat. Catalog staff only, like the other product mutations.
+    """
+    content = await file.read()
+    if not content:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "فایل CSV خالی است")
+    report = await csv_import.import_rows(session, content, user.id)
+    await record_audit(
+        session,
+        admin_id=user.id,
+        action="import_products",
+        entity_type="product",
+        entity_id="bulk",
+        new_values={
+            "file": file.filename or "upload.csv",
+            **report,
+        },
+    )
+    await session.commit()
+    return report
 
 
 # --- admin CRUD -------------------------------------------------------------------

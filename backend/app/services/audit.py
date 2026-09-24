@@ -33,6 +33,7 @@ ACTIONS = {
     "cancel_order",
     "resolve_refund",
     "create_product",
+    "import_products",
     "update_product",
     "delete_product",
     "create_variant",

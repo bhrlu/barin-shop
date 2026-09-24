@@ -566,7 +566,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "B2.2a",
+    "agent_start_task": "B4.13",
     "playwright_e2e_status": "DEFERRED",
     "one_task_at_a_time": true,
     "verify_before_done": true,
@@ -959,13 +959,16 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "B2.2a",
       "title": "CSV product import",
       "priority": "P3",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "backend",
       "depends_on": [],
       "blocks": [],
       "batch": "F",
       "source": "backend-tasks.md",
-      "scope": "Implement idempotent upsert using product_id when supplied, otherwise normalized name+category, with partial-field updates and duplicate rejection."
+      "scope": "Implement idempotent upsert using product_id when supplied, otherwise normalized name+category, with partial-field updates and duplicate rejection.",
+      "audit": "plan/audit/2026-09-25-b22a-csv-product-import.md",
+      "verification_level": "integration tested",
+      "completed": "2026-09-25"
     },
     {
       "id": "B4.13",
@@ -3062,8 +3065,11 @@ Do not reintroduce Lovable/Supabase architecture.
 ## B2.2a — CSV product import
 
 * **Layer:** Backend
-* **Status:** TODO
+* **Status:** DONE (2026-09-25)
 * **Dependencies:** resolved D3
+* **Audit:** [`plan/audit/2026-09-25-b22a-csv-product-import.md`](audit/2026-09-25-b22a-csv-product-import.md)
+* **Verification level:** integration tested (11 live-DB tests, pytest 364,
+  smoke 257/0)
 
 ### Required implementation
 
@@ -3907,7 +3913,7 @@ B2.1   (DONE 2026-09-22)
 F2.3   (DONE 2026-09-23)
 B2.5  (DONE 2026-09-23)
 B2.5a  (needs a product decision)
-B2.2a
+B2.2a  (DONE 2026-09-25)
 B4.13
 B2.1a  (needs real credentials)
 B6.8a  (DONE 2026-09-23)
@@ -4106,16 +4112,15 @@ were freshly executed.
 ## START HERE
 
 ```text
-B2.2a — CSV product import (P3, backend; decision D3 fully specified)
+B4.13 — Preorder fulfilment flag (P3, backend; D2/D4 specified, B2.1 DONE)
 ```
 
-48 of 58 executable units are DONE — each links its audit
+50 of 58 executable units are DONE — each links its audit
 and verification level in the JSON index and in its own section.
 
-(F5.19 closed Batch D and `F3.4b` closed Batch F's other executable items on
-2026-09-25. Remaining: B2.2a (Batch F, D3-specified), AB-FE-06 (Batch F),
-B4.13 / B2.5a (unblocked, Batch F), B2.3 / F1.9 (Batch G), B2.1a (credentials),
-B6.18a (trigger-gated).)
+(F5.19, F3.4b and B2.2a closed on 2026-09-25. Remaining: B4.13 (Batch F,
+unblocked), B2.5a (needs a product decision), AB-FE-06 (Batch F),
+B2.3 / F1.9 (Batch G), B2.1a (credentials), B6.18a (trigger-gated).)
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -4219,11 +4224,11 @@ Reconciliation date:
 Current state:
 
 ```text
-8 remaining implementation units (B2.1a, B2.3, AB-FE-06, F1.9, B2.2a, B4.13, B6.18a, B2.5a)
-50 completed implementation units
+7 remaining implementation units (B2.1a, B2.3, AB-FE-06, F1.9, B4.13, B6.18a, B2.5a)
+51 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 10 product decisions resolved
-NEXT = B2.2a (Batch F, P3 backend; B2.1a parked on credentials, B6.18a gated on a trigger)
+NEXT = B4.13 (Batch F, P3 backend; B2.1a parked on credentials, B6.18a gated on a trigger, B2.5a needs a product decision)
 ```
