@@ -1,12 +1,20 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { AlertTriangle, History, PackageX } from "lucide-react";
+import { AlertTriangle, ChevronsUpDown, History, PackageSearch, PackageX, X } from "lucide-react";
 import { api, type InventoryLogEntry, type InventoryReason } from "@/lib/api";
 import { categoryTitle, type CategoryId } from "@/data/products";
 import { formatFaDateTime, formatToman, toFa } from "@/lib/format";
 import { AdminDataTable, CopyValue } from "@/components/admin/AdminDataTable";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -49,23 +57,112 @@ function cleanSearch(next: InventorySearch): InventorySearch {
   ) as InventorySearch;
 }
 
+/** F5.19: a ledger filter value that is not a UUID can never match a row —
+ * reject it here so junk URL params never reach the API. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const asId = (value: unknown): string | undefined =>
+  typeof value === "string" && UUID_RE.test(value.trim()) ? value.trim() : undefined;
+
 export const Route = createFileRoute("/_authenticated/admin/inventory")({
   validateSearch: (search: Record<string, unknown>): InventorySearch => {
     const page = Number(search["page"]);
     const reason = search["reason"];
-    const productId = search["product_id"];
-    const variantId = search["variant_id"];
     return {
       page: Number.isInteger(page) && page > 1 ? page : undefined,
       reason: REASON_VALUES.includes(reason as InventoryReason)
         ? (reason as InventoryReason)
         : undefined,
-      product_id: typeof productId === "string" && productId.trim() ? productId : undefined,
-      variant_id: typeof variantId === "string" && variantId.trim() ? variantId : undefined,
+      product_id: asId(search["product_id"]),
+      variant_id: asId(search["variant_id"]),
     };
   },
   component: AdminInventory,
 });
+
+/** F5.19: the ledger's generic product filter — a toolbar combobox backed by the
+ * canonical `GET /search?q=` API (server-side, limit 8; never downloads the
+ * catalogue). The selection lives in the URL (`product_id`), so it survives
+ * pagination, is shareable, and clears with the adjacent action. */
+function ProductFilter({
+  selectedId,
+  selectedName,
+  onSelect,
+  onClear,
+}: {
+  selectedId: string | undefined;
+  selectedName: string | null;
+  onSelect: (productId: string) => void;
+  onClear: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [debounced, setDebounced] = useState("");
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(query.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  const results = useQuery({
+    queryKey: ["inventory-product-search", debounced],
+    queryFn: () => api.search(debounced, 8),
+    enabled: open && debounced.length > 0,
+    placeholderData: keepPreviousData,
+  });
+
+  return (
+    <div className="flex items-center gap-2">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-xs transition-colors hover:border-terracotta"
+          >
+            <PackageSearch className="size-3.5 text-muted-foreground" aria-hidden />
+            {selectedId ? (
+              <span className="max-w-48 truncate">{selectedName ?? selectedId}</span>
+            ) : (
+              <span className="text-muted-foreground">فیلتر محصول…</span>
+            )}
+            <ChevronsUpDown className="size-3.5 text-muted-foreground" aria-hidden />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-72 p-0">
+          <Command>
+            <CommandInput placeholder="جست‌وجوی محصول…" value={query} onValueChange={setQuery} />
+            <CommandList className="max-h-60">
+              <CommandEmpty>
+                {debounced ? "محصولی یافت نشد." : "نام محصول را بنویسید…"}
+              </CommandEmpty>
+              {(results.data?.hits ?? []).map((hit) => (
+                <CommandItem
+                  key={hit.id}
+                  value={hit.id}
+                  onSelect={() => {
+                    onSelect(hit.id);
+                    setOpen(false);
+                  }}
+                >
+                  <span className="truncate">{hit.name}</span>
+                </CommandItem>
+              ))}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      {selectedId ? (
+        <button
+          type="button"
+          onClick={onClear}
+          title="حذف فیلتر محصول"
+          className="flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-terracotta hover:text-terracotta"
+        >
+          <X className="size-3.5" aria-hidden />
+          همه
+        </button>
+      ) : null}
+    </div>
+  );
+}
 
 /**
  * Inventory health: aggregate counts from `GET /admin/inventory`, the low-stock
@@ -104,6 +201,10 @@ function AdminInventory() {
     placeholderData: keepPreviousData,
   });
   const entries = ledger.data?.items ?? [];
+
+  /** Label for the product-filter button: the joined product name from the rows,
+   * falling back to the raw id — same derivation as the scope banner above. */
+  const productLabel = productId ? (entries[0]?.product_name ?? productId) : null;
 
   /** Any filter change starts from page 1; a patch that names a page (the pager) wins. */
   const setSearch = (patch: InventorySearch) =>
@@ -420,6 +521,14 @@ function AdminInventory() {
                 onChange: (next) => setSearch({ reason: next[0] as InventoryReason | undefined }),
               },
             ]}
+            toolbarEnd={
+              <ProductFilter
+                selectedId={productId}
+                selectedName={productLabel}
+                onSelect={(id) => setSearch({ product_id: id, variant_id: undefined })}
+                onClear={() => setSearch({ product_id: undefined, variant_id: undefined })}
+              />
+            }
             isLoading={ledger.isLoading}
             isFetching={ledger.isFetching}
             isError={ledger.isError}

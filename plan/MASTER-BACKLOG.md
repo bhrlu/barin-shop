@@ -1373,7 +1373,7 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "F5.19",
       "title": "Admin inventory ledger viewer",
       "priority": "P3",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "frontend",
       "depends_on": ["AB-BE-01"],
       "blocks": [],
@@ -1381,7 +1381,10 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "frontend-tasks.md",
       "discovered_as": "NEW-ABBE01-2",
       "discovered_during": "AB-BE-01",
-      "scope": "Show the stock ledger (GET /admin/inventory/logs: reason, change, product/variant, order number, who, when) on /admin/inventory with AdminDataTable filters (reason, product) and a per-product history link; catalog staff only (the API already 403s others)."
+      "scope": "Show the stock ledger (GET /admin/inventory/logs: reason, change, product/variant, order number, who, when) on /admin/inventory with AdminDataTable filters (reason, product) and a per-product history link; catalog staff only (the API already 403s others).",
+      "audit": "plan/audit/2026-09-25-f519-admin-inventory-ledger-viewer.md",
+      "verification_level": "integration tested + build verified (no browser session available)",
+      "completed": "2026-09-25"
     },
     {
       "id": "F5.20",
@@ -3434,7 +3437,7 @@ overrides are unchanged.
 ## F5.19 — Admin inventory ledger viewer
 
 * **Layer:** Frontend
-* **Status:** TODO
+* **Status:** DONE (2026-09-25)
 * **Priority:** P3
 * **Batch:** D
 * **Dependencies:** `AB-BE-01` (DONE)
@@ -3458,6 +3461,20 @@ Add a history view on `/admin/inventory` built with `AdminDataTable` (F4.3):
 - a link from each product to its history.
 
 Catalog staff only; the API already refuses others.
+
+### Delivered (2026-09-25)
+
+The screen (shipped with `db61c2c`) gains the missing generic product filter: a
+toolbar combobox (`AdminDataTable` `toolbarEnd`, Popover + Command) backed by
+`GET /search?q=` (limit 8, debounced; the catalogue is never downloaded). The
+selection lives in the URL `product_id` — clearable, survives pagination,
+shareable — and `validateSearch` rejects non-UUID ids so junk never reaches the
+API. pytest 353 (incl. the 9 ledger tests), smoke 257/0, lint clean, build
+green; junk `product_id` is 307-stripped at the router.
+
+* **Audit:** [`plan/audit/2026-09-25-f519-admin-inventory-ledger-viewer.md`](audit/2026-09-25-f519-admin-inventory-ledger-viewer.md)
+* **Verification level:** integration tested + build verified (no browser
+  session available).
 
 ### Verification
 
@@ -4150,11 +4167,11 @@ Reconciliation date:
 Current state:
 
 ```text
-10 remaining implementation units (B2.1a, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.18a, F5.19, B2.5a)
-48 completed implementation units
+9 remaining implementation units (B2.1a, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.18a, B2.5a)
+49 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = F5.19
+NEXT = F3.4b (Batch D; B2.1a parked on credentials, B6.18a gated on a trigger)
 ```

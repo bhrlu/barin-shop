@@ -3170,3 +3170,27 @@ diff vs `53cb99b`). No new context file or skill; no task status change.
 (docs-only; Part B not applicable).
 
 → audit: [2026-09-25-thin-agents-md.md](audit/2026-09-25-thin-agents-md.md)
+
+## 2026-09-25 — F5.19 Admin inventory ledger viewer (completed)
+
+**What was done** — closed F5.19's remaining gap: the ledger screen (already
+shipped in `db61c2c`) lacked the required generic product filter. Added a
+toolbar combobox (`AdminDataTable` `toolbarEnd`, Popover+Command pattern) backed
+by the canonical `GET /search?q=` (limit 8, debounced — no catalogue download);
+selection lives in URL `product_id` (clearable, pagination-safe, shareable);
+`validateSearch` now UUID-validates `product_id`/`variant_id` so junk URL values
+never reach the API. Reason chips, signed changes, history links, pagination and
+the whole backend contract (StaffCatalog, page envelope) untouched — zero
+backend edits. Verified: pytest 353 (incl. the 9 ledger tests: net-zero
+checkout→cancel, 403 support/customer, 401 anonymous), smoke 257/0, lint 0
+errors, build green (after `bun install --frozen-lockfile` restored a stale
+`node_modules` and nvm node 22 replaced system node 20.9, which breaks the
+build), `/admin/inventory` 200 + junk `product_id` 307-stripped. Backlog,
+frontend-tasks and counts synced (NEXT = F3.4b).
+
+**What was NOT done** — interactive browser verification (no browser session
+and no frontend test runner exist); the acceptance flow is verified at API
+level + route-serves-200. Recorded honestly as "integration tested + build
+verified". No other task status changed; no workflow files touched.
+
+→ audit: [2026-09-25-f519-admin-inventory-ledger-viewer.md](audit/2026-09-25-f519-admin-inventory-ledger-viewer.md)
