@@ -3108,3 +3108,28 @@ skill added because the runtime supports on-demand loading and the file is small
 (~50 lines); spec index kept to ~25 topic rows, no spec text copied.
 
 → audit: [2026-09-25-task-scoped-recon-workflow.md](audit/2026-09-25-task-scoped-recon-workflow.md)
+
+## 2026-09-25 — Selective RULES loading (context optimization follow-up)
+
+**What was done** — completion of the `a72f93e` workflow change: the bootstrap
+no longer reads the whole `plan/RULES.md`. A **rule-topic map** (task type →
+RULES section numbers, ~12 rows) was added to `plan/CONTEXT-MAP.md`;
+`AGENTS.md` bootstrap step 3/4 now loads relevant RULES sections via that map
+and the last "read the full text of RULES.md" instruction was replaced;
+`plan/RULES.md` gained only a "How to load this file" header note (canonical
+source, selective loading, all rules authoritative, whole file reserved for
+cross-cutting work); `plan/MASTER-BACKLOG.md` §3 item 3 aligned;
+the skill gained a short "Rule loading" section. No rule text was moved,
+rewritten, deleted or renumbered (no second source of truth; Rules 0–15
+verbatim).
+
+**What was NOT done** — no application code/SQL/Docker change, no spec edit,
+no new context document or skill, no backlog task/status change, no test run
+(docs-only task; RULES.md Part B does not apply).
+
+**Decisions** — mapping rows were derived from the actual rule scopes (admin
+UI rows include 9; money/stock rows add 10+11; DB/infra adds 14; docs = 0–5);
+whole-file RULES reading is reserved for genuinely cross-cutting tasks or when
+the map cannot locate a needed section.
+
+→ audit: [2026-09-25-selective-rules-loading.md](audit/2026-09-25-selective-rules-loading.md)

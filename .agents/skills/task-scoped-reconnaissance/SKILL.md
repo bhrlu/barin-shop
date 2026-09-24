@@ -21,6 +21,15 @@ Goal: know the **smallest relevant dependency graph**, then implement.
 6. A prior audit **only** if it touched the same area — read that one audit,
    never the audit folder.
 
+## Rule loading
+
+1. Identify the task category (docs, UI, backend API, money/stock, DB/infra,
+   …).
+2. Consult the rule-topic map in `plan/CONTEXT-MAP.md`.
+3. Load only the RULES sections that row lists — never the whole file by
+   default.
+4. Add more rule sections only when the task expands into another concern.
+
 ## Targeted search
 
 - Search for symbols/patterns with line numbers, then read a line range — not

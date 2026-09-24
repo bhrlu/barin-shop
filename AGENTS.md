@@ -11,8 +11,11 @@ Default reading order at task start (no exploration before this is done):
 1. `AGENTS.md` (this file) + the task request itself.
 2. The task entry in [`plan/MASTER-BACKLOG.md`](./plan/MASTER-BACKLOG.md) (the
    canonical backlog; search by task ID, do not read the whole file).
-3. [`plan/CONTEXT-MAP.md`](./plan/CONTEXT-MAP.md) — repo map + spec index.
-4. The relevant **spec sections** (via the index — not the whole spec).
+3. [`plan/CONTEXT-MAP.md`](./plan/CONTEXT-MAP.md) — repo map, spec index and
+   rule-topic map.
+4. The relevant **spec sections** (via the spec index — not the whole spec)
+   and the relevant **RULES sections** (via the rule-topic map — not the whole
+   `plan/RULES.md`).
 5. Only the files on the task's dependency path
    (route/component → `src/lib/api.ts` → backend endpoint → service → test).
 6. A prior audit **only** when it touched the same area.
@@ -73,7 +76,11 @@ Rules 0–5 govern **documents**; Rules 6–15 in [`plan/RULES.md`](./plan/RULES
 govern **code**, and exist because the 2026-09-22 full-stack audit found P0/P1
 defects while Rules 0–5 were already in force. They apply to any change touching
 code, SQL, Docker or seeds — a markdown-only change needs Rules 0–5 only.
-Read the full text in `plan/RULES.md` before a non-trivial code change.
+**Load only the RULES sections relevant to the current task**, using the
+rule-topic map in [`plan/CONTEXT-MAP.md`](./plan/CONTEXT-MAP.md); the
+always-loaded summaries below are part of this file, and the whole of
+`plan/RULES.md` is reserved for genuinely cross-cutting work or when a required
+section cannot be located.
 
 - **R6 — Recon first, task-scoped.** Before the first edit, name the owning
   module, the data flow, the API contract, the auth dependency, existing tests,

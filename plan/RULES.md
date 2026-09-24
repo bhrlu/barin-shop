@@ -1,5 +1,14 @@
 # Working Rules
 
+> **How to load this file.** This is the canonical rule source; nothing here is
+> duplicated elsewhere. Load only the sections relevant to the current task —
+> the rule-topic map in [`CONTEXT-MAP.md`](./CONTEXT-MAP.md) says which rule
+> numbers apply to which task type. All rules remain authoritative: loading a
+> subset is a context economy, never permission to skip an applicable rule.
+> Read the whole file only for genuinely cross-cutting work (a task matching
+> several rule areas) or when a required section cannot be located from the
+> map.
+
 Two groups of rules apply to every task in this repository:
 
 - **Part A — Process rules (0–5)**: what to read before a task and what to write
