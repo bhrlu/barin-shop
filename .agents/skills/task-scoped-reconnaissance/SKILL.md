@@ -23,12 +23,13 @@ Goal: know the **smallest relevant dependency graph**, then implement.
 
 ## Rule loading
 
-1. Identify the task category (docs, UI, backend API, money/stock, DB/infra,
+1. Rules 0–5 are always applicable.
+2. Identify the task category (docs, UI, backend API, money/stock, DB/infra,
    …).
-2. Consult the rule-topic map in `plan/CONTEXT-MAP.md`.
-3. Load only the RULES sections that row lists — never the whole file by
-   default.
-4. Add more rule sections only when the task expands into another concern.
+3. Consult the rule-topic map in `plan/CONTEXT-MAP.md`.
+4. Load only the applicable Part B rules (6–15) listed for that category —
+   never the whole file by default.
+5. Add more Part B rules only when the task expands into another concern.
 
 ## Targeted search
 

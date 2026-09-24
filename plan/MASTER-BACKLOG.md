@@ -62,11 +62,12 @@ Before starting a task (bootstrap — read narrow, expand on evidence, Rule 6):
 2. Check `design/SANDE_FULL_DEV_SPEC.md` **by section** — locate the relevant
    sections via the index in `plan/CONTEXT-MAP.md` (Rule 0); read the whole spec
    only when the task spans many areas.
-3. Read the applicable `plan/RULES.md` sections identified by the rule-topic
-   map in `plan/CONTEXT-MAP.md` — not the entire file unless the task spans
-   multiple rule areas — and inspect only the live implementation on the task's
-   dependency path (route/component → `api.ts` → endpoint → service → test);
-   trace the contract you are about to change, not the whole repository.
+3. Read the always-applicable Rules 0–5 plus the Part B (6–15) sections
+   identified by the rule-topic map in `plan/CONTEXT-MAP.md` — the entire
+   file only when the task spans multiple rule areas — and inspect only the
+   live implementation on the task's dependency path (route/component →
+   `api.ts` → endpoint → service → test); trace the contract you are about to
+   change, not the whole repository.
 4. Confirm the task is still `TODO` and that all prerequisites are satisfied.
 5. Do not silently absorb another backlog item into the current task.
 6. Stop reconnaissance once owner, files, contract, auth, tests and acceptance

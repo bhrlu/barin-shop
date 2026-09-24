@@ -3133,3 +3133,21 @@ whole-file RULES reading is reserved for genuinely cross-cutting tasks or when
 the map cannot locate a needed section.
 
 → audit: [2026-09-25-selective-rules-loading.md](audit/2026-09-25-selective-rules-loading.md)
+
+## 2026-09-25 — Rules 0–5 always apply (semantic correction)
+
+**What was done** — docs-only fix to the selective-loading wording introduced
+in `39af476`: the rule-topic map rows could be read as omitting Rules 1–5 for
+code tasks. Corrected semantics everywhere: **Rules 0–5 (Part A) apply to
+every task; the context map selects only the applicable Part B (6–15)
+rules**. Updated `plan/CONTEXT-MAP.md` (map statement + Part B-only column,
+docs row = "none"), the skill's Rule loading steps, `AGENTS.md` bootstrap
+step 4 and think-before-you-edit paragraph, and `plan/MASTER-BACKLOG.md` §3
+item 3. F5.19's effective set is now Rules 0–5 + 6, 6a, 7, 8, 9, 12, 13, 15
+(+10/11 if stock behaviour changes); docs-only = Rules 0–5.
+
+**What was NOT done** — no `plan/RULES.md` text changed, no renumbering, no
+task status change, no application code/tests touched, no new context file or
+skill, no test suite run (docs-only).
+
+→ audit: [2026-09-25-rules-05-always-apply.md](audit/2026-09-25-rules-05-always-apply.md)

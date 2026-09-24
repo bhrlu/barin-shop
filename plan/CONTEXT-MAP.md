@@ -86,27 +86,29 @@ Pre-flight checklist           -> B5          -> verification checklist
 Feature backlog                -> Part C      -> prioritized platform features
 ```
 
-## Rule-topic map (load only these RULES sections)
+## Rule-topic map (Rules 0–5 always; this table selects Part B)
 
+**Rules 0–5 apply to every task.** The table below selects only the applicable
+Part B rules (6–15); every row means *Rules 0–5 plus the listed Part B rules*.
 Rule content lives only in [`RULES.md`](./RULES.md) — this map lists rule
-numbers, never rule text. Pick the row matching the task type (union the sets
-when a task spans two rows); if a row does not fit, fall back to Rules 0–5 + 6,
-6a, 12, 13, 15 and add rules as the task's concern becomes clear.
+numbers, never rule text. Union the sets when a task spans two rows; if a row
+does not fit, load Part B 6, 6a, 12, 13, 15 and add rules as the task's
+concern becomes clear.
 
 ```text
-task type / concern               -> RULES sections
-docs / markdown only              -> 0–5
-storefront UI (localized)         -> 0, 6, 6a, 7, 8, 12, 13, 15
-admin / staff-gated UI            -> 0, 6, 6a, 7, 8, 9, 12, 13, 15
-backend API endpoint              -> 0, 6, 6a, 7, 8, 9, 13, 15
-auth / roles change               -> 0, 6, 6a, 7, 9, 13, 15
-money / pricing / coupons         -> 0, 6, 6a, 7, 8, 10, 11, 13, 15
-inventory / stock                 -> 0, 6, 6a, 7, 8, 10, 11, 13, 15
-payments / refunds                -> 0, 6, 6a, 7, 8, 9, 10, 13, 15
-order statuses / lifecycle        -> 0, 6, 6a, 7, 8, 10, 13, 15
-DB / SQL / Docker / seeds / env   -> 0, 6, 6a, 7, 10, 11, 13, 14, 15
-shared component / helper / type  -> 0, 6, 6a, 7, 8, 12, 13, 15
-cross-cutting feature             -> 0–15 (whole file then warranted)
+task type / concern               -> applicable Part B rules (6–15)
+docs / markdown only              -> none (Rules 0–5 only)
+storefront UI (localized)         -> 6, 6a, 7, 8, 12, 13, 15
+admin / staff-gated UI            -> 6, 6a, 7, 8, 9, 12, 13, 15
+backend API endpoint              -> 6, 6a, 7, 8, 9, 13, 15
+auth / roles change               -> 6, 6a, 7, 9, 13, 15
+money / pricing / coupons         -> 6, 6a, 7, 8, 10, 11, 13, 15
+inventory / stock                 -> 6, 6a, 7, 8, 10, 11, 13, 15
+payments / refunds                -> 6, 6a, 7, 8, 9, 10, 13, 15
+order statuses / lifecycle        -> 6, 6a, 7, 8, 10, 13, 15
+DB / SQL / Docker / seeds / env   -> 6, 6a, 7, 10, 11, 13, 14, 15
+shared component / helper / type  -> 6, 6a, 7, 8, 12, 13, 15
+cross-cutting feature             -> 6–15 (whole file then warranted)
 ```
 
 Read the whole spec only when a task spans many of these areas or creates new
