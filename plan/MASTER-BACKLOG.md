@@ -521,7 +521,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "F5.19",
+    "agent_start_task": "F3.4b",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,
@@ -3826,7 +3826,7 @@ F5.15  (DONE 2026-09-23)
 F5.16  (DONE 2026-09-23)
 F5.17  (DONE 2026-09-23)
 F5.18  (DONE 2026-09-23)
-F5.19
+F5.19  (DONE 2026-09-25)
 F5.20  (DONE 2026-09-24)
 ```
 
@@ -4054,16 +4054,15 @@ were freshly executed.
 ## START HERE
 
 ```text
-F5.19
+F3.4b — Guest recently viewed (P3, frontend; decision D7(c) already resolved)
 ```
 
-48 of 58 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section. next P3 (Batch D) — admin inventory ledger viewer
+49 of 58 executable units are DONE — each links its audit
+and verification level in the JSON index and in its own section.
 
-(`F5.20` was executed out of order as a user-directed P1 on 2026-09-24; `B6.18`
-and `B5.1e` then closed Batch C, so the pointer moves to the last remaining
-Batch D item, `F5.19`. `B6.18a` is open in Batch C but gated on a trigger — see
-its section.)
+(F5.19 closed Batch D on 2026-09-25 — integration tested + build verified, with
+browser click-through left OPEN; the JSON index's `agent_start_task` agrees:
+`F3.4b`. `B6.18a` is open in Batch C but gated on a trigger — see its section.)
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -4173,5 +4172,5 @@ Current state:
 2 dropped
 1 obsolete
 9 product decisions resolved
-NEXT = F3.4b (Batch D; B2.1a parked on credentials, B6.18a gated on a trigger)
+NEXT = F3.4b (Batch F, P3 frontend; B2.1a parked on credentials, B6.18a gated on a trigger)
 ```

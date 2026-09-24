@@ -3194,3 +3194,29 @@ level + route-serves-200. Recorded honestly as "integration tested + build
 verified". No other task status changed; no workflow files touched.
 
 → audit: [2026-09-25-f519-admin-inventory-ledger-viewer.md](audit/2026-09-25-f519-admin-inventory-ledger-viewer.md)
+
+## 2026-09-25 — F5.19 finalization (verification + backlog reconciliation)
+
+**What was done** — no code change. Replayed the acceptance flow against the
+**live running stack** with real seed accounts: checkout of a stocked product
+(order `601f98ce…`) → one `purchase` row −1; cancel via the valid lifecycle →
+`return` +1; two rows visible for the order, **net stock change 0**;
+`product_id` filter returns only that product's rows; **support-role → 403**;
+anonymous → 401; junk `product_id` → 200-empty at the API (plain-string param,
+no match ≠ error — existing contract) and 307-stripped by the UI. Browser
+click-through remains **OPEN**: no browser-automation mechanism exists in this
+environment; nothing was fabricated. Reconciled the Master Backlog's stale
+spots: §2 `agent_start_task` F5.19 → F3.4b, Batch D listing now `F5.19 (DONE
+2026-09-25)`, §16 START-HERE rewritten to `F3.4b` (Batch F, P3, no deps —
+verified against the JSON index), §20 label fixed (Batch F, not D). Counts
+recounted from the JSON index: 49 DONE / 9 TODO / 2 DROPPED / 1 OBSOLETE = 58
+executable, 49/58 DONE — §16 and §20 agree. Audit and frontend-tasks updated
+with the live-flow results and the honest level: **integration tested + build
+verified, browser click-through OPEN** — F5.19 stays DONE per the Definition
+of DONE (acceptance criteria verified at the API/runtime level), without
+claiming "browser tested" or "fully verified".
+
+**What was NOT done** — no application code change (verification found no
+defect), no browser automation invented, no other task status touched.
+
+→ audit: [2026-09-25-f519-admin-inventory-ledger-viewer.md](audit/2026-09-25-f519-admin-inventory-ledger-viewer.md)

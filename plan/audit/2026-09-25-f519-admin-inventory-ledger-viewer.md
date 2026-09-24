@@ -66,15 +66,25 @@ product filter control.
 
 ## What is NOT done / open
 
-- **Browser verification (interactive)**: no frontend test runner exists and no
-  browser session was available in this environment; the acceptance flow
-  (checkout → cancel → two rows netting to zero → support 403) is verified at
-  the API level by `test_inventory_log.py` (`test_checkout_and_cancel_net_to_zero`,
-  `test_the_read_endpoint`) and the smoke run, and the route renders (200), but
-  the combobox was not clicked through in a real browser. Verification level:
-  **integration tested + build-verified** — one step below the repo's "fully
-  verified".
+- **Browser click-through = OPEN.** No browser-automation mechanism exists in
+  this environment (no test runner in the repo; no browser session available),
+  so the combobox was not clicked in a real browser. Everything the browser
+  flow exercises was verified against the **live running stack** (2026-09-25,
+  dev servers on :5173/:8000) with real seed accounts:
+  checkout of «کراپ‌تاپ بافت ریب آوا» (order `601f98ce…`) → ledger shows one
+  `purchase` row, change −1; cancel via the valid lifecycle → second `return`
+  row, +1; **net stock change 0**; `product_id` filter returns only that
+  product's rows (13, all matching); **support-role → 403**; anonymous → 401;
+  junk `product_id` → 200-empty at the API (the param is a plain string with
+  no match — existing contract) and 307-stripped by the UI before any call.
+  The screen itself serves 200 and was build-verified.
+  **Verification level: integration tested + build verified — not
+  "browser tested", not "fully verified".**
 - Pre-existing environment issues encountered and fixed locally, unrelated to
   this feature: stale `node_modules` (missing `@tanstack/react-table`,
   restored via `bun install --frozen-lockfile`) and system node 20.9 being too
   old for the build toolchain.
+- Backlog reconciliation (2026-09-25, finalization pass): §16 START-HERE
+  pointer, Batch D listing and §2 `agent_start_task` now agree with §20 —
+  `NEXT = F3.4b` (Batch F, P3, no dependencies), counts 49 DONE / 9 remaining
+  / 58 executable, recounted from the JSON index.

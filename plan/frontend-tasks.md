@@ -514,8 +514,11 @@ conflict (DESIGN_SYSTEM.md §5).
   backend change (StaffCatalog + `product_id` filter already in the contract).
   pytest 353 (incl. the 9 ledger tests: net-zero checkout→cancel, 403 support,
   401 anonymous), smoke 257/0, lint 0 errors, build green, `/admin/inventory`
-  serves 200 and strips junk `product_id` (307). Integration tested + build
-  verified (no browser session available — see audit).
+  serves 200 and strips junk `product_id` (307). Finalization (2026-09-25): the
+  acceptance flow was replayed against the live running stack — checkout →
+  `purchase −1`, cancel → `return +1`, net 0, `product_id` filter server-side,
+  support 403. Integration tested + build verified; **browser click-through
+  OPEN** (no automation available — see audit).
   → audit: [2026-09-25-f519-admin-inventory-ledger-viewer.md](audit/2026-09-25-f519-admin-inventory-ledger-viewer.md)
 - [x] **F5.20 Complete customer profile** (user-directed P1, separate from
   AB-FE-06) — personal info (first/last name, birth date, gender), contact +
