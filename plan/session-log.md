@@ -3220,3 +3220,24 @@ claiming "browser tested" or "fully verified".
 defect), no browser automation invented, no other task status touched.
 
 → audit: [2026-09-25-f519-admin-inventory-ledger-viewer.md](audit/2026-09-25-f519-admin-inventory-ledger-viewer.md)
+
+## 2026-09-25 — D10: browser E2E (Playwright) deferred by decision
+
+**What was done** — recorded the user's decision as resolved decision **D10**
+in `plan/MASTER-BACKLOG.md` §4: browser automation is planned and will be
+**Playwright + Chromium** when activated, with the gate
+`PLAYWRIGHT_E2E_STATUS = DEFERRED` (also machine-readable in the JSON
+`execution_policy`). Only the user's explicit instruction (e.g. `ACTIVATE
+PLAYWRIGHT`) flips it to ACTIVE. Until then: no Playwright installs, no
+dependency-file edits for it, no configs/specs, no browser-tooling recon, and
+no implementation changes made just to satisfy browser verification; tasks
+record the strongest truthful level (e.g. `integration tested + build
+verified`) and leave browser verification OPEN. Always-loaded discoverability
+via one new invariant bullet in `AGENTS.md`; F5.19's audit now references D10
+(status and verification level unchanged); `plan/README.md` index line updated.
+
+**What was NOT done** — no application code, no dependency, no Playwright
+package/config/spec, no workflow redesign, no historical audit rewrite, no
+task status change.
+
+→ audit: [2026-09-25-d10-playwright-deferred.md](audit/2026-09-25-d10-playwright-deferred.md)

@@ -107,7 +107,8 @@ Before marking `DONE`:
 
 # 4. Resolved product / architecture decisions
 
-All previous decisions D1–D9 are now resolved.
+All previous decisions D1–D9 are now resolved. D10 is canonical policy too —
+recorded as **deferred** (a decision, not an open question).
 
 Agents must implement these decisions as written and must **not reopen them** unless
 a new explicit product decision is added.
@@ -456,6 +457,50 @@ No new implementation task is needed.
 
 ---
 
+## D10 — Browser E2E (Playwright): deferred
+
+**Decision:**
+
+Real browser automation **is planned** for this repository, and when activated
+the canonical browser/E2E mechanism will be **Playwright + Chromium**. It is
+deferred until the user explicitly activates it.
+
+### Activation gate
+
+```text
+PLAYWRIGHT_E2E_STATUS = DEFERRED
+```
+
+Only an explicit user instruction — e.g. **`ACTIVATE PLAYWRIGHT`** — changes
+this gate to `ACTIVE`. Merely needing browser verification in a task does not
+activate it: the agent reports the gate and moves on.
+
+### While DEFERRED, agents must NOT
+
+* install Playwright or any browser-automation package;
+* modify `package.json` or `bun.lock` for Playwright;
+* create Playwright config files or browser/E2E specs;
+* spend reconnaissance time investigating browser-automation infrastructure;
+* change an existing implementation (e.g. F5.19) just to satisfy browser
+  verification.
+
+### Verification honesty (Rules 13 and 15)
+
+* Acceptance criteria must never be marked `browser tested` without an actual
+  browser runtime.
+* Until activation, a task records the strongest truthful level actually
+  achieved (e.g. `integration tested + build verified`) and leaves browser
+  verification explicitly **OPEN**.
+
+### When the user says `ACTIVATE PLAYWRIGHT`
+
+Implement the deferred Playwright + Chromium infrastructure and use it for
+browser acceptance testing according to Rules 13 and 15; only then may
+`browser tested` be claimed where it is genuinely earned. (Mirrored in the
+JSON `execution_policy` and in the always-loaded `AGENTS.md`.)
+
+---
+
 # 5. Critical ordering
 
 ## First task
@@ -522,6 +567,7 @@ changes to the file shipped in sequence; the collision is closed.
   "execution_policy": {
     "blocked_tasks": 0,
     "agent_start_task": "F3.4b",
+    "playwright_e2e_status": "DEFERRED",
     "one_task_at_a_time": true,
     "verify_before_done": true,
     "audit_required": true,

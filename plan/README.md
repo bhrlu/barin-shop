@@ -15,6 +15,7 @@ plan/
 ├── README.md            ← this file
 ├── RULES.md             ← working rules (spec-preflight + audit + doc-sync)
 ├── CONTEXT-MAP.md       ← repo map + spec index (task-scoped bootstrap; Rule 0/6)
+├── MASTER-BACKLOG.md    ← canonical backlog + resolved decisions (incl. D10: Playwright deferred)
 ├── session-log.md       ← what was done / not done per session
 ├── backend-tasks.md     ← task list for backend/
 ├── frontend-tasks.md    ← task list for vogue-vintage-vibes/

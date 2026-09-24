@@ -50,6 +50,11 @@ followed/ignored sections in the audit; never edit the spec unless asked.
   validation to make a test pass.
 - Never invent architecture when repository evidence is missing — stop and
   inspect; asking beats guessing.
+- Browser E2E is **deferred** (`PLAYWRIGHT_E2E_STATUS = DEFERRED`, decision D10
+  in `plan/MASTER-BACKLOG.md`): never mark anything `browser tested` without a
+  real browser runtime; do not install Playwright, touch dependency files for
+  it, or build E2E scaffolding until the user explicitly says
+  `ACTIVATE PLAYWRIGHT`.
 - Commits: conventional-commit style (`fix(backend): …`, `docs(plan): …`);
   never rewrite pushed history.
 

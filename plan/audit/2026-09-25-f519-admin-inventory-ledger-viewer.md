@@ -88,3 +88,8 @@ product filter control.
   pointer, Batch D listing and §2 `agent_start_task` now agree with §20 —
   `NEXT = F3.4b` (Batch F, P3, no dependencies), counts 49 DONE / 9 remaining
   / 58 executable, recounted from the JSON index.
+- The open browser item is now governed by decision **D10**
+  (`plan/MASTER-BACKLOG.md` §4): browser E2E is planned and will be
+  Playwright + Chromium, but `PLAYWRIGHT_E2E_STATUS = DEFERRED` — it activates
+  only on the user's explicit `ACTIVATE PLAYWRIGHT`. This does not change
+  F5.19's status or its recorded verification level.
