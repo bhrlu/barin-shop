@@ -25,11 +25,15 @@ pattern. Asking the user is better than guessing.
 
 # Part A — Process rules
 
-## Rule 0 — Read the dev spec before starting (mandatory)
+## Rule 0 — Check the dev spec before starting (mandatory)
 
-Before **any** task — backend, frontend, docs or infra — read
-[`../design/SANDE_FULL_DEV_SPEC.md`](../design/SANDE_FULL_DEV_SPEC.md) and check
-the work against it. This rule has no exceptions.
+Before **any** task — backend, frontend, docs or infra — check the work against
+[`../design/SANDE_FULL_DEV_SPEC.md`](../design/SANDE_FULL_DEV_SPEC.md). This rule
+has no exceptions. **Checking is section-scoped, not a full read**: start from
+the spec index in [`CONTEXT-MAP.md`](./CONTEXT-MAP.md) (topic → section →
+keywords), locate the sections that cover the task, and read only those. Read
+the whole spec only when a task spans many areas or creates new ground the index
+cannot locate.
 
 1. **Follow it where it applies.** Its UI/UX rules (Sections B0/B1), directory
    conventions (B2), module specs (B3) and the Part C backlog are the reference
@@ -122,35 +126,61 @@ one untouched, say so in the audit file under **What is NOT done / open**.
 
 # Part B — Engineering rules
 
-## Rule 6 — Reconnaissance before modification (all code changes)
+## Rule 6 — Task-scoped reconnaissance before modification (all code changes)
 
-Do not edit the first file that looks relevant. Before the first edit, write down
-(in your working notes, and later in the audit) the answers to all seven:
+Do not edit the first file that looks relevant — and do not explore the whole
+repository first. Understand the **smallest relevant dependency graph** before
+editing. For a localized task that is normally:
+
+```text
+task → target route/component → api.ts method → backend endpoint →
+backend service → relevant test
+```
+
+Before the first edit, write down (in your working notes, and later in the audit)
+the answers to all seven, gathering each from the narrowest source that answers
+it — the context map in [`CONTEXT-MAP.md`](./CONTEXT-MAP.md) locates files, a
+function-level search finds the symbol, read only the relevant line ranges:
 
 1. **Owning module** — which of `backend/app/routers/*`, `backend/app/services/*`,
    `backend/app/models.py`, `vogue-vintage-vibes/src/lib/*`,
    `vogue-vintage-vibes/src/routes/*`, `vogue-vintage-vibes/src/components/*`,
    or `infra/` actually owns this behaviour.
-2. **Data flow** — trace the full path. In this repo it is almost always:
-   route/component → `src/lib/api.ts` → `backend/app/routers/<x>.py` →
+2. **Data flow** — the arrows the task's change actually crosses. The backbone
+   is route/component → `src/lib/api.ts` → `backend/app/routers/<x>.py` →
    `backend/app/services/<x>.py` → `backend/app/models.py` → PostgreSQL
-   (and MinIO for files). A change that alters behaviour crossing any of those
-   arrows must be considered at every arrow, not only where you type.
+   (and MinIO for files); you normally need only the segments on the task's path,
+   not a proof of every arrow.
 3. **API contract** — the exact endpoint(s) involved (Rule 8).
 4. **Auth requirements** — which dependency in `backend/app/auth.py` guards it
    (`CurrentUser`, `AdminUser`, `OptionalUser`, `StaffOrders`, `StaffRefunds`,
    `StaffCatalog`, `StaffCoupons`, `StaffReviews`, `StaffContactInbox`,
    `StaffUsers`, `StaffStats`, `StaffAudit`, `StaffSettings`) and why that one.
-5. **Existing tests** — grep `backend/tests/` for the behaviour
+5. **Existing tests** — search `backend/tests/` for the behaviour; read the
+   matching test(s), not the whole test directory
    (`test_pricing_and_coupons.py`, `test_availability_and_filters.py`,
    `test_variants.py`, `test_addresses.py`, `api_smoke.py`).
-6. **Documents** — the task checkbox in `plan/*-tasks.md` or
-   `plan/ADMIN-*_TASKS.md`, the matching spec section (Rule 0), and any prior
-   `plan/audit/*.md` that touched the same area. Prior audits record decisions
-   you must not silently reverse.
-7. **Existing pattern** — find a sibling that already solves the same shape of
+6. **Documents** — the task entry in `plan/MASTER-BACKLOG.md` (the canonical
+   backlog; older task files are historical), the matching spec **sections**
+   (Rule 0), and prior `plan/audit/*.md` **only when they touched the same
+   area** — read the linked audit of a directly related task, not the audit
+   folder.
+7. **Existing pattern** — find one sibling that already solves the same shape of
    problem (another router, another `api.ts` method, another admin route) and
-   follow it.
+   follow it. One is enough.
+
+**Stop rule (mandatory).** Once you can name the owning module, the relevant
+files, the API contract, the auth requirement, the relevant tests and the
+acceptance criteria — **stop reconnaissance and start implementing.** Do not
+keep scanning, do not reread files already inspected this task, and do not open
+unrelated task files, all routes, all services or historical audits "for
+completeness".
+
+**Progressive expansion.** Search beyond the task's own graph only when there is
+evidence you must: the target code is shared (see blast radius below), the API
+contract crosses frontend/backend, authorization is involved, a shared helper
+changes, tests or types reveal another dependency, or the task explicitly spans
+modules. Then expand one hop at a time from the task graph, not the repo tree.
 
 **Blast radius.** Before changing anything shared — an API response shape, a
 shared TypeScript type, a status string, a helper in `src/lib/`, a method on the
@@ -158,7 +188,27 @@ shared TypeScript type, a status string, a helper in `src/lib/`, a method on the
 component — `grep -rn` the repository for *every* consumer, in both
 `backend/` and `vogue-vintage-vibes/src/`, and list them before editing. If the
 list is longer than you expected, that is a signal to make a smaller change, not
-a bigger one.
+a bigger one. This repo-wide grep is required **only for shared code**; a
+localized task skips it.
+
+### Rule 6a — Reading discipline (all tasks)
+
+Context is budget. These apply to every task, documentation or code:
+
+1. Prefer targeted search plus the relevant line ranges over whole-file reads;
+   a large file is read in windows around the symbols you need.
+2. Never read a large file completely when only one symbol or section is
+   relevant.
+3. Do not reread a file already inspected during the current task; work from
+   what you already hold in context.
+4. Do not read historical audits unless the current task touches the same area
+   (Rule 6.6) — read the audit of a directly related task, never the audit
+   folder.
+5. Do not read unrelated task files or unrelated backlog entries.
+6. Do not recursively inspect the whole source tree for a localized task; the
+   context map plus targeted searches replace tree-walking.
+7. Once the Rule 6 stop-rule information is known, stop searching — leftover
+   curiosity is not a reason to read.
 
 ## Rule 7 — Use the canonical implementation; never a second one
 

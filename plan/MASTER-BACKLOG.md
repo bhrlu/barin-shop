@@ -55,14 +55,20 @@ Priority:
 
 ## 3. Agent execution contract
 
-Before starting a task:
+Before starting a task (bootstrap — read narrow, expand on evidence, Rule 6):
 
-1. Read `design/SANDE_FULL_DEV_SPEC.md`.
-2. Read `AGENTS.md` and `plan/RULES.md`.
-3. Read this file and the source task/spec entry for the selected task.
-4. Inspect the live implementation and trace the full contract before modifying it.
-5. Confirm the task is still `TODO` and that all prerequisites are satisfied.
-6. Do not silently absorb another backlog item into the current task.
+1. Read `AGENTS.md` and the task entry in this file (search by task ID; do not
+   read the whole file).
+2. Check `design/SANDE_FULL_DEV_SPEC.md` **by section** — locate the relevant
+   sections via the index in `plan/CONTEXT-MAP.md` (Rule 0); read the whole spec
+   only when the task spans many areas.
+3. Read `plan/RULES.md` and inspect only the live implementation on the task's
+   dependency path (route/component → `api.ts` → endpoint → service → test);
+   trace the contract you are about to change, not the whole repository.
+4. Confirm the task is still `TODO` and that all prerequisites are satisfied.
+5. Do not silently absorb another backlog item into the current task.
+6. Stop reconnaissance once owner, files, contract, auth, tests and acceptance
+   criteria are known (Rule 6 stop rule).
 
 While implementing:
 

@@ -4,11 +4,33 @@ Applies to any agent/assistant working in this repository. The detailed rules
 live in [`plan/RULES.md`](./plan/RULES.md); this file is the always-loaded
 summary. **Follow these before considering any task finished.**
 
-## Mandatory: read the dev spec before the task starts
+## Session bootstrap — start narrow, expand on evidence
 
-Every task (backend, frontend, docs, infra), with no exceptions, starts by
-reading [`design/SANDE_FULL_DEV_SPEC.md`](./design/SANDE_FULL_DEV_SPEC.md) and
-checking the work against it:
+Default reading order at task start (no exploration before this is done):
+
+1. `AGENTS.md` (this file) + the task request itself.
+2. The task entry in [`plan/MASTER-BACKLOG.md`](./plan/MASTER-BACKLOG.md) (the
+   canonical backlog; search by task ID, do not read the whole file).
+3. [`plan/CONTEXT-MAP.md`](./plan/CONTEXT-MAP.md) — repo map + spec index.
+4. The relevant **spec sections** (via the index — not the whole spec).
+5. Only the files on the task's dependency path
+   (route/component → `src/lib/api.ts` → backend endpoint → service → test).
+6. A prior audit **only** when it touched the same area.
+
+Expand the search only when evidence requires it (shared code, cross-boundary
+contract, authorization, a shared helper change, tests revealing a dependency,
+or an explicitly cross-module task) — see Rule 6 in
+[`plan/RULES.md`](./plan/RULES.md). Once you know the owner, files, contract,
+auth, tests and acceptance criteria, **stop reconnaissance and implement.**
+
+## Mandatory: check the dev spec before the task starts
+
+Every task (backend, frontend, docs, infra), with no exceptions, is checked
+against [`design/SANDE_FULL_DEV_SPEC.md`](./design/SANDE_FULL_DEV_SPEC.md)
+**by section, not by full read**: locate the sections covering the task via the
+spec index in [`plan/CONTEXT-MAP.md`](./plan/CONTEXT-MAP.md) (topic → section →
+keywords) and read only those. Read the whole spec only when a task spans many
+areas or the index cannot locate the ground. Then:
 
 - **Follow it where it applies** — UI/UX rules (Sections B0/B1), directory
   conventions (B2), module specs (B3) and the Part C backlog are the reference for
@@ -53,11 +75,18 @@ defects while Rules 0–5 were already in force. They apply to any change touchi
 code, SQL, Docker or seeds — a markdown-only change needs Rules 0–5 only.
 Read the full text in `plan/RULES.md` before a non-trivial code change.
 
-- **R6 — Recon first.** Before the first edit, name the owning module, the data
-  flow (route/component → `src/lib/api.ts` → `app/routers/*` → `app/services/*` →
-  `app/models.py` → Postgres), the API contract, the auth dependency, existing
-  tests, the task/spec/audit docs, and the sibling that already solves this. Then
-  `grep -rn` every consumer before touching anything shared.
+- **R6 — Recon first, task-scoped.** Before the first edit, name the owning
+  module, the data flow, the API contract, the auth dependency, existing tests,
+  the task/spec/audit docs, and one sibling that already solves this — gathered
+  from the narrowest source that answers each. Work the smallest relevant
+  dependency graph (task → route/component → `api.ts` method → backend endpoint
+  → service → relevant test); expand beyond it only on evidence (shared code,
+  cross-boundary contract, authz, shared helper change). Repo-wide consumer
+  grep is required **only** when changing shared code. Once owner, files,
+  contract, auth, tests and acceptance criteria are known, **stop
+  reconnaissance and implement** (Rule 6a adds the reading discipline: search +
+  line ranges over whole-file reads, no rereads, no unrelated files, no
+  audit-folder browsing).
 - **R7 — One canonical implementation.** Reuse (or fix in place) the existing
   helper; never add a second. Auth → `app/auth.py`; roles → `services/roles.py`;
   totals → `services/pricing.py`; transitions/stock restore →

@@ -3085,3 +3085,26 @@ contract is identical), so `frontend-tasks.md`, `FEATURES.md`,
 Batch C is complete apart from `B6.18a`, which is gated on a trigger.
 
 → audit: [2026-09-24-b51e-least-privilege-db-role.md](audit/2026-09-24-b51e-least-privilege-db-role.md)
+
+## 2026-09-25 — Task-scoped agent reconnaissance workflow
+
+**What was done** — agent-workflow change only (no application code): Rule 0 is
+now **section-scoped** (spec index in the new `plan/CONTEXT-MAP.md` locates the
+relevant spec sections; no full-spec read per task); Rule 6 is now **task-scoped**
+(smallest dependency graph, evidence-gated expansion, mandatory recon stop rule,
+blast-radius grep only for shared code) plus new **Rule 6a reading discipline**
+(search + line ranges over whole files, no rereads, no unrelated task files, no
+audit-folder browsing). `AGENTS.md` gained a "Session bootstrap" reading order;
+`plan/MASTER-BACKLOG.md` §3 aligned to the same order;
+`.agents/skills/task-scoped-reconnaissance/SKILL.md` added as an on-demand skill
+(not auto-loaded); `plan/README.md` indexes the new context map.
+
+**What was NOT done** — no code/SQL/Docker/schema/API change, no backlog status
+changes, no spec edits (Rule 0.4), no tests run (docs-only; RULES.md Part B does
+not apply).
+
+**Decisions** — Rule 0 kept mandatory (check-by-section instead of full read);
+skill added because the runtime supports on-demand loading and the file is small
+(~50 lines); spec index kept to ~25 topic rows, no spec text copied.
+
+→ audit: [2026-09-25-task-scoped-recon-workflow.md](audit/2026-09-25-task-scoped-recon-workflow.md)

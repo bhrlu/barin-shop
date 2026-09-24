@@ -14,6 +14,7 @@ This folder tracks all planned work for both halves of the project:
 plan/
 ├── README.md            ← this file
 ├── RULES.md             ← working rules (spec-preflight + audit + doc-sync)
+├── CONTEXT-MAP.md       ← repo map + spec index (task-scoped bootstrap; Rule 0/6)
 ├── session-log.md       ← what was done / not done per session
 ├── backend-tasks.md     ← task list for backend/
 ├── frontend-tasks.md    ← task list for vogue-vintage-vibes/
@@ -139,9 +140,12 @@ Legend used across the task files: `[ ]` todo · `[~]` in progress · `[x]` done
 Rules 0–5 above govern **documents**. Rules 6–15 govern **code** and apply to any
 change touching code, SQL, Docker or seeds (markdown-only tasks are exempt):
 
-- **Rule 6 — Reconnaissance before modification.** Trace module, data flow, API
-  contract, auth dependency, tests, docs and existing pattern; grep every
-  consumer before touching anything shared.
+- **Rule 6 — Task-scoped reconnaissance.** Trace the smallest relevant
+  dependency graph (module, data flow, API contract, auth dependency, tests,
+  docs, one sibling); expand only on evidence, grep every consumer only when
+  changing shared code, and stop recon once owner/contract/auth/tests/
+  acceptance criteria are known. Rule 6a: search + line ranges over whole-file
+  reads; no rereads, unrelated files or audit browsing.
 - **Rule 7 — Use the canonical implementation.** Reuse or fix in place; never add
   a second auth/role/pricing/API helper.
 - **Rule 8 — Contract first** for every change crossing the frontend/backend
