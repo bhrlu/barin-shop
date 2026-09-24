@@ -3151,3 +3151,22 @@ task status change, no application code/tests touched, no new context file or
 skill, no test suite run (docs-only).
 
 → audit: [2026-09-25-rules-05-always-apply.md](audit/2026-09-25-rules-05-always-apply.md)
+
+## 2026-09-25 — Thin always-loaded AGENTS.md
+
+**What was done** — AGENTS.md rewritten in place as a small operating contract
+(157 → 80 lines, 9,860 → 4,170 chars, −49%): removed the detailed R6–R15
+summaries, the R7 canonical-path list, the R13/R14 command sequences and the
+Rule-5 doc checklist that duplicate `plan/RULES.md` / `plan/CONTEXT-MAP.md`;
+kept the session bootstrap, the section-scoped Rule-0 check, the non-
+negotiable global invariants (no Supabase/RLS/RPC, single API client, backend
+authorization authoritative, frozen statuses + money rules, no faked tests or
+weakened validation, no invented architecture, commit style), the finish-every-
+task duties and a one-line-per-rule index of R6–6a–R15 pointing at RULES.md as
+canonical. `plan/RULES.md` and `plan/CONTEXT-MAP.md` unchanged (verified empty
+diff vs `53cb99b`). No new context file or skill; no task status change.
+
+**What was NOT done** — no application code/tests touched, no test suite run
+(docs-only; Part B not applicable).
+
+→ audit: [2026-09-25-thin-agents-md.md](audit/2026-09-25-thin-agents-md.md)
