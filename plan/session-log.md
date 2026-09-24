@@ -3241,3 +3241,24 @@ package/config/spec, no workflow redesign, no historical audit rewrite, no
 task status change.
 
 → audit: [2026-09-25-d10-playwright-deferred.md](audit/2026-09-25-d10-playwright-deferred.md)
+
+## 2026-09-25 — Continuous backlog execution: F3.4b
+
+**What was done** — first task of the continuous run (selected from the JSON
+index: `agent_start_task` = F3.4b). Implemented guest recently-viewed per
+D7(c): new canonical `src/lib/recently-viewed.ts` (cap 8, dedupe, newest-wins,
+tolerant reader; `mergeGuestHistoryOnSignIn()` replays ≤8 ids through the
+existing `POST /products/{id}/view` oldest-first then clears the local list —
+server history authoritative); `auth.tsx` runs the merge before `user` is set
+(best-effort, never blocks sign-in); `RecentlyViewedRail` renders for guests
+(query key per world); `product.$id.tsx` records guest views locally. No new
+endpoint/dependency/schema. Verified: lint 0 errors, tsc 0, build exit 0, and
+merge semantics replayed against the live stack (newest guest view wins
+server-side). Browser click-through remains OPEN (D10 gate). Backlog synced:
+JSON + prose + Batch F listing + counts (50 DONE / 8 TODO of 58) +
+`agent_start_task`/START HERE → **B2.2a**. Committed and pushed.
+
+**What was NOT done** — no backend change, no DELETE endpoint (D7(c) excludes
+it), no browser automation (D10).
+
+→ audit: [2026-09-25-f34b-guest-recently-viewed.md](audit/2026-09-25-f34b-guest-recently-viewed.md)

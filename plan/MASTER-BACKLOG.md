@@ -566,7 +566,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "F3.4b",
+    "agent_start_task": "B2.2a",
     "playwright_e2e_status": "DEFERRED",
     "one_task_at_a_time": true,
     "verify_before_done": true,
@@ -920,13 +920,16 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "F3.4b",
       "title": "Guest recently viewed",
       "priority": "P3",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "frontend",
       "depends_on": [],
       "blocks": [],
       "batch": "F",
       "source": "frontend-tasks.md",
-      "scope": "Store up to 8 guest product IDs/timestamps in localStorage and merge deterministically into account history on sign-in."
+      "scope": "Store up to 8 guest product IDs/timestamps in localStorage and merge deterministically into account history on sign-in.",
+      "audit": "plan/audit/2026-09-25-f34b-guest-recently-viewed.md",
+      "verification_level": "integration tested + build verified",
+      "completed": "2026-09-25"
     },
     {
       "id": "AB-FE-06",
@@ -2970,8 +2973,11 @@ Generated PDF must contain correct order data and open correctly.
 ## F3.4b — Guest recently viewed
 
 * **Layer:** Frontend
-* **Status:** TODO
+* **Status:** DONE (2026-09-25)
 * **Dependencies:** resolved D7(c)
+* **Audit:** [`plan/audit/2026-09-25-f34b-guest-recently-viewed.md`](audit/2026-09-25-f34b-guest-recently-viewed.md)
+* **Verification level:** integration tested + build verified (browser
+  click-through OPEN — D10)
 
 ### Required behavior
 
@@ -3905,7 +3911,7 @@ B2.2a
 B4.13
 B2.1a  (needs real credentials)
 B6.8a  (DONE 2026-09-23)
-F3.4b
+F3.4b  (DONE 2026-09-25)
 F4.3  (DONE 2026-09-23)
 AB-FE-06
 ```
@@ -4100,15 +4106,16 @@ were freshly executed.
 ## START HERE
 
 ```text
-F3.4b — Guest recently viewed (P3, frontend; decision D7(c) already resolved)
+B2.2a — CSV product import (P3, backend; decision D3 fully specified)
 ```
 
-49 of 58 executable units are DONE — each links its audit
+48 of 58 executable units are DONE — each links its audit
 and verification level in the JSON index and in its own section.
 
-(F5.19 closed Batch D on 2026-09-25 — integration tested + build verified, with
-browser click-through left OPEN; the JSON index's `agent_start_task` agrees:
-`F3.4b`. `B6.18a` is open in Batch C but gated on a trigger — see its section.)
+(F5.19 closed Batch D and `F3.4b` closed Batch F's other executable items on
+2026-09-25. Remaining: B2.2a (Batch F, D3-specified), AB-FE-06 (Batch F),
+B4.13 / B2.5a (unblocked, Batch F), B2.3 / F1.9 (Batch G), B2.1a (credentials),
+B6.18a (trigger-gated).)
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -4212,11 +4219,11 @@ Reconciliation date:
 Current state:
 
 ```text
-9 remaining implementation units (B2.1a, B2.3, F3.4b, AB-FE-06, F1.9, B2.2a, B4.13, B6.18a, B2.5a)
-49 completed implementation units
+8 remaining implementation units (B2.1a, B2.3, AB-FE-06, F1.9, B2.2a, B4.13, B6.18a, B2.5a)
+50 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
-9 product decisions resolved
-NEXT = F3.4b (Batch F, P3 frontend; B2.1a parked on credentials, B6.18a gated on a trigger)
+10 product decisions resolved
+NEXT = B2.2a (Batch F, P3 backend; B2.1a parked on credentials, B6.18a gated on a trigger)
 ```

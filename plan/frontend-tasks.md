@@ -259,9 +259,20 @@ needs new backend work except where explicitly noted.
 - [x] "بازدیدهای اخیر" rail on home/shop (`GET /recently-viewed`) — new
   `components/product/RecentlyViewedRail.tsx` reusing `ProductRail`; renders only
   for signed-in customers with a non-empty list
-- [ ] **F3.4b Guest recently-viewed** — the endpoint needs auth, so signed-out
+- [x] **F3.4b Guest recently-viewed** — the endpoint needs auth, so signed-out
   browsing is not remembered; decide whether a localStorage rail should merge
   with the account list after sign-in (`GET /recently-viewed` has no DELETE either)
+  Done (2026-09-25, decision D7(c)): `src/lib/recently-viewed.ts` is the canonical
+  store — localStorage history capped at 8, dedupe by product id, newest wins;
+  `mergeGuestHistoryOnSignIn()` replays the ≤8 guest ids through the existing
+  `POST /products/{id}/view` oldest-first before `user` is set, so the newest guest
+  view wins server-side and the server history stays authoritative; unknown ids
+  drop silently. The rail renders for guests too (query key distinguishes
+  guest/server history); the product page records guest views locally. No new
+  endpoint, no DELETE (D7(c)), no dependency. Lint 0 errors, tsc 0, build green;
+  merge semantics verified on the live stack. Integration tested + build verified
+  (browser click-through OPEN — D10).
+  → audit: [2026-09-25-f34b-guest-recently-viewed.md](audit/2026-09-25-f34b-guest-recently-viewed.md)
 
 ### F3.5 Cart (`cart.tsx`) — DONE
 

@@ -16,6 +16,7 @@ import {
 import { defaultColor, variantStockFor } from "@/lib/variants";
 import { formatFaDate, formatToman, toFa } from "@/lib/format";
 import { useAuth } from "@/lib/auth";
+import { recordGuestView } from "@/lib/recently-viewed";
 import { useCart } from "@/lib/cart";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -131,15 +132,20 @@ function ProductDetail({
   const selectedColor = color ?? defaultColor(product, variants);
   const maxQuantity = 20;
 
-  // `POST /products/{id}/view` — signed-in only, once per product page visit.
+  // `POST /products/{id}/view` — signed-in visitors go straight to the server;
+  // guests record the view in localStorage (F3.4b/D7(c), merged at sign-in).
   // Invalidate the rail afterwards so «بازدیدهای اخیر» is correct even when the
   // visitor navigates away before the request settles.
   useEffect(() => {
-    if (!user) return;
-    void api
-      .recordProductView(product.id)
-      .then(() => queryClient.invalidateQueries({ queryKey: ["recently-viewed"] }))
-      .catch(() => {});
+    if (user) {
+      void api
+        .recordProductView(product.id)
+        .then(() => queryClient.invalidateQueries({ queryKey: ["recently-viewed"] }))
+        .catch(() => {});
+    } else {
+      recordGuestView(product.id);
+      queryClient.invalidateQueries({ queryKey: ["recently-viewed"] });
+    }
   }, [user, product.id, queryClient]);
 
   const combo = size ? variantStockFor(product, variants, size, selectedColor) : null;

@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { api, ApiError, getToken, setToken, type UserInfo } from "@/lib/api";
+import { mergeGuestHistoryOnSignIn } from "@/lib/recently-viewed";
 
 type Profile = {
   full_name: string | null;
@@ -105,6 +106,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback(
     async (email: string, password: string) => {
       const result = await api.signIn({ email, password });
+      // F3.4b/D7(c): merge the guest localStorage history into the server's
+      // per-customer history BEFORE `user` is set, so the first recently-viewed
+      // fetch is already the deterministic merged result.
+      await mergeGuestHistoryOnSignIn().catch(() => {});
       cancelRetry();
       setToken(result.access_token);
       setUser(result.user);
