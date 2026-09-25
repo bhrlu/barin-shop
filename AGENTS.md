@@ -40,6 +40,10 @@ followed/ignored sections in the audit; never edit the spec unless asked.
 - No second API client or parallel auth/role/pricing system: all frontend HTTP
   goes through `src/lib/api.ts`; reuse the canonical implementations (table in
   `plan/CONTEXT-MAP.md`, Rule 7).
+- Frontend UX behavior is part of the task contract: select the applicable UX
+  rules through `plan/UX-CONTEXT-MAP.md` and state them as UX Acceptance
+  Criteria (behavior lives in `plan/UX-RULES.md`; visuals stay in the design
+  system).
 - Backend authorization is authoritative; roles come from `user_roles`, never
   the token claim; hidden nav and disabled buttons are not authorization.
 - Existing status strings (`paid/unpaid`,

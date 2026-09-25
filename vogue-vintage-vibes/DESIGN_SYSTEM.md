@@ -14,6 +14,12 @@ tokens, component inventory, and the conventions to follow.
 > - **Now** — true of the current code; build new UI this way to match it.
 > - **Target** — from the spec, applies to new work (mainly the admin panel); not
 >   yet implemented, with the path to get there.
+>
+> **Boundary:** this document is the *visual* system (tokens, components,
+> styling, copy conventions). Behavioral rules — loading/empty/error states,
+> async mutations, confirmation, dialogs/drawers, tables, a11y — live in
+> [`../plan/UX-RULES.md`](../plan/UX-RULES.md), selected per task via
+> [`../plan/UX-CONTEXT-MAP.md`](../plan/UX-CONTEXT-MAP.md).
 
 ---
 

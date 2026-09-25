@@ -113,3 +113,11 @@ cross-cutting feature             -> 6–15 (whole file then warranted)
 
 Read the whole spec only when a task spans many of these areas or creates new
 ground the index cannot locate.
+
+## UX rule-topic map (frontend tasks)
+
+Frontend tasks additionally select the applicable **UX behavior rules** through
+[`UX-CONTEXT-MAP.md`](./UX-CONTEXT-MAP.md) (rule text in
+[`UX-RULES.md`](./UX-RULES.md)) and state them as UX Acceptance Criteria in the
+task/audit. UX-CORE always applies to frontend work; the rest is task-scoped,
+like the Part B table above.

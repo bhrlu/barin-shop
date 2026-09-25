@@ -3376,3 +3376,33 @@ no payment-page preorder wording (money flow identical);
 `stockIssueLabel`/checkout toasts unchanged (no preorder wording there).
 
 → audit: [2026-09-25-f32c-storefront-preorder.md](audit/2026-09-25-f32c-storefront-preorder.md)
+
+## 2026-09-25 — UX-1: UX engineering layer
+
+**What was done** — docs/infra task (user brief): established the canonical UX
+behavioral contract inside the existing agent architecture, no product UI
+code touched. Two new files: `plan/UX-RULES.md` (16 stable-ID sections:
+UX-CORE always-on plus UX-FORM/ASYNC/CONFIRM/DESTRUCTIVE/DIALOG/DRAWER/TABLE/
+SEARCH/PAGINATION/A11Y/KEYBOARD/RESPONSIVE/NOTIFICATION/PERMISSION/
+DATA-FRESHNESS; MUST-phrased, testable rules with ⟦PW⟧ future-Playwright
+assertion markers — D10 untouched) and `plan/UX-CONTEXT-MAP.md` (surface →
+sections selection map + the conditional **UX Acceptance Criteria** template
+for task entries/audits). Integration: one bullet in `AGENTS.md`, a UX
+rule-topic map pointer in `CONTEXT-MAP.md`, a visual-vs-behavioral boundary
+note in `DESIGN_SYSTEM.md`, `plan/README.md` index rows, and MASTER-BACKLOG
+JSON entry **UX-1** (DONE, docs verified) with §11/§16/§19 updated — §19's
+Definition of DONE now includes "frontend tasks: UX Acceptance Criteria
+selected via plan/UX-CONTEXT-MAP.md". Rules were validated against five
+representative surfaces (RolesDialog typed-confirm, AdminDataTable,
+CustomerProfileDrawer, cart quote, HeaderSearch/stock-issues) and anchored to
+existing conventions rather than inventions; known gaps were documented, not
+fixed (brief §18). Verified: JSON parses (60 executable / 55 DONE / 5 open),
+all cross-references resolve, diff contains only the intended docs, no
+Playwright artifact. Counts now **55 DONE / 5 open of 60**; every remaining
+unit stays gated on external input (decision/credentials/trigger/conditional).
+
+**What was NOT done** — no product code changes; no retrospective UX
+acceptance retrofit of completed tasks; no Playwright wiring (markers only);
+backfilling UX-gap checkboxes left as an optional follow-up.
+
+→ audit: [2026-09-25-ux1-ux-engineering-layer.md](audit/2026-09-25-ux1-ux-engineering-layer.md)

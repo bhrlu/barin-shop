@@ -1505,6 +1505,21 @@ changes to the file shipped in sequence; the collision is closed.
       "audit": "plan/audit/2026-09-23-b620-smoke-contact-inbox-deterministic.md",
       "verification_level": "locally tested",
       "completed": "2026-09-23"
+    },
+    {
+      "id": "UX-1",
+      "title": "UX engineering layer (behavioral contract + context selection)",
+      "priority": "P3",
+      "status": "DONE",
+      "layer": "docs_infra",
+      "depends_on": [],
+      "blocks": [],
+      "batch": "F",
+      "source": "user task brief (2026-09-25)",
+      "scope": "Establish the canonical UX behavioral contract: plan/UX-RULES.md (UX-CORE, UX-FORM, UX-ASYNC, UX-CONFIRM, UX-DESTRUCTIVE, UX-DIALOG, UX-DRAWER, UX-TABLE, UX-SEARCH, UX-PAGINATION, UX-A11Y, UX-KEYBOARD, UX-RESPONSIVE, UX-NOTIFICATION, UX-PERMISSION, UX-DATA-FRESHNESS) and plan/UX-CONTEXT-MAP.md (task-scoped selection + conditional UX Acceptance Criteria); one-line AGENTS.md invariant; pointers from CONTEXT-MAP.md, DESIGN_SYSTEM.md and plan/README.md. No product UI changes; no Playwright activation (D10 stands). Rules validated against RolesDialog, AdminDataTable, CustomerProfileDrawer, the cart quote and HeaderSearch.",
+      "audit": "plan/audit/2026-09-25-ux1-ux-engineering-layer.md",
+      "verification_level": "docs verified (references resolved, JSON parsed, no source changes)",
+      "completed": "2026-09-25"
     }
   ],
   "excluded": [
@@ -1525,13 +1540,13 @@ changes to the file shipped in sequence; the collision is closed.
     }
   ],
   "counts": {
-    "total_executable": 57,
-    "done": 46,
-    "open": 11,
+    "total_executable": 60,
+    "done": 55,
+    "open": 5,
     "P0": 0,
     "P1": 0,
     "P2": 0,
-    "P3": 11,
+    "P3": 5,
     "blocked": 0,
     "dropped": 2,
     "obsolete": 1,
@@ -3971,13 +3986,17 @@ After resolving the decisions:
 
 ### Remaining implementation units
 
-**11** open · **45** DONE · 56 executable in total.
+**5** open · **55** DONE · 60 executable in total (UX-1, the UX engineering
+layer, was added and closed on 2026-09-25).
 29 units were added by discovery during earlier tasks (see
 `discovered_as` / `discovered_during` in the JSON index).
 
 ### Ready for execution
 
-**11** (`B2.1a` additionally needs real provider credentials from the user)
+**0 unconditionally** — every remaining unit is gated on an external input:
+`B2.5a` needs the webhook product decision, `B2.1a` additionally needs real
+provider credentials from the user, `B6.18a` is trigger-gated, `B2.3` / `F1.9`
+are conditional (implement only if still justified).
 
 ### Blocked
 
@@ -4135,15 +4154,22 @@ were freshly executed.
 B2.5a — Outbound order webhooks (P3, backend; depends on B2.5 DONE — see JSON index)
 ```
 
-54 of 59 executable units are DONE — each links its audit
-and verification level in the JSON index and in its own section.
+54 of 59 executable units were DONE before this task; UX-1 (the UX engineering
+layer — [`UX-RULES.md`](UX-RULES.md) + [`UX-CONTEXT-MAP.md`](UX-CONTEXT-MAP.md))
+was added and closed on 2026-09-25 → **55 of 60 executable units are DONE** —
+each links its audit and verification level in the JSON index and in its own
+section.
 
-(F5.19, F3.4b, B2.2a, B4.13, AB-FE-06 and F3.2c closed on 2026-09-25.
+(F5.19, F3.4b, B2.2a, B4.13, AB-FE-06, F3.2c and UX-1 closed on 2026-09-25.
 Remaining — **every one gated on an external input**: B2.5a (needs the webhook
 product decision: consumers, payload, HMAC secret, retry policy), B2.1a
 (needs real Kavenegar/SMTP credentials), B6.18a (trigger-gated), B2.3 / F1.9
 (conditional Batch G — implement only if still justified). No unconditionally
 executable unit remains; the next move is a user decision, not a task pick.)
+
+Frontend tasks additionally select their UX rules through
+[`UX-CONTEXT-MAP.md`](UX-CONTEXT-MAP.md) and state the applicable **UX
+Acceptance Criteria** (see §19).
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -4224,6 +4250,10 @@ task checkbox synchronized
 session-log updated
         +
 Master Backlog updated
+        +
+frontend tasks: UX Acceptance Criteria selected via plan/UX-CONTEXT-MAP.md
+                and verified at the level Rule 13 prescribes (browser E2E
+                stays deferred per D10 until ACTIVATE PLAYWRIGHT)
 ```
 
 "Code exists" is not enough.

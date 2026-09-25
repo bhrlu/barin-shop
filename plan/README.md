@@ -15,6 +15,8 @@ plan/
 ├── README.md            ← this file
 ├── RULES.md             ← working rules (spec-preflight + audit + doc-sync)
 ├── CONTEXT-MAP.md       ← repo map + spec index (task-scoped bootstrap; Rule 0/6)
+├── UX-RULES.md          ← canonical UX behavioral rules (frontend task contract)
+├── UX-CONTEXT-MAP.md    ← per-task UX rule selection + UX Acceptance Criteria
 ├── MASTER-BACKLOG.md    ← canonical backlog + resolved decisions (incl. D10: Playwright deferred)
 ├── session-log.md       ← what was done / not done per session
 ├── backend-tasks.md     ← task list for backend/
