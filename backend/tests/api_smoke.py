@@ -738,6 +738,44 @@ def main() -> int:
     call("GET", "/admin/users", admin)
     call("GET", "/admin/refunds", admin)
     call("GET", "/admin/orders", admin)
+
+    # --- customer 360° profile + tiers (AB-FE-06, D7b) ---
+    ulist = call("GET", "/admin/users?page=1&page_size=5", admin)
+    first_user = (ulist.json().get("items") or [{}])[0] if ulist is not None else {}
+    if first_user.get("id"):
+        check(
+            "admin users list carries the D7b tier",
+            first_user.get("tier") in ("new", "vip", "wholesale"),
+            str(first_user.get("tier")),
+        )
+        prof = call("GET", f"/admin/users/{first_user['id']}/profile", admin)
+        check(
+            "GET /admin/users/{id}/profile returns the 360° view",
+            prof is not None and prof.status_code == 200
+            and isinstance(prof.json().get("orders"), list)
+            and isinstance(prof.json().get("addresses"), list)
+            and isinstance(prof.json().get("favorites"), list)
+            and "ltv" in prof.json().get("stats", {})
+            and prof.json().get("tier") in ("new", "vip", "wholesale"),
+            f"{prof.status_code if prof else 0}",
+        )
+    else:
+        check("GET /admin/users/{id}/profile returns the 360° view", False, "no users")
+    prof_anon = call("GET", "/admin/users/00000000-0000-0000-0000-000000000000/profile")
+    check(
+        "customer profile is admin-only",
+        prof_anon is not None and prof_anon.status_code == 401,
+        f"{prof_anon.status_code if prof_anon else 0}",
+    )
+    prof_cust = call(
+        "GET", f"/admin/users/{call('GET', '/auth/me', customer).json()['id']}/profile",
+        customer,
+    )
+    check(
+        "customer cannot read own 360° profile",
+        prof_cust is not None and prof_cust.status_code == 403,
+        f"{prof_cust.status_code if prof_cust else 0}",
+    )
     check(
         "admin orders carry tracking_code",
         all("tracking_code" in o for o in (call("GET", "/admin/orders", admin).json() or [])),

@@ -567,7 +567,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "AB-FE-06",
+    "agent_start_task": "F3.2c",
     "playwright_e2e_status": "DEFERRED",
     "one_task_at_a_time": true,
     "verify_before_done": true,
@@ -936,13 +936,16 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "AB-FE-06",
       "title": "Customer 360° profile",
       "priority": "P3",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "fullstack_frontend",
       "depends_on": [],
       "blocks": [],
       "batch": "F",
       "source": "ADMIN-FRONTEND_TASKS.md:FE-08",
-      "scope": "Customer overview, orders, addresses, wishlist, LTV, purchase interval, role entry point, and New/VIP/Wholesale tier display."
+      "scope": "Customer overview, orders, addresses, wishlist, LTV, purchase interval, role entry point, and New/VIP/Wholesale tier display.",
+      "audit": "plan/audit/2026-09-25-abfe06-customer-360-profile.md",
+      "verification_level": "fully verified",
+      "completed": "2026-09-25"
     },
     {
       "id": "F1.9",
@@ -3027,20 +3030,15 @@ account recently-viewed
 ## AB-FE-06 — Customer 360° profile
 
 * **Layer:** Full-stack/frontend
-* **Status:** TODO
+* **Status:** DONE (2026-09-25)
+* **Audit:** [`plan/audit/2026-09-25-abfe06-customer-360-profile.md`](audit/2026-09-25-abfe06-customer-360-profile.md)
+* **Verification level:** fully verified (396 pytest incl. 19 new DB-backed tier/profile tests, 9 new smoke checks, 266/0 live smoke, live acceptance probe on the tier endpoints, frontend tsc/eslint/build green; browser click-through of the drawer stays OPEN under D10)
+* **Delivered:** `public.user_tiers` (idempotent DDL; role ≠ tier per D7b — Wholesale is classification, not a role); `app/services/tiers.py` as the one canonical D7b implementation (`resolve_tier` pure rule, `VIP_DELIVERED_ORDERS = 3` lives only there); `GET /admin/users/{user_id}/profile` 360° endpoint (identity+roles, tier, LTV excluding cancelled, delivered-based avg days between purchases, full orders/addresses/favorites from the customer's own sources); `PUT /admin/users/{user_id}/tier` staff-assigns/clears only `wholesale` (422 otherwise) with the `update_user_tier` audit row; `GET /admin/users` rows carry `delivered_count`/`explicit_tier`/`tier`; frontend `CustomerProfileDrawer` per [FE-08] (initials avatar, tier badge, registration date, LTV + avg-days cards, orders/addresses/favorites tabs, typed Wholesale confirm) with a one-role-UI hand-off to the existing two-step `RolesDialog`; «سطح» column + «پروفایل» action on `/admin/users`.
+* **Decisions recorded:** LTV excludes cancelled orders (matches the list `spent` convention) while the history keeps all orders; avg-days uses delivered orders only (≥2 required); tier labels are UI copy in `lib/tiers.ts`, semantics stay server-side; only `wholesale` is staff-assignable (New/VIP are derived states); Wholesale lives in its own table, not `user_roles`.
+* **Open:** wishlist tab shows product ids (no products join yet); no pagination inside the orders tab (flagged for F2.5); tier affects no pricing/capabilities (D7b); browser click-through OPEN (D10).
+* **Priority:** P3
+* **Batch:** F
 * **Dependencies:** none
-
-### Required implementation
-
-* customer overview;
-* registration date;
-* order history;
-* saved addresses;
-* wishlist;
-* LTV;
-* average days between purchases;
-* role management entry point;
-* customer tier.
 
 ### Tier rules
 
@@ -3052,10 +3050,8 @@ Wholesale = explicitly assigned by staff
 
 Wholesale takes precedence over New/VIP.
 
-If an explicit Wholesale representation does not yet exist in the backend,
-add the minimum canonical customer-tier representation required by this task.
-
-Do not create a second authorization role system.
+The explicit Wholesale flag lives in `public.user_tiers`; New/VIP are derived
+from the delivered-order count and are not staff-assignable.
 
 ### Verification
 
@@ -3807,10 +3803,10 @@ B2.1 (DONE)
 ├──→ B4.13 (DONE 2026-09-25)
 └──→ B2.1a (also needs real credentials)
 
-F3.4b
+F3.4b (DONE 2026-09-25)
 └── guest localStorage → login merge
 
-AB-FE-06
+AB-FE-06 (DONE 2026-09-25)
 └── resolved customer tier rules
 
 F4.3
@@ -3939,9 +3935,8 @@ B2.2a  (DONE 2026-09-25)
 B4.13  (DONE 2026-09-25)
 B2.1a  (needs real credentials)
 B6.8a  (DONE 2026-09-23)
-F3.4b  (DONE 2026-09-25)
-F4.3  (DONE 2026-09-23)
-AB-FE-06
+F3.4b  (DONE 2026-09-25)F4.3   (DONE 2026-09-23)
+AB-FE-06  (DONE 2026-09-25)
 ```
 
 Notification chain:
@@ -4134,16 +4129,15 @@ were freshly executed.
 ## START HERE
 
 ```text
-AB-FE-06 — Customer 360° profile (P3, full-stack frontend; no deps — see JSON index)
+F3.2c — Storefront preorder purchase, D4 flip (P3, frontend; depends on B4.13 DONE — see JSON index)
 ```
 
-52 of 59 executable units are DONE (F3.2c, the storefront half of B4.13, was
-discovered and added — 59 total) — each links its audit
+53 of 59 executable units are DONE — each links its audit
 and verification level in the JSON index and in its own section.
 
-(F5.19, F3.4b, B2.2a and B4.13 closed on 2026-09-25. Remaining: AB-FE-06
-(Batch F, next), B2.5a (needs a product decision),
-B2.3 / F1.9 (Batch G), B2.1a (credentials), B6.18a (trigger-gated).)
+(F5.19, F3.4b, B2.2a, B4.13 and AB-FE-06 closed on 2026-09-25. Remaining:
+F3.2c (Batch F, next — the storefront half of B4.13), B2.5a (needs a product
+decision), B2.3 / F1.9 (Batch G), B2.1a (credentials), B6.18a (trigger-gated).)
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -4247,11 +4241,11 @@ Reconciliation date:
 Current state:
 
 ```text
-7 remaining implementation units (B2.1a, B2.3, AB-FE-06, F1.9, B6.18a, B2.5a, F3.2c)
-52 completed implementation units
+6 remaining implementation units (F3.2c, B2.1a, B2.3, F1.9, B6.18a, B2.5a)
+53 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 10 product decisions resolved
-NEXT = AB-FE-06 (Batch F, P3 full-stack; B2.1a parked on credentials, B6.18a gated on a trigger, B2.5a needs a product decision; F3.2c is the storefront half of B4.13)
+NEXT = F3.2c (Batch F, P3 frontend; B2.1a parked on credentials, B6.18a gated on a trigger, B2.5a needs a product decision; B2.3/F1.9 are Batch G)
 ```

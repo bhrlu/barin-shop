@@ -651,6 +651,52 @@ export type AdminUser = {
   roles: string[];
   order_count: number;
   spent: number;
+  /** AB-FE-06/D7b: wholesale flag wins over the delivered-count rule. */
+  delivered_count: number;
+  explicit_tier: "wholesale" | null;
+  tier: CustomerTier;
+};
+
+/** D7b customer classification — deliberately NOT a staff role (role != tier). */
+export type CustomerTier = "new" | "vip" | "wholesale";
+
+/** `GET /admin/users/{id}/profile` — the customer's own sources, admin-read
+ * (spec [FE-08]). Orders reuse the storefront `Order` shape, addresses are the
+ * raw account rows. */
+export type AdminCustomerProfile = {
+  profile: {
+    id: string;
+    full_name: string | null;
+    phone: string | null;
+    avatar_url: string | null;
+    email: string | null;
+    created_at: string;
+    roles: string[];
+  };
+  tier: CustomerTier;
+  explicit_tier: "wholesale" | null;
+  stats: {
+    order_count: number;
+    delivered_count: number;
+    ltv: number;
+    favorite_count: number;
+    address_count: number;
+    avg_days_between_purchases: number | null;
+  };
+  orders: Order[];
+  addresses: Array<{
+    id: string;
+    title: string;
+    receiver: string;
+    phone: string;
+    province: string;
+    city: string;
+    postal_code: string | null;
+    line: string;
+    is_default: boolean;
+    created_at: string;
+  }>;
+  favorites: Array<{ product_id: string; created_at: string }>;
 };
 
 /** One `audit_logs` row as `GET /admin/audit-logs` returns it (B5.1, spec [BE-04]). */
@@ -967,6 +1013,15 @@ export const api = {
       method: "PUT",
       json: { roles },
     }),
+  // AB-FE-06: the customer's 360° view for the admin drawer (spec [FE-08])
+  adminCustomerProfile: (userId: string) =>
+    request<AdminCustomerProfile>(`/admin/users/${userId}/profile`),
+  // AB-FE-06/D7b: assign (or clear) the explicit Wholesale tier — audited, not a role
+  adminSetUserTier: (userId: string, tier: "wholesale" | null) =>
+    request<{ userId: string; explicit_tier: "wholesale" | null; tier: CustomerTier }>(
+      `/admin/users/${userId}/tier`,
+      { method: "PUT", json: { tier } },
+    ),
   // F4.3: optional server-side search / filters / sort (omitted = the old answer)
   adminOrders: (params: AdminOrderListParams = {}) => {
     const qs = new URLSearchParams();

@@ -330,6 +330,23 @@ ROLE_DDL = [
 ]
 
 
+# --- Customer tiers (AB-FE-06, decision D7b) ---------------------------------
+# Explicit Wholesale is a customer classification, NOT an authorization role:
+# it lives in its own table, never in `user_roles` (role != tier). Staff set it
+# from the customer's 360° profile; automatic New/VIP needs no storage (it is a
+# pure function of the delivered-order count, resolved per request).
+USER_TIER_DDL = [
+    """
+    CREATE TABLE IF NOT EXISTS public.user_tiers (
+      user_id UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
+      tier TEXT NOT NULL CHECK (tier IN ('wholesale')),
+      updated_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+    """,
+]
+
+
 # --- Admin audit log (idempotent) --------------------------------------------
 # Spec [BE-04] / B5.1: tamper-resistant trail of privileged mutations. Written by
 # `app/services/audit.py` on the same session as the mutation it describes, so
@@ -733,6 +750,7 @@ async def startup_ddl() -> None:
             NOTIFICATION_DDL,
             PASSWORD_RESET_DDL,
             PROFILE_DDL,
+            USER_TIER_DDL,
             [co_purchase_ddl()],
         ):
             for stmt in statements:

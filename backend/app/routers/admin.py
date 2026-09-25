@@ -21,6 +21,13 @@ from app.services.audit import record_audit
 from app.services.catalog_filters import split_multi
 from app.services.pagination import clamp_page_size, count_rows, envelope
 from app.services.roles import ROLE_CAPABILITIES, STAFF_ROLES, role_lockout_reason
+from app.services.tiers import (
+    TIERS,
+    get_explicit_tier,
+    resolve_tier,
+    resolve_tier_for_user,
+    set_explicit_tier,
+)
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -104,7 +111,12 @@ async def users(
         "SELECT p.id, p.full_name, p.phone, p.avatar_url, p.created_at, u.email, "
         "COALESCE(r.roles, '{}') AS roles, "
         "COALESCE(o.order_count, 0) AS order_count, "
-        "COALESCE(o.spent, 0) AS spent "
+        "COALESCE(o.spent, 0) AS spent, "
+        "COALESCE((SELECT COUNT(*) FROM public.orders od "
+        "          WHERE od.user_id = p.id AND od.status = 'delivered'), 0) "
+        "  AS delivered_count, "
+        "COALESCE((SELECT t.tier FROM public.user_tiers t WHERE t.user_id = p.id), '') "
+        "  AS explicit_tier "
         "FROM public.profiles p "
         "JOIN public.users u ON u.id = p.id "
         "LEFT JOIN (SELECT user_id, array_agg(role::text) AS roles "
@@ -139,6 +151,11 @@ async def users(
             "roles": list(r["roles"]),
             "order_count": int(r["order_count"]),
             "spent": int(r["spent"]),
+            # AB-FE-06/D7b: tier on every row — wholesale flag wins over the
+            # delivered-count rule (role != tier; see services/tiers.py)
+            "delivered_count": int(r["delivered_count"]),
+            "explicit_tier": r["explicit_tier"] or None,
+            "tier": resolve_tier(int(r["delivered_count"]), r["explicit_tier"] or None),
         }
         for r in rows
     ]
@@ -722,3 +739,163 @@ async def set_user_roles(
     )
     await session.commit()
     return {"userId": str(user_id), "roles": new_roles}
+
+
+# --- Customer 360° profile (AB-FE-06, spec [FE-08]) ---------------------------
+
+
+class TierIn(BaseModel):
+    # only Wholesale can be assigned; null clears it (back to automatic New/VIP)
+    tier: Literal["wholesale"] | None = None
+
+
+@router.get("/users/{user_id}/profile")
+async def user_profile(user_id: UUID, user: StaffUsers, session: DbSession) -> dict:
+    """One customer's 360° view for the admin drawer (spec [FE-08]).
+
+    Every section is read from the customer's own sources (Rule 7 — no second
+    copy of the account data): the same rows the account endpoints return the
+    customer. LTV / avg-days follow the house convention: cancelled orders are
+    excluded from money (`spent` in `GET /admin/users`), but a valid
+    cancellation is part of the history, so the counts below include it.
+    """
+    from app.routers.orders import _ORDER_SELECT, _order_row
+
+    identity = (
+        await session.execute(
+            text(
+                "SELECT p.id, p.full_name, p.phone, p.avatar_url, p.created_at, u.email, "
+                "COALESCE((SELECT array_agg(role::text) FROM public.user_roles ur "
+                "         WHERE ur.user_id = p.id), '{}') AS roles, "
+                "COALESCE((SELECT SUM(o.total) FROM public.orders o "
+                "          WHERE o.user_id = p.id AND o.status <> 'cancelled'), 0) AS spent, "
+                "COALESCE((SELECT COUNT(*) FROM public.orders o "
+                "          WHERE o.user_id = p.id), 0) AS order_count, "
+                "COALESCE((SELECT COUNT(*) FROM public.orders o "
+                "          WHERE o.user_id = p.id AND o.status = 'delivered'), 0) "
+                "  AS delivered_count, "
+                "COALESCE((SELECT COUNT(*) FROM public.favorites f "
+                "          WHERE f.user_id = p.id), 0) AS favorite_count, "
+                "COALESCE((SELECT COUNT(*) FROM public.addresses a "
+                "          WHERE a.user_id = p.id), 0) AS address_count "
+                "FROM public.profiles p JOIN public.users u ON u.id = p.id "
+                "WHERE p.id = CAST(:uid AS uuid)"
+            ),
+            {"uid": str(user_id)},
+        )
+    ).mappings().first()
+    if identity is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "کاربر پیدا نشد")
+
+    orders_sql = (
+        _ORDER_SELECT + " WHERE o.user_id = CAST(:uid AS uuid) GROUP BY o.id "
+        "ORDER BY o.created_at DESC"
+    )
+    order_rows = (await session.execute(text(orders_sql), {"uid": str(user_id)})).mappings().all()
+    addresses = (
+        await session.execute(
+            text(
+                "SELECT id, title, receiver, phone, province, city, postal_code, line, "
+                "is_default, created_at FROM public.addresses WHERE user_id = CAST(:uid AS uuid) "
+                "ORDER BY is_default DESC, created_at DESC"
+            ),
+            {"uid": str(user_id)},
+        )
+    ).mappings().all()
+    favorites = (
+        await session.execute(
+            text(
+                "SELECT product_id, created_at FROM public.favorites "
+                "WHERE user_id = CAST(:uid AS uuid) ORDER BY created_at DESC"
+            ),
+            {"uid": str(user_id)},
+        )
+    ).all()
+
+    delivered = int(identity["delivered_count"])
+    explicit = await get_explicit_tier(session, user_id)
+    # delivered order timestamps for the purchase cadence (cancelled excluded)
+    delivered_times = [
+        r[0]
+        for r in (
+            await session.execute(
+                text(
+                    "SELECT o.created_at FROM public.orders o "
+                    "WHERE o.user_id = CAST(:uid AS uuid) AND o.status = 'delivered' "
+                    "ORDER BY o.created_at"
+                ),
+                {"uid": str(user_id)},
+            )
+        ).all()
+    ]
+    avg_days: float | None = None
+    if len(delivered_times) >= 2:
+        gaps = [
+            (b - a).total_seconds() / 86400
+            for a, b in zip(delivered_times, delivered_times[1:], strict=False)
+        ]
+        avg_days = round(sum(gaps) / len(gaps), 1)
+
+    return {
+        "profile": {
+            "id": str(identity["id"]),
+            "full_name": identity["full_name"],
+            "phone": identity["phone"],
+            "avatar_url": identity["avatar_url"],
+            "email": identity["email"],
+            "created_at": _iso(identity["created_at"]),
+            "roles": list(identity["roles"]),
+        },
+        "tier": resolve_tier(delivered, explicit),
+        "explicit_tier": explicit,
+        "stats": {
+            "order_count": int(identity["order_count"]),
+            "delivered_count": delivered,
+            "ltv": int(identity["spent"]),
+            "favorite_count": int(identity["favorite_count"]),
+            "address_count": int(identity["address_count"]),
+            "avg_days_between_purchases": avg_days,
+        },
+        "orders": [_order_row(r) for r in order_rows],
+        "addresses": [dict(r) | {"created_at": _iso(r["created_at"])} for r in addresses],
+        "favorites": [
+            {"product_id": r[0], "created_at": _iso(r[1])} for r in favorites
+        ],
+    }
+
+
+@router.put("/users/{user_id}/tier")
+async def set_user_tier(
+    user_id: UUID, body: TierIn, user: StaffUsers, session: DbSession
+) -> dict:
+    """Assign/clear the explicit Wholesale tier (D7b: staff-assigned only).
+
+    Same guard family as `PUT /users/{id}/roles` (`users` capability), same
+    audit pattern — and deliberately **not** a role: the tier table has no
+    connection to authorization (role != tier).
+    """
+    target = (
+        await session.execute(
+            text("SELECT id FROM public.users WHERE id = CAST(:uid AS uuid)"),
+            {"uid": str(user_id)},
+        )
+    ).first()
+    if target is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "کاربر پیدا نشد")
+    if body.tier is not None and body.tier not in TIERS:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "سطح نامعتبر است")
+
+    old = await get_explicit_tier(session, user_id)
+    await set_explicit_tier(session, user_id, body.tier, user.id)
+    effective = await resolve_tier_for_user(session, user_id)
+    await record_audit(
+        session,
+        admin_id=user.id,
+        action="update_user_tier",
+        entity_type="user",
+        entity_id=str(user_id),
+        old_values={"explicit_tier": old},
+        new_values={"explicit_tier": body.tier},
+    )
+    await session.commit()
+    return {"userId": str(user_id), "explicit_tier": body.tier, "tier": effective}

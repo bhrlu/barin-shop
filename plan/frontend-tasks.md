@@ -547,6 +547,25 @@ conflict (DESIGN_SYSTEM.md §5).
   Done (2026-09-24): `profiles` gains 7 columns + one-to-one `user_size_profiles` (idempotent `PROFILE_DDL`); `services/profile.py` validates the national-ID checksum, birth-date bounds, gender set and cm/kg ranges; omitted = unchanged / explicit `null` = cleared on every profile PATCH; `full_name` is re-derived from the merged first/last (unless set explicitly) so the header, checkout and admin lists never go stale; verification timestamps exist but nothing sets them. 57 backend tests (mutation-checked), pytest 344, smoke 253/0, browser 24/24 incl. checkout regression, clean-env `down -v` DDL proof. Clean-environment tested + browser tested. Backend part tracked in `backend-tasks.md`.
   → audit: [2026-09-24-f520-complete-customer-profile.md](audit/2026-09-24-f520-complete-customer-profile.md)
 
+- [x] **AB-FE-06 Customer 360° profile** (`[FE-08]`, full-stack, D7b tier
+  semantics binding) — staff-facing per-customer drawer on `/admin/users`:
+  initials avatar, tier badge, registration date; LTV and average-days-between-
+  purchases cards; orders / saved addresses / favorites tabs; «مدیریت نقش‌ها»
+  entry point into the existing two-step `RolesDialog` (one role UI, not a
+  second one); «سطح» column with the tier badge and a «پروفایل» row action.
+  Done (2026-09-25): `public.user_tiers` (idempotent DDL; role ≠ tier) +
+  `services/tiers.py` as the canonical D7b rule (New <3 delivered ≤ VIP,
+  Wholesale staff-assigned and taking precedence, unknown explicit values
+  ignored); `GET /admin/users/{user_id}/profile` (LTV excludes cancelled,
+  avg-days from delivered orders ≥2, orders/addresses/favorites read from the
+  customer's own sources); `PUT /admin/users/{user_id}/tier` (only `wholesale`
+  assignable, 422 otherwise, `update_user_tier` audit row); `GET /admin/users`
+  rows carry `delivered_count`/`explicit_tier`/`tier`; shared Persian labels in
+  `lib/tiers.ts`. 19 DB-backed tests + 9 smoke checks, pytest 396, smoke 266/0,
+  live acceptance probe on the tier endpoints, tsc/eslint/build green.
+  Fully verified; **browser click-through of the drawer OPEN** (D10).
+  → audit: [2026-09-25-abfe06-customer-360-profile.md](audit/2026-09-25-abfe06-customer-360-profile.md)
+
 ## Rules reminder
 
 Every completed F-task needs an audit file in `plan/audit/` (see `plan/RULES.md` Rule 1).

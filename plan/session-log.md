@@ -3318,3 +3318,32 @@ preorder badge on cart/checkout UI (same); no automatic fulfilment worker
 (D4 explicitly); browser click-through stays OPEN (D10).
 
 → audit: [2026-09-25-b413-preorder-fulfilment-flag.md](audit/2026-09-25-b413-preorder-fulfilment-flag.md)
+
+## 2026-09-25 — Continuous backlog execution: AB-FE-06
+
+**What was done** — fourth task of the continuous run (JSON index → AB-FE-06
+after B4.13; the working tree already held the previous session's completed
+implementation and audit draft, which were finalized rather than rewritten).
+Customer 360° profile per D7b: `public.user_tiers` (role ≠ tier),
+`services/tiers.py` as the one canonical tier rule, `GET
+/admin/users/{user_id}/profile` (LTV excluding cancelled, delivered-based
+avg-days, orders/addresses/favorites from the customer's own sources), `PUT
+/admin/users/{user_id}/tier` (only `wholesale` staff-assignable, audited), tier
+fields on `GET /admin/users` rows; frontend `CustomerProfileDrawer` + «سطح»
+column on `/admin/users` with a one-role-UI hand-off to the existing two-step
+`RolesDialog`. This session's own work: one ruff line-length fix in the new
+test file (the draft's "ruff clean" claim did not hold as written), then fresh
+re-verification — ruff clean, **pytest 396** (was 377; +19), frontend tsc 0 /
+eslint 0 / build green (Node 22) — and the **doc sync the draft had claimed but
+not executed**: JSON index → DONE with audit + verification level, §AB-FE-06
+section rewritten as DONE with decisions and opens, dependency trees, START
+HERE → **F3.2c**, counts **53 DONE / 6 TODO of 59**, `agent_start_task` →
+F3.2c, frontend-tasks checkbox + Done paragraph, this log. Committed.
+
+**What was NOT done** — browser click-through of the drawer (D10 gate, OPEN);
+products join for the wishlist tab; pagination inside the drawer's orders tab
+(flagged for F2.5); no pricing/capability effect of tiers (D7b: classification
+only); F5.20's self-service profile deliberately not merged (staff view ≠
+self-service view).
+
+→ audit: [2026-09-25-abfe06-customer-360-profile.md](audit/2026-09-25-abfe06-customer-360-profile.md)

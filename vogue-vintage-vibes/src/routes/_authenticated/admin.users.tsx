@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef, SortingState } from "@tanstack/react-table";
 import { useState } from "react";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import {
   api,
@@ -15,6 +15,8 @@ import {
 import { useAuth } from "@/lib/auth";
 import { formatFaDate, formatToman, toFa, toLatinDigits } from "@/lib/format";
 import { AdminDataTable, CopyValue } from "@/components/admin/AdminDataTable";
+import { CustomerProfileDrawer } from "@/components/admin/CustomerProfileDrawer";
+import { TIER_LABELS } from "@/lib/tiers";
 import {
   Dialog,
   DialogContent,
@@ -72,6 +74,7 @@ function AdminUsers() {
   const [role, setRole] = useState<string[]>([]);
   const [sorting, setSorting] = useState<SortingState>([{ id: "created_at", desc: true }]);
   const [editing, setEditing] = useState<AdminUser | null>(null);
+  const [profiling, setProfiling] = useState<AdminUser | null>(null);
 
   const params: AdminUserListParams = {
     page,
@@ -141,22 +144,42 @@ function AdminUsers() {
       ),
     },
     {
+      id: "tier",
+      header: "سطح",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <span className="rounded-full bg-sand px-2.5 py-0.5 text-xs">
+          {TIER_LABELS[row.original.tier] ?? row.original.tier}
+        </span>
+      ),
+    },
+    {
       id: "actions",
       header: () => <span className="sr-only">اقدام</span>,
       enableSorting: false,
       cell: ({ row }) => {
         const isSelf = row.original.id === me?.id;
         return (
-          <button
-            type="button"
-            onClick={() => setEditing(row.original)}
-            disabled={isSelf}
-            title={isSelf ? "نقش‌های حساب خودتان را از اینجا نمی‌توانید تغییر دهید" : undefined}
-            className="flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-terracotta hover:text-terracotta disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <ShieldCheck className="size-3.5" aria-hidden />
-            نقش‌ها
-          </button>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setProfiling(row.original)}
+              className="flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-terracotta hover:text-terracotta"
+            >
+              <UserRound className="size-3.5" aria-hidden />
+              پروفایل
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditing(row.original)}
+              disabled={isSelf}
+              title={isSelf ? "نقش‌های حساب خودتان را از اینجا نمی‌توانید تغییر دهید" : undefined}
+              className="flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-terracotta hover:text-terracotta disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ShieldCheck className="size-3.5" aria-hidden />
+              نقش‌ها
+            </button>
+          </div>
         );
       },
     },
@@ -213,6 +236,11 @@ function AdminUsers() {
       {editing ? (
         <RolesDialog key={editing.id} user={editing} onClose={() => setEditing(null)} />
       ) : null}
+      <CustomerProfileDrawer
+        user={profiling}
+        onClose={() => setProfiling(null)}
+        onEditRoles={(target) => setEditing(target)}
+      />
     </>
   );
 }
