@@ -942,13 +942,14 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "B2.3",
       "title": "PDF invoices",
       "priority": "P3",
-      "status": "TODO",
+      "status": "DROPPED",
       "layer": "backend",
       "depends_on": [],
       "blocks": [],
       "batch": "G",
       "source": "backend-tasks.md",
-      "scope": "Implement server-generated PDF invoices only if still required after the existing browser invoice flow is confirmed insufficient."
+      "scope": "Implement server-generated PDF invoices only if still required after the existing browser invoice flow is confirmed insufficient.",
+      "closure": "DROPPED 2026-09-25 by user decision: the premise never fired — the browser invoice flow (F4.4) shipped and nothing has confirmed it insufficient; reopen only if a concrete need appears."
     },
     {
       "id": "F3.4b",
@@ -984,13 +985,14 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "F1.9",
       "title": "Lovable preview tooling",
       "priority": "P3",
-      "status": "TODO",
+      "status": "DROPPED",
       "layer": "frontend_tooling",
       "depends_on": [],
       "blocks": [],
       "batch": "G",
       "source": "frontend-tasks.md",
-      "scope": "Only implement if useful after Lovable is fully out of the runtime architecture; never reintroduce Lovable/Supabase dependencies."
+      "scope": "Only implement if useful after Lovable is fully out of the runtime architecture; never reintroduce Lovable/Supabase dependencies.",
+      "closure": "DROPPED 2026-09-25 by user decision: the app is fully independent of Lovable (established invariant), so the tooling's own premise — being useful after the Lovable exit — never fired; no Lovable/Supabase code may return."
     },
     {
       "id": "B2.2a",
@@ -1578,13 +1580,13 @@ changes to the file shipped in sequence; the collision is closed.
   "counts": {
     "total_executable": 61,
     "done": 56,
-    "open": 4,
+    "open": 2,
     "P0": 0,
     "P1": 0,
     "P2": 0,
-    "P3": 4,
+    "P3": 2,
     "blocked": 0,
-    "dropped": 2,
+    "dropped": 4,
     "obsolete": 1,
     "open_product_decisions": 0,
     "resolved_product_decisions": 11
@@ -3831,6 +3833,36 @@ Do not implement.
 
 ---
 
+## B2.3 — PDF invoices
+
+**Status: DROPPED (2026-09-25, user decision)**
+
+Reason:
+
+The task's own premise — "only if still required after the existing browser
+invoice flow is confirmed insufficient" — never fired: the browser invoice
+flow (`F4.4`, print-ready invoice in the order drawer) shipped and nothing has
+confirmed it insufficient. Reopen only when a concrete need appears (e.g. an
+accounting requirement for server-generated PDFs).
+
+Do not implement.
+
+---
+
+## F1.9 — Lovable preview tooling
+
+**Status: DROPPED (2026-09-25, user decision)**
+
+Reason:
+
+The app is fully independent of Lovable (an established architecture
+invariant), so the tooling's own premise — being useful *after* the Lovable
+exit — never fired. No Lovable/Supabase code may return.
+
+Do not implement.
+
+---
+
 ## Historical duplicate IDs
 
 `B6.1` appears multiple times in `backend-tasks.md`, while `B6.3` overlaps the
@@ -4189,8 +4221,9 @@ were freshly executed.
 
 ```text
 No executable TODO remains. Every open unit is gated on an external input:
-B2.1a needs real credentials, B6.18a needs its trigger, B2.3 / F1.9 are
-conditional. The next move is a user decision (or a closure call), not a task pick.
+B2.1a needs real credentials, B6.18a needs its trigger. B2.3 and F1.9 were
+DROPPED on 2026-09-25 (user decision — their premises never fired). The next
+move is a user-supplied external input, not a task pick.
 ```
 
 54 of 59 executable units were DONE before the 2026-09-25 continuous run;
@@ -4201,10 +4234,9 @@ webhooks per decision **D11**) were added and closed the same day →
 level in the JSON index and in its own section.
 
 (F5.19, F3.4b, B2.2a, B4.13, AB-FE-06, F3.2c, UX-1 and B2.5a closed on
-2026-09-25. Remaining — **every one gated on an external input**: B2.1a
-(needs real Kavenegar/SMTP credentials), B6.18a (trigger-gated: upload surface
-beyond catalog staff), B2.3 / F1.9 (conditional Batch G — their premise is
-unmet; a closure decision is pending).)
+2026-09-25; **B2.3 and F1.9 DROPPED** the same day. Remaining — **every one
+gated on an external input**: B2.1a (needs real Kavenegar/SMTP credentials),
+B6.18a (trigger-gated: upload surface beyond catalog staff).)
 
 Frontend tasks additionally select their UX rules through
 [`UX-CONTEXT-MAP.md`](UX-CONTEXT-MAP.md) and state the applicable **UX
@@ -4316,12 +4348,11 @@ Reconciliation date:
 Current state:
 
 ```text
-4 remaining implementation units (B2.1a, B2.3, F1.9, B6.18a — all gated on external input)
+2 remaining implementation units (B2.1a, B6.18a — both gated on external input)
 56 completed implementation units
 0 blocked implementation units
-2 dropped
-1 obsolete
+4 dropped (B4.8, B4.9, B2.3, F1.9)
+1 obsolete (B2.6)
 11 product decisions resolved
-NEXT = none executable — B2.1a parked on credentials, B6.18a trigger-gated,
-B2.3/F1.9 conditional (closure decision pending)
+NEXT = none executable — B2.1a parked on credentials, B6.18a trigger-gated
 ```

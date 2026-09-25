@@ -83,6 +83,9 @@ new session can pick up exactly where this one stopped. Legend: `[ ]` todo ·
   → audit: same file as F1.6
 - [ ] **F1.9 Lovable preview tooling** — `reportLovableError`/`error-capture` kept
   (no Supabase dependency); revisit once the app runs outside Lovable.
+  **DROPPED (2026-09-25, user decision)** — the app is fully independent of
+  Lovable, so the tooling's premise never fired; no Lovable/Supabase code may
+  return. Recorded in `MASTER-BACKLOG.md` §8.
 
 ### A1 — open decisions
 

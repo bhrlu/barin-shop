@@ -3440,3 +3440,27 @@ no admin UI screen for deliveries (API complete), no real external consumer
 (receiver was throwaway), no retry jitter (single consumer).
 
 → audit: [2026-09-25-b25a-outbound-order-webhooks.md](audit/2026-09-25-b25a-outbound-order-webhooks.md)
+
+## 2026-09-25 — Continuous backlog execution: B2.3 + F1.9 closure
+
+**What was done** — the user's second approved call, executed as a backlog-only
+edit: **B2.3 (PDF invoices)** and **F1.9 (Lovable preview tooling)** are
+**DROPPED**. Both were conditional tasks whose own premises never fired —
+B2.3 required the browser invoice flow to be "confirmed insufficient" (F4.4's
+print-ready invoice shipped and nothing has), F1.9 required being "useful
+after the Lovable exit" (the app is fully Lovable-independent already).
+Backlog synced: JSON status → DROPPED with closure reasons, §8 prose entries
+alongside B4.8/B4.9, checkbox notes in `backend-tasks.md`/`frontend-tasks.md`,
+counts regenerated — **56 DONE / 2 TODO of 61 (B2.1a credentials-gated,
+B6.18a trigger-gated), 4 dropped, 1 obsolete, 11 decisions resolved**.
+No code touched; reopen either task only when its premise actually fires.
+
+**What was NOT done** — nothing else; no code, no spec, no reopened tasks.
+
+**Backlog end-state after the 2026-09-25 continuous run** — every executable
+unit that could be executed has been; the remaining two are parked on external
+inputs the user must supply (credentials for B2.1a, an upload-surface change
+for B6.18a). The backlog machinery itself is sound and waiting.
+
+→ audits: none (closure of never-started conditional tasks; reasons recorded
+here, in §8, and in the JSON `closure` fields)

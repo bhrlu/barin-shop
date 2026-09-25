@@ -88,6 +88,9 @@ Legend: `[ ]` todo · `[x]` done (audit file required) · audit links in `plan/a
   Done (2026-09-23): Export ranges convert an explicit offset to UTC (naive stays UTC, `to` exclusive), bad/inverted ranges are a Persian 422, and CSV bodies start with a UTF-8 BOM. 9 tests (negative control: 7 fail), pytest 287, smoke 253/0 (+BOM check), browser export panels 5/5. Integration + browser tested.
   → audit: [2026-09-23-b22b-export-dates-and-bom.md](audit/2026-09-23-b22b-export-dates-and-bom.md)
 - [ ] **B2.3 PDF invoices** — reportlab/weasyprint, Persian digits, per-order invoice endpoint
+  **DROPPED (2026-09-25, user decision)** — the premise (browser invoice flow
+  confirmed insufficient) never fired; F4.4's print-ready invoice stands. Recorded
+  in `MASTER-BACKLOG.md` §8; reopen only if a concrete need appears.
 - [x] **B2.4 Recommendation engine** — related products from co-purchase patterns
   Done (2026-09-22): `co_purchases` pair table (canonical pairs, DDL in startup)
   refreshed in the checkout transaction for multi-item carts + at startup;
