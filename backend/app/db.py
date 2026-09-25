@@ -526,6 +526,35 @@ NOTIFICATION_DDL = [
     "INSERT INTO public.notification_settings (id) VALUES (true) ON CONFLICT (id) DO NOTHING",
 ]
 
+# `webhook_deliveries` is the B2.5a outbox for outbound order webhooks (D11): one
+# row per event, written on the caller's transaction and delivered after the
+# commit. `UNIQUE (event, order_id)` makes a replayed lifecycle event a no-op.
+# The endpoint URL and the HMAC secret never live in the database (D11: env only).
+WEBHOOK_DDL = [
+    """
+    CREATE TABLE IF NOT EXISTS public.webhook_deliveries (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      event TEXT NOT NULL
+        CHECK (event IN ('order.created', 'order.paid', 'order.shipped',
+                         'order.delivered', 'order.cancelled')),
+      order_id UUID NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'sent', 'failed', 'skipped')),
+      attempts INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT,
+      response_status INTEGER,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (event, order_id)
+    )
+    """,
+    (
+        "CREATE INDEX IF NOT EXISTS webhook_deliveries_open_idx "
+        "ON public.webhook_deliveries(created_at) "
+        "WHERE status IN ('pending', 'failed')"
+    ),
+]
+
 
 # --- Password reset tokens (idempotent) --------------------------------------
 # F2.3. Only the SHA-256 of the emailed token is stored, so a database reader
@@ -748,6 +777,7 @@ async def startup_ddl() -> None:
             PAYMENT_DDL,
             CONTACT_DDL,
             NOTIFICATION_DDL,
+            WEBHOOK_DDL,
             PASSWORD_RESET_DDL,
             PROFILE_DDL,
             USER_TIER_DDL,

@@ -32,6 +32,7 @@ from app.services.order_lifecycle import (
 from app.services.pagination import clamp_page_size, count_rows, envelope
 from app.services.payments import simulation_mode
 from app.services.roles import has_capability
+from app.services.webhooks import enqueue_order_event
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["orders"])
@@ -255,8 +256,12 @@ async def patch_order(
         # from cancel_order_tx); repeats are deduped by the notification service
         if "status" in changed and order["status"] == "shipped":
             await notify_order_event(session, str(order_id), "shipped")
+            await enqueue_order_event(session, str(order_id), "shipped")  # B2.5a/D11
+        if "status" in changed and order["status"] == "delivered":
+            await enqueue_order_event(session, str(order_id), "delivered")  # B2.5a/D11
         if "payment_status" in changed and order["payment_status"] == "paid":
             await notify_order_event(session, str(order_id), "paid")
+            await enqueue_order_event(session, str(order_id), "paid")  # B2.5a/D11
 
     await session.commit()
     return order
@@ -515,5 +520,6 @@ async def payment_complete(
     )
     if paid:
         await notify_order_event(session, str(order_id), "paid")
+        await enqueue_order_event(session, str(order_id), "paid")  # B2.5a/D11
     await session.commit()
     return PaymentCompleteOut(ok=paid, order_number=order["order_number"], reference=reference)

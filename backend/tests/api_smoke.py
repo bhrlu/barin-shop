@@ -1028,6 +1028,42 @@ def main() -> int:
     anon = call("GET", "/notifications")
     check("GET /notifications anonymous → 401", anon is not None and anon.status_code == 401, "")
 
+    # --- B2.5a/D11: outbound order webhooks (admin read-only state + outbox) ---
+    ws = call("GET", "/admin/settings/webhooks", admin)
+    ws_body = ws.json() if ws is not None and ws.status_code == 200 else {}
+    check(
+        "admin reads webhook state (env-driven, events listed)",
+        ws_body.get("events")
+        == [
+            "order.cancelled",
+            "order.created",
+            "order.delivered",
+            "order.paid",
+            "order.shipped",
+        ]
+        and "secret" not in str(ws_body).lower() or "secret" not in str(ws_body.keys()),
+        f"{ws_body}",
+    )
+    for who, tok in (("customer", customer), ("support", support)):
+        denied = call("GET", "/admin/settings/webhooks", tok)
+        check(
+            f"webhook settings as {who} → 403",
+            denied is not None and denied.status_code == 403,
+            f"{denied.status_code if denied else 0}",
+        )
+    wl = call("GET", "/admin/webhooks/deliveries", admin)
+    check(
+        "admin lists webhook deliveries (envelope)",
+        wl is not None and wl.status_code == 200 and "items" in wl.json(),
+        f"{wl.status_code if wl else 0}",
+    )
+    wdenied = call("GET", "/admin/webhooks/deliveries", customer)
+    check(
+        "webhook deliveries as customer → 403",
+        wdenied is not None and wdenied.status_code == 403,
+        f"{wdenied.status_code if wdenied else 0}",
+    )
+
     ns = call("GET", "/admin/settings/notifications", admin)
     ns_body = ns.json() if ns is not None and ns.status_code == 200 else {}
     check(

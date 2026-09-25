@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.inventory_log import log_stock_change
 from app.services.notifications import notify_order_event
+from app.services.webhooks import enqueue_order_event
 
 # Shipped orders are physically gone — the store can no longer restock them,
 # so the cancel guard keeps refusing them (same behavior as before B6.1).
@@ -160,3 +161,5 @@ async def cancel_order_tx(
     await restore_stock(session, order_id, actor_id)
     # B2.1: both cancel paths (customer POST /cancel, staff PATCH) end here
     await notify_order_event(session, order_id, "cancelled")
+    # B2.5a/D11: the outbound `order.cancelled` webhook, same transaction
+    await enqueue_order_event(session, order_id, "cancelled")

@@ -29,6 +29,7 @@ from app.services.notifications import notify_order_event
 from app.services.pricing import quote
 from app.services.recommendations import refresh_co_purchases
 from app.services.variants import load_variants, variant_price, variant_stock
+from app.services.webhooks import enqueue_order_event
 
 log = logging.getLogger(__name__)
 
@@ -288,6 +289,8 @@ async def create_order(
         await notify_order_event(session, order_id, "created_preorder")
     else:
         await notify_order_event(session, order_id, "created")
+    # B2.5a/D11: the canonical `order.created` webhook either way
+    await enqueue_order_event(session, order_id, "created")
 
     return {
         "order_id": str(order_id),

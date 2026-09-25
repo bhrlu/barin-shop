@@ -100,9 +100,24 @@ Legend: `[ ]` todo · `[x]` done (audit file required) · audit links in `plan/a
   `services/notifications.dispatch_deliveries()`, which is already retry-safe.)
   Done (2026-09-23): Background worker (`python -m app.worker`, compose `worker`): advisory-locked idempotent jobs — the outbox sweeper (crash-stale `pending` sent, `failed` retried with backoff up to a cap) and abandoned-payment reminders (`payment_reminder`, once per pending+unpaid order after 60 min, via `notify_order_event`). 12 tests + 3 mutation controls; pytest 267, smoke 245/0; clean env with a live reminder, duplicate pass and worker restart. Outbound webhooks need a decision → B2.5a. Clean-environment tested.
   → audit: [2026-09-23-b25-background-jobs.md](audit/2026-09-23-b25-background-jobs.md)
-- [ ] **B2.5a Outbound order webhooks** (`NEW-B25-1`, discovered during B2.5) — needs a
+- [x] **B2.5a Outbound order webhooks** (`NEW-B25-1`, discovered during B2.5) — needs a
   product decision first (consumers, payload, HMAC secret in env, retry policy); then
   an outbox + a job in `services/jobs.py` + signed POSTs. Do not build without it.
+  Done (2026-09-25) per decision **D11** (user-decided: 5 lifecycle events, raw row
+  dump payload, env-only URL + HMAC secret, outbox with 1→60s backoff ×5 + admin
+  redeliver): `webhook_deliveries` outbox (idempotent DDL, `UNIQUE(event, order_id)`),
+  `services/webhooks.py` as the one implementation (enqueue on the caller's
+  transaction, after-commit dispatch like the notification outbox, HMAC-SHA256
+  `X-SANDE-Signature` over the raw body, `X-SANDE-Event`/`X-SANDE-Delivery` headers),
+  hooks at all five lifecycle points (`checkout`, `payments` verify + simulator,
+  staff PATCH shipped/delivered/paid, `cancel_order_tx`), worker job `sweep_webhooks`,
+  admin surface `GET /admin/settings/webhooks` (read-only) +
+  `GET /admin/webhooks/deliveries` + `POST …/redeliver` (guard `settings`, audited).
+  13 tests (6 unit + 7 DB-backed), pytest 409, smoke 275/0, clean-env boot proof, and
+  a live end-to-end probe: real receiver in the running API got the signed POST
+  (`sig_ok: true`, raw 15-column order dump + items), row `sent/200`. Probe rows
+  hard-deleted; throwaway receiver removed. Clean-environment tested.
+  → audit: [2026-09-25-b25a-outbound-order-webhooks.md](audit/2026-09-25-b25a-outbound-order-webhooks.md)
 - [ ] **B2.6 Coupon admin UI support** — nothing to build in Python; expose whatever the admin panel needs (done as part of B1.4 API)
   → superseded by B1.9: `/admin/*` endpoints + `/coupons` CRUD now exist; the panel
   still needs wiring (frontend F1.2 / F2.4)

@@ -13,7 +13,10 @@ jobs are idempotent on their own too, so a crash mid-run is repaired by the next
 * `remind_unpaid_orders` — one in-app «یادآوری پرداخت» (plus SMS / email when those
   channels are on) for each order still `pending` and `unpaid` after
   `payment_reminder_after_minutes`, through the canonical `notify_order_event`;
-  `UNIQUE(user_id, event_key)` makes a second reminder for the same order a no-op.
+  `UNIQUE(user_id, event_key)` makes a second reminder for the same order a no-op;
+* `sweep_webhooks` — the B2.5a outbox (D11): re-dispatches webhook deliveries left
+  `pending` by a lost after-commit send and retries `failed` ones after
+  `attempts × backoff`, up to the cap (mirrors `sweep_deliveries`).
 """
 
 import logging
@@ -25,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db import SessionLocal
 from app.services.notifications import dispatch_deliveries, notify_order_event
+from app.services.webhooks import dispatch_webhooks
 
 log = logging.getLogger(__name__)
 
@@ -86,9 +90,37 @@ async def remind_unpaid_orders(session: AsyncSession) -> int:
     return len(due)
 
 
+async def sweep_webhooks(session: AsyncSession) -> int:
+    ids = [
+        str(row[0])
+        for row in (
+            await session.execute(
+                text(
+                    "SELECT id FROM public.webhook_deliveries "
+                    "WHERE (status = 'pending' "
+                    "       AND created_at < now() - make_interval(secs => :stale)) "
+                    "   OR (status = 'failed' AND attempts < :max_attempts "
+                    "       AND updated_at < now() - make_interval(secs => :backoff * attempts)) "
+                    "ORDER BY created_at LIMIT :batch"
+                ),
+                {
+                    "stale": settings.webhook_pending_stale_seconds,
+                    "max_attempts": settings.webhook_retry_max_attempts,
+                    "backoff": settings.webhook_retry_backoff_seconds,
+                    "batch": BATCH,
+                },
+            )
+        ).all()
+    ]
+    if ids:
+        await dispatch_webhooks(ids)
+    return len(ids)
+
+
 JOBS: dict[str, Job] = {
     "sweep_deliveries": sweep_deliveries,
     "remind_unpaid_orders": remind_unpaid_orders,
+    "sweep_webhooks": sweep_webhooks,
 }
 
 

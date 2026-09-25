@@ -3406,3 +3406,37 @@ acceptance retrofit of completed tasks; no Playwright wiring (markers only);
 backfilling UX-gap checkboxes left as an optional follow-up.
 
 → audit: [2026-09-25-ux1-ux-engineering-layer.md](audit/2026-09-25-ux1-ux-engineering-layer.md)
+
+## 2026-09-25 — Continuous backlog execution: B2.5a
+
+**What was done** — sixth task of the continuous run. New session: reconstructed
+state from the canonical backlog (56→, then 5 TODOs — every one self-gated) and
+reported before acting; the user then made two calls: **decide B2.5a** and
+**close B2.3 + F1.9**. The B2.5a decisions were taken via multiple choice and
+recorded as **decision D11**: five lifecycle events only, raw orders+items row
+dump payload, env-only endpoint URL + HMAC secret, outbox with exponential
+backoff ×5 and admin redeliver, guard `settings`, audited mutations.
+Implementation mirrors the notification outbox (R7: `services/webhooks.py` is
+the one implementation): `webhook_deliveries` DDL (UNIQUE(event, order_id))
+registered in `startup_ddl()`, enqueue on the caller's transaction +
+after-commit dispatch + `FOR UPDATE SKIP LOCKED`, HMAC-SHA256 `X-SANDE-*`
+headers (ASCII — RFC 7230), hooks at all five lifecycle points, worker job
+`sweep_webhooks`, admin API `GET /admin/settings/webhooks` (read-only, no
+secret) + `GET /admin/webhooks/deliveries` + `POST …/redeliver` (409 non-
+failed, audited). Verified: ruff clean; **pytest 409** (was 396; +13: 6 unit,
+7 DB-backed); smoke **275/0**; clean-env `down -v` boot proof per Rule 14
+(db-init 0, app-role privileges confirmed live); OpenAPI 77 paths; and a live
+end-to-end probe — a throwaway receiver inside the real API process received
+the signed POST (`sig_ok: true`, raw 15-column dump + items), row `sent/200`.
+The probe caught a real bug unit tests missed (`order_items.created_at` does
+not exist → `ORDER BY id`); probe rows hard-deleted, receiver removed,
+`main.py` restored. Backlog synced: D11 §4 + implemented-note, JSON B2.5a →
+DONE (audit + "fully verified"), counts **56 DONE / 4 TODO of 61**,
+`agent_start_task` → **null** (no executable TODO), §16 rewritten accordingly.
+
+**What was NOT done** — B2.3/F1.9 closure (user picked it, but it is a
+backlog-only edit; left for the next commit to keep this one focused on B2.5a),
+no admin UI screen for deliveries (API complete), no real external consumer
+(receiver was throwaway), no retry jitter (single consumer).
+
+→ audit: [2026-09-25-b25a-outbound-order-webhooks.md](audit/2026-09-25-b25a-outbound-order-webhooks.md)

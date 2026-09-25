@@ -96,6 +96,15 @@ class Settings(BaseSettings):
     # `failed` deliveries are retried after attempts × backoff, up to max attempts
     notification_retry_backoff_seconds: int = 120
     notification_retry_max_attempts: int = 5
+    # B2.5a/D11 outbound order webhooks: disabled until both env values exist
+    webhook_order_url: str = ""
+    webhook_hmac_secret: str = ""
+    webhook_timeout_seconds: float = 10.0
+    # failed webhook deliveries are retried after attempts × backoff, up to max attempts
+    webhook_retry_backoff_seconds: int = 60
+    webhook_retry_max_attempts: int = 5
+    # a `pending` webhook older than this lost its after-commit send (sweeper picks it up)
+    webhook_pending_stale_seconds: int = 120
 
     # Bootstrap admin (used by `python -m app.seed_auth`)
     admin_email: str = "admin@sande.local"

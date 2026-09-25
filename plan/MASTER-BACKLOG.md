@@ -502,6 +502,39 @@ JSON `execution_policy` and in the always-loaded `AGENTS.md`.)
 
 ---
 
+## D11 — Outbound order webhooks (resolves B2.5a)
+
+> Status: resolved by the user on 2026-09-25; implemented as B2.5a (DONE).
+
+**Decision (user, 2026-09-25):**
+
+* **Events:** the five order-lifecycle events only — `order.created`,
+  `order.paid`, `order.shipped`, `order.delivered`, `order.cancelled`. No
+  refund/payment-specific events for now.
+* **Payload:** **raw row dump** — the full `orders` row (all columns, ISO
+  timestamps) plus the order's `order_items` rows, wrapped in a minimal
+  envelope `{id, event, occurred_at, order, items}`. Internal columns are
+  deliberately exposed; consumers of this integration were chosen by the owner
+  with that in mind. Changing this later is a breaking payload version.
+* **Endpoint + secret:** env-only — `WEBHOOK_ORDER_URL` and
+  `WEBHOOK_HMAC_SECRET` (HMAC-SHA256 over the raw body, `X-SÂNDÉ-Signature:
+  sha256=<hex>` + `X-SÂNDÉ-Event` + `X-SÂNDÉ-Delivery` headers). No admin-
+  managed endpoint UI; `/admin/settings/webhooks` is read-only state.
+* **Delivery:** outbox table `webhook_deliveries` (one row per event), sent
+  after the caller's commit like the notification outbox; sweeper job
+  `sweep_webhooks` in `services/jobs.py` retries with exponential backoff
+  (1 → 5 → 15 → 60 minutes, 5 attempts, then `failed`); admin redeliver
+  endpoint re-queues a failed delivery; guard `StaffSettings` ("settings"
+  capability, same as the notification switches), mutations audited.
+
+Agents implement B2.5a exactly as decided and must not widen the event set,
+change the payload, or add endpoint management without a new decision.
+
+**Implemented** (2026-09-25) as B2.5a exactly as above
+([audit](audit/2026-09-25-b25a-outbound-order-webhooks.md)); the task is DONE.
+
+---
+
 # 5. Critical ordering
 
 ## First task
@@ -567,7 +600,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "B2.5a",
+    "agent_start_task": null,
     "playwright_e2e_status": "DEFERRED",
     "one_task_at_a_time": true,
     "verify_before_done": true,
@@ -1477,9 +1510,9 @@ changes to the file shipped in sequence; the collision is closed.
     },
     {
       "id": "B2.5a",
-      "title": "Outbound order webhooks (needs a product decision)",
+      "title": "Outbound order webhooks (decision D11)",
       "priority": "P3",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "backend",
       "depends_on": ["B2.5"],
       "blocks": [],
@@ -1487,7 +1520,10 @@ changes to the file shipped in sequence; the collision is closed.
       "source": "backend-tasks.md",
       "discovered_as": "NEW-B25-1",
       "discovered_during": "B2.5",
-      "scope": "Send order lifecycle events to external systems. Needs a decision first: consumers, payload, HMAC signing secret (env only), retry policy and replay protection. Then: an outbox table like notification_deliveries, a sweeper job in services/jobs.py, signed POSTs, tests. Do not build without the decision."
+      "scope": "Send order lifecycle events to external systems. Decision D11 (2026-09-25): the five lifecycle events only, raw orders+items row dump payload, env-only endpoint URL + HMAC secret, webhook_deliveries outbox with exponential backoff x5 and admin redeliver; signed POSTs via the jobs sweeper.",
+      "audit": "plan/audit/2026-09-25-b25a-outbound-order-webhooks.md",
+      "verification_level": "fully verified (clean-env boot, live end-to-end signed-POST probe, pytest 409, smoke 275/0)",
+      "completed": "2026-09-25"
     },
     {
       "id": "B6.20",
@@ -1540,17 +1576,18 @@ changes to the file shipped in sequence; the collision is closed.
     }
   ],
   "counts": {
-    "total_executable": 60,
-    "done": 55,
-    "open": 5,
+    "total_executable": 61,
+    "done": 56,
+    "open": 4,
     "P0": 0,
     "P1": 0,
     "P2": 0,
-    "P3": 5,
+    "P3": 4,
     "blocked": 0,
     "dropped": 2,
     "obsolete": 1,
-    "open_product_decisions": 0
+    "open_product_decisions": 0,
+    "resolved_product_decisions": 11
   }
 }
 ```
@@ -4151,21 +4188,23 @@ were freshly executed.
 ## START HERE
 
 ```text
-B2.5a — Outbound order webhooks (P3, backend; depends on B2.5 DONE — see JSON index)
+No executable TODO remains. Every open unit is gated on an external input:
+B2.1a needs real credentials, B6.18a needs its trigger, B2.3 / F1.9 are
+conditional. The next move is a user decision (or a closure call), not a task pick.
 ```
 
-54 of 59 executable units were DONE before this task; UX-1 (the UX engineering
-layer — [`UX-RULES.md`](UX-RULES.md) + [`UX-CONTEXT-MAP.md`](UX-CONTEXT-MAP.md))
-was added and closed on 2026-09-25 → **55 of 60 executable units are DONE** —
-each links its audit and verification level in the JSON index and in its own
-section.
+54 of 59 executable units were DONE before the 2026-09-25 continuous run;
+UX-1 (the UX engineering layer — [`UX-RULES.md`](UX-RULES.md) +
+[`UX-CONTEXT-MAP.md`](UX-CONTEXT-MAP.md)) and **B2.5a** (outbound order
+webhooks per decision **D11**) were added and closed the same day →
+**56 of 61 executable units are DONE** — each links its audit and verification
+level in the JSON index and in its own section.
 
-(F5.19, F3.4b, B2.2a, B4.13, AB-FE-06, F3.2c and UX-1 closed on 2026-09-25.
-Remaining — **every one gated on an external input**: B2.5a (needs the webhook
-product decision: consumers, payload, HMAC secret, retry policy), B2.1a
-(needs real Kavenegar/SMTP credentials), B6.18a (trigger-gated), B2.3 / F1.9
-(conditional Batch G — implement only if still justified). No unconditionally
-executable unit remains; the next move is a user decision, not a task pick.)
+(F5.19, F3.4b, B2.2a, B4.13, AB-FE-06, F3.2c, UX-1 and B2.5a closed on
+2026-09-25. Remaining — **every one gated on an external input**: B2.1a
+(needs real Kavenegar/SMTP credentials), B6.18a (trigger-gated: upload surface
+beyond catalog staff), B2.3 / F1.9 (conditional Batch G — their premise is
+unmet; a closure decision is pending).)
 
 Frontend tasks additionally select their UX rules through
 [`UX-CONTEXT-MAP.md`](UX-CONTEXT-MAP.md) and state the applicable **UX
@@ -4277,11 +4316,12 @@ Reconciliation date:
 Current state:
 
 ```text
-5 remaining implementation units (B2.5a, B2.1a, B2.3, F1.9, B6.18a — all gated on external input)
-54 completed implementation units
+4 remaining implementation units (B2.1a, B2.3, F1.9, B6.18a — all gated on external input)
+56 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
-10 product decisions resolved
-NEXT = B2.5a (Batch F, P3 backend — requires the webhook product decision FIRST: consumers, payload, HMAC signing secret, retry policy; B2.1a parked on credentials, B6.18a trigger-gated, B2.3/F1.9 conditional Batch G)
+11 product decisions resolved
+NEXT = none executable — B2.1a parked on credentials, B6.18a trigger-gated,
+B2.3/F1.9 conditional (closure decision pending)
 ```

@@ -202,9 +202,8 @@ skips that tick. Jobs:
   `unpaid` `PAYMENT_REMINDER_AFTER_MINUTES` (60) after checkout and not older than
   `PAYMENT_REMINDER_MAX_AGE_HOURS` (72), through `notify_order_event`; the event key
   `order:<id>:payment_reminder` makes repeats no-ops.
-
-No outbound webhooks yet: which systems would receive order events, and how they are
-signed, is an open product decision (B2.5a).
+- **`sweep_webhooks`** — the webhook outbox (B2.5a/D11): the same pattern as
+  `sweep_deliveries` with the `WEBHOOK_*` settings (backoff 60 s, 5 attempts).
 
 ## Notifications (B2.1)
 
@@ -232,6 +231,25 @@ rejected refund notifies nobody (D2 scope).
   safe — only `pending`/`failed` rows are picked, under a row lock. The B2.5
   worker's sweeper sends rows a crash left `pending` and retries `failed` ones
   (see *Background jobs* below).
+
+## Outbound order webhooks (B2.5a, decision D11)
+
+`app/services/webhooks.py` is the **only** webhook implementation. When both
+`WEBHOOK_ORDER_URL` and `WEBHOOK_HMAC_SECRET` exist, the five lifecycle events
+(`order.created/paid/shipped/delivered/cancelled`) are written to the
+`webhook_deliveries` outbox at the same lifecycle points as notifications and
+POSTed after the commit. The payload is the raw `orders` row + its
+`order_items` rows (`{event, occurred_at, order, items}`); the body is signed
+with HMAC-SHA256 (`X-SANDE-Signature: sha256=<hex>`; also `X-SANDE-Event` and
+`X-SANDE-Delivery`). 2xx = `sent`; failures back off (attempts × 60 s, 5
+attempts) via the worker's `sweep_webhooks`. Admin surface (guard:
+`settings` capability, same as the notification switches):
+`GET /admin/settings/webhooks` (read-only state),
+`GET /admin/webhooks/deliveries`,
+`POST /admin/webhooks/deliveries/{id}/redeliver` (failed rows only, audited).
+Endpoint and secret are **env-only**; there is deliberately no admin UI to
+change them.
+
 - **Providers** (`services/notification_providers.py`): `KavenegarSmsProvider`
   (`KAVENEGAR_API_KEY`, optional `KAVENEGAR_SENDER`) and `SmtpEmailProvider`
   (`SMTP_HOST`, `SMTP_PORT`=587, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`,

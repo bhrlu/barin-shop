@@ -31,6 +31,7 @@ from app.routers import (
     search,
     stock,
     storage,
+    webhooks,
 )
 from app.services import audit
 from app.services.client_ip import resolve_client_ip
@@ -84,6 +85,7 @@ app.include_router(checkout.router)
 app.include_router(payments.router)
 app.include_router(exports.router)
 app.include_router(notifications.router)
+app.include_router(webhooks.router)
 
 
 @app.middleware("http")
