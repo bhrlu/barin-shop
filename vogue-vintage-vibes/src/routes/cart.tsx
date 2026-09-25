@@ -180,11 +180,16 @@ function CartPage() {
                   </Link>
                   <p className="mt-1 text-xs text-muted-foreground">
                     سایز {toFa(line.size)} · رنگ {line.color}
+                    {product.availability === "preorder" && (
+                      <span className="ms-2 rounded-full bg-sage/25 px-2 py-0.5 text-[11px] text-sage-deep">
+                        پیش‌خرید
+                      </span>
+                    )}
                   </p>
                   {issue && (
                     <p className="mt-2 flex items-center gap-1.5 text-xs text-terracotta">
                       <AlertTriangle className="size-3.5 shrink-0" />
-                      {stockIssueMessage(issue, product)}
+                      {stockIssueMessage(issue)}
                     </p>
                   )}
                   <div className="mt-4 flex items-center gap-4">

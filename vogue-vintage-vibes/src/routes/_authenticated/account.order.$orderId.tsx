@@ -160,6 +160,11 @@ function OrderStatusPage() {
                 )}
                 <span className="flex-1">
                   {item.name}
+                  {item.is_preorder && (
+                    <span className="ms-2 rounded-full bg-sage/25 px-2 py-0.5 text-[11px] text-sage-deep">
+                      پیش‌خرید
+                    </span>
+                  )}
                   <span className="block text-xs text-muted-foreground">
                     سایز {toFa(item.size ?? "-")} · رنگ {item.color} · تعداد {toFa(item.quantity)}
                   </span>

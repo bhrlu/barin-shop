@@ -6,7 +6,7 @@
  * from here instead of each keeping its own message map.
  */
 
-import type { Availability, StockIssue, StockIssueReason } from "@/lib/api";
+import type { StockIssue, StockIssueReason } from "@/lib/api";
 import { toFa } from "@/lib/format";
 
 /** Short forms — toasts, where several issues may be listed at once. */
@@ -33,23 +33,18 @@ export function stockIssueLabel(issue: StockIssue): string {
 /**
  * Full sentence shown next to the cart line itself.
  *
- * `not_available` covers both `coming_soon` and `preorder` (the API reports one
- * reason), so the product's own merchandising state — available from the
- * catalog — is what keeps the copy specific.
+ * Since B4.13/D4 a preorder line is orderable server-side (no stock gate, no
+ * decrement), so the server never reports one for it: `not_available` now only
+ * ever means `coming_soon` — the product has not been released yet.
  */
-export function stockIssueMessage(
-  issue: StockIssue,
-  product?: { availability?: Availability },
-): string {
+export function stockIssueMessage(issue: StockIssue): string {
   switch (issue.reason) {
     case "not_found":
       return "این محصول دیگر در فروشگاه نیست؛ آن را از سبد حذف کنید.";
     case "inactive":
       return "این ترکیب سایز و رنگ غیرفعال شده است؛ ترکیب دیگری انتخاب کنید.";
     case "not_available":
-      return product?.availability === "preorder"
-        ? "این محصول پیش‌فروش است و فعلاً قابل سفارش نیست."
-        : "این محصول هنوز عرضه نشده و قابل سفارش نیست.";
+      return "این محصول هنوز عرضه نشده و قابل سفارش نیست.";
     case "size_invalid":
       return "این سایز برای این محصول عرضه نمی‌شود؛ سایز دیگری انتخاب کنید.";
     case "insufficient_stock": {

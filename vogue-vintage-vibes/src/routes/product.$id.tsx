@@ -165,22 +165,34 @@ function ProductDetail({
       ? Math.round(((product.oldPrice - price) / product.oldPrice) * 100)
       : null;
 
-  const purchasable = !comingSoon && !preorder && Boolean(combo) && !combo?.soldOut;
+  // D4 flip (F3.2c): a preorder line has no stock gate — the backend never
+  // checks nor decrements stock for it (B4.13) — so an *active* combination is
+  // orderable at any count. coming_soon stays unorderable.
+  const comboOrderable = combo ? (preorder ? combo.available : !combo.soldOut) : false;
+  const purchasable = !comingSoon && comboOrderable;
+  // Preorder quantities are not capped by stock (there is no stock to cap);
+  // only the cart's 20-line ceiling applies.
   const stockForMax = combo && combo.available ? combo.stock : product.stock;
-  const quantityCeiling = Math.max(1, Math.min(maxQuantity, stockForMax || 1));
+  const quantityCeiling = preorder
+    ? maxQuantity
+    : Math.max(1, Math.min(maxQuantity, stockForMax || 1));
 
   const handleAdd = () => {
-    if (comingSoon || preorder) return;
+    if (comingSoon) return;
     if (!size) {
       toast.error("لطفاً سایز را انتخاب کنید");
       return;
     }
-    if (!combo || combo.soldOut) {
+    if (!combo || !combo.available) {
       toast.error("این ترکیب سایز و رنگ موجود نیست");
       return;
     }
+    if (!preorder && combo.soldOut) {
+      toast.error("موجودی این ترکیب تمام شده است");
+      return;
+    }
     add({ productId: product.id, size, color: selectedColor, quantity });
-    toast.success("به سبد خرید اضافه شد");
+    toast.success(preorder ? "پیش‌خرید به سبد خرید اضافه شد" : "به سبد خرید اضافه شد");
   };
 
   const addLabel = comingSoon
@@ -199,7 +211,7 @@ function ProductDetail({
       : "این محصول به‌زودی عرضه می‌شود."
     : preorder
       ? availableAt
-        ? `پیش‌خرید تا ${availableAt}؛ پس از عرضه ارسال می‌شود.`
+        ? `پیش‌خرید؛ عرضه از ${availableAt}؛ پس از عرضه ارسال می‌شود.`
         : "این محصول پیش‌فروش است."
       : combo && combo.stock <= product.lowStockThreshold && !combo.soldOut
         ? `فقط ${toFa(combo.stock)} عدد در انبار`
@@ -270,6 +282,9 @@ function ProductDetail({
                 {comingSoon ? "به‌زودی" : "پیش‌خرید"}
               </span>
             )}
+            {/* F3.2c: the preorder chip doubles as the purchasable-state badge —
+                it stays visible when the preorder combo is selected, so a
+                stock-0 preorder never reads as the dead «ناموجود» chip. */}
             {!comingSoon && !preorder && product.stock <= 0 && (
               <span className="rounded-full bg-clay px-3 py-1 text-muted-foreground">ناموجود</span>
             )}
@@ -355,6 +370,7 @@ function ProductDetail({
                 "mt-3 text-xs",
                 comingSoon || preorder ? "text-sage-deep" : "text-terracotta",
               )}
+              data-testid="stock-message"
             >
               {stockMessage}
             </p>

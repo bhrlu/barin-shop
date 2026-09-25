@@ -408,7 +408,14 @@ export function OrderDetailDrawer({
                     <div className="size-12 shrink-0 rounded-lg border border-border bg-secondary" />
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm">{item.name}</p>
+                    <p className="truncate text-sm">
+                      {item.name}
+                      {item.is_preorder && (
+                        <span className="ms-2 rounded-full bg-sage/25 px-2 py-0.5 text-[11px] text-sage-deep">
+                          پیش‌خرید
+                        </span>
+                      )}
+                    </p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {item.color ?? "—"} / سایز {toFa(item.size ?? "—")} · ×{toFa(item.quantity)}
                     </p>

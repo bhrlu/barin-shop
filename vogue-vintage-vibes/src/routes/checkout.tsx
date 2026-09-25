@@ -299,6 +299,11 @@ function CheckoutPage() {
                 >
                   <span className="text-muted-foreground">
                     {product.name} × {toFa(line.quantity)}
+                    {product.availability === "preorder" && (
+                      <span className="ms-1 rounded-full bg-sage/25 px-2 py-0.5 text-[11px] text-sage-deep">
+                        پیش‌خرید
+                      </span>
+                    )}
                     <br />
                     <span className="text-xs">
                       سایز {toFa(line.size)} · {line.color}

@@ -567,7 +567,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "F3.2c",
+    "agent_start_task": "B2.5a",
     "playwright_e2e_status": "DEFERRED",
     "one_task_at_a_time": true,
     "verify_before_done": true,
@@ -993,13 +993,16 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "F3.2c",
       "title": "Storefront preorder purchase (D4 flip)",
       "priority": "P3",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "frontend",
       "depends_on": ["B4.13"],
       "blocks": [],
       "batch": "F",
       "source": "frontend-tasks.md F3.2c (discovered during B4.13)",
-      "scope": "product.$id.tsx and VariantPicker stop disabling preorder (backend now accepts it since B4.13); preorder badge/copy on product, cart and order items; cart stock-check tolerates preorder lines (no sufficiency gate server-side)."
+      "scope": "product.$id.tsx and VariantPicker stop disabling preorder (backend now accepts it since B4.13); preorder badge/copy on product, cart and order items; cart stock-check tolerates preorder lines (no sufficiency gate server-side).",
+      "audit": "plan/audit/2026-09-25-f32c-storefront-preorder.md",
+      "verification_level": "integration tested + build verified",
+      "completed": "2026-09-25"
     },
     {
       "id": "B6.8a",
@@ -3112,7 +3115,7 @@ Do not reintroduce Lovable/Supabase architecture.
 * **Audit:** [`plan/audit/2026-09-25-b413-preorder-fulfilment-flag.md`](audit/2026-09-25-b413-preorder-fulfilment-flag.md)
 * **Verification level:** fully verified (377 pytest incl. 8 new DB-backed preorder tests + live-stack acceptance probe through the real endpoints: preorder at stock 0 → check → checkout → paid → cancel, throwaway rows removed)
 * **Delivered:** `order_items.is_preorder` (idempotent DDL; no new order status string); `availability=preorder` orderable via `availability_issue()` + new `is_preorder()` helper; checkout skips the sufficiency check, the decrement and the `purchase` ledger row for preorder lines (stock counter is an operational allocation, never the gate — the typical preorder has stock 0); `/stock/check` mirrors checkout so the cart never blocks what checkout accepts; cancellation restores nothing for preorder lines (purchase/return net to zero, ledger stays a true mirror); order payloads expose `is_preorder` to customer and admin; `order_created_preorder` notification through the D2 path with the standard `order:<id>:…` dedup key. `available_at` stays the operational fulfilment signal (no automatic worker, per D4).
-* **Open:** storefront still disables preorder add-to-cart → F3.2c (new frontend task).
+* **Open:** none — the storefront half closed with F3.2c (2026-09-25).
 * **Priority:** P3
 * **Batch:** F
 * **Dependencies:** B2.1 (DONE)
@@ -4129,15 +4132,18 @@ were freshly executed.
 ## START HERE
 
 ```text
-F3.2c — Storefront preorder purchase, D4 flip (P3, frontend; depends on B4.13 DONE — see JSON index)
+B2.5a — Outbound order webhooks (P3, backend; depends on B2.5 DONE — see JSON index)
 ```
 
-53 of 59 executable units are DONE — each links its audit
+54 of 59 executable units are DONE — each links its audit
 and verification level in the JSON index and in its own section.
 
-(F5.19, F3.4b, B2.2a, B4.13 and AB-FE-06 closed on 2026-09-25. Remaining:
-F3.2c (Batch F, next — the storefront half of B4.13), B2.5a (needs a product
-decision), B2.3 / F1.9 (Batch G), B2.1a (credentials), B6.18a (trigger-gated).)
+(F5.19, F3.4b, B2.2a, B4.13, AB-FE-06 and F3.2c closed on 2026-09-25.
+Remaining — **every one gated on an external input**: B2.5a (needs the webhook
+product decision: consumers, payload, HMAC secret, retry policy), B2.1a
+(needs real Kavenegar/SMTP credentials), B6.18a (trigger-gated), B2.3 / F1.9
+(conditional Batch G — implement only if still justified). No unconditionally
+executable unit remains; the next move is a user decision, not a task pick.)
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
 report, never fake).
@@ -4241,11 +4247,11 @@ Reconciliation date:
 Current state:
 
 ```text
-6 remaining implementation units (F3.2c, B2.1a, B2.3, F1.9, B6.18a, B2.5a)
-53 completed implementation units
+5 remaining implementation units (B2.5a, B2.1a, B2.3, F1.9, B6.18a — all gated on external input)
+54 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 10 product decisions resolved
-NEXT = F3.2c (Batch F, P3 frontend; B2.1a parked on credentials, B6.18a gated on a trigger, B2.5a needs a product decision; B2.3/F1.9 are Batch G)
+NEXT = B2.5a (Batch F, P3 backend — requires the webhook product decision FIRST: consumers, payload, HMAC signing secret, retry policy; B2.1a parked on credentials, B6.18a trigger-gated, B2.3/F1.9 conditional Batch G)
 ```

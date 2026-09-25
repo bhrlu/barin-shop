@@ -1,4 +1,4 @@
-import type { ProductVariant } from "@/lib/api";
+import type { Availability, ProductVariant } from "@/lib/api";
 import type { AdminProduct } from "@/lib/catalog";
 import { variantStockFor } from "@/lib/variants";
 import { toFa } from "@/lib/format";
@@ -7,7 +7,11 @@ import { cn } from "@/lib/utils";
 /**
  * Size × colour selection. Availability mirrors the backend (an explicit variant
  * wins for its combination; a deactivated or empty one is not purchasable), so
- * the UI can never offer a combination checkout would reject.
+ * the UI can never offer a combination checkout would reject — with the D4
+ * exception that a preorder product has no stock gate: its sizes stay
+ * selectable at any count (stock 0 included), because the backend decrements
+ * nothing for preorder lines (B4.13). A *deactivated* variant row is still
+ * blocked even on preorder — activity is a merchandising decision, not stock.
  */
 export function VariantPicker({
   product,
@@ -24,6 +28,8 @@ export function VariantPicker({
   onSize: (size: string) => void;
   onColor: (color: string) => void;
 }) {
+  const preorder: Availability = product.availability ?? "in_stock";
+  const noStockGate = preorder === "preorder";
   const selected = size ? variantStockFor(product, variants, size, color) : null;
 
   return (
@@ -32,9 +38,11 @@ export function VariantPicker({
         <p className="mb-3 text-xs tracking-[0.2em] text-muted-foreground">رنگ: {color}</p>
         <div className="flex flex-wrap gap-3">
           {product.colors.map((option) => {
-            const soldOut = product.sizes.every(
-              (s) => variantStockFor(product, variants, s, option.name).soldOut,
-            );
+            const soldOut =
+              !noStockGate &&
+              product.sizes.every(
+                (s) => variantStockFor(product, variants, s, option.name).soldOut,
+              );
             return (
               <button
                 key={option.name}
@@ -60,21 +68,24 @@ export function VariantPicker({
         <p className="mb-3 text-xs tracking-[0.2em] text-muted-foreground">سایز</p>
         <div className="flex flex-wrap gap-2">
           {product.sizes.map((option) => {
-            const { soldOut } = variantStockFor(product, variants, option, color);
+            const { soldOut, available, stock } = variantStockFor(product, variants, option, color);
+            // D4 flip (F3.2c): on preorder the physical count never gates —
+            // a deactivated variant is still unselectable (it is not for sale).
+            const blocked = soldOut && !(noStockGate && available);
             return (
               <button
                 key={option}
                 type="button"
                 onClick={() => onSize(option)}
-                disabled={soldOut}
+                disabled={blocked}
                 aria-pressed={size === option}
-                title={soldOut ? `${toFa(option)} — ناموجود` : toFa(option)}
+                title={blocked ? `${toFa(option)} — ناموجود` : toFa(option)}
                 className={cn(
                   "border px-4 py-2 text-sm transition-colors",
                   size === option
                     ? "border-foreground bg-foreground text-background"
                     : "border-border hover:border-foreground",
-                  soldOut &&
+                  blocked &&
                     "cursor-not-allowed border-dashed text-muted-foreground/60 line-through hover:border-border",
                 )}
               >
@@ -87,11 +98,15 @@ export function VariantPicker({
         <p className="mt-3 min-h-5 text-xs text-muted-foreground" aria-live="polite">
           {!size
             ? "برای دیدن موجودی، سایز را انتخاب کنید."
-            : selected?.soldOut
+            : selected && !selected.available
               ? "این ترکیب سایز و رنگ موجود نیست."
-              : selected && selected.stock <= product.lowStockThreshold
-                ? `فقط ${toFa(selected.stock)} عدد باقی مانده`
-                : "موجود در انبار"}
+              : noStockGate
+                ? "پیش‌خرید — پس از عرضهٔ محصول ارسال می‌شود."
+                : selected?.soldOut
+                  ? "این ترکیب سایز و رنگ موجود نیست."
+                  : selected && selected.stock <= product.lowStockThreshold
+                    ? `فقط ${toFa(selected.stock)} عدد باقی مانده`
+                    : "موجود در انبار"}
         </p>
       </div>
     </div>

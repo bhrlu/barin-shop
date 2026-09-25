@@ -3347,3 +3347,32 @@ only); F5.20's self-service profile deliberately not merged (staff view ≠
 self-service view).
 
 → audit: [2026-09-25-abfe06-customer-360-profile.md](audit/2026-09-25-abfe06-customer-360-profile.md)
+
+## 2026-09-25 — Continuous backlog execution: F3.2c
+
+**What was done** — fifth task of the continuous run (JSON index → F3.2c after
+AB-FE-06). The storefront preorder flip per D4, closing the open half of
+B4.13: `VariantPicker` mirrors the backend rule (preorder sizes/colours
+selectable at stock 0, deactivated variants still blocked — activity is not
+stock); `product.$id.tsx` gates on an active combo instead of a stock count,
+quantity capped by the cart's 20 on preorder, toast «پیش‌خرید به سبد خرید
+اضافه شد», and the stock copy corrected to «عرضه از {availableAt}» (the old
+«پیش‌خرید تا …» inverted `available_at` into a deadline); «پیش‌خرید» chips on
+cart/checkout lines and on order items in customer + admin views (from
+`item.is_preorder`, frozen at purchase); `stockIssueMessage` dropped its false
+«preorder is not orderable» branch — `not_available` now only means
+`coming_soon`. The cart's tolerance needed no code: `/stock/check` already
+reports preorder lines `ok` (B4.13 mirrored checkout). Verified: tsc 0, eslint
+0 errors on the 8 touched files (2 pre-existing drawer warnings untouched),
+build green (Node 22). Backlog synced: JSON index F3.2c → DONE, `agent_start_task`
+→ **B2.5a**, START HERE rewritten (all 5 remaining units are gated on external
+input — decision, credentials, trigger, or conditional justification), counts
+**54 DONE / 5 TODO of 59**, B4.13's Open line resolved, frontend-tasks
+checkbox, roadmap row, this log. Committed.
+
+**What was NOT done** — browser click-through (D10 gate, OPEN); no
+product-tile preorder badges on `/shop` (out of scope, follow-up if wanted);
+no payment-page preorder wording (money flow identical);
+`stockIssueLabel`/checkout toasts unchanged (no preorder wording there).
+
+→ audit: [2026-09-25-f32c-storefront-preorder.md](audit/2026-09-25-f32c-storefront-preorder.md)

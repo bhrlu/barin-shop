@@ -232,11 +232,25 @@ needs new backend work except where explicitly noted.
   `not_available` (B4.11). Superseded for preorder by B4.13/D4: preorder is
   orderable server-side; the storefront flip is F3.2c.
   → audit: [2026-09-21-backend-b411-b412-availability-multifacet.md](audit/2026-09-21-backend-b411-b412-availability-multifacet.md)
-- [ ] **F3.2c Storefront preorder purchase (D4 flip)** — `product.$id.tsx` and
+- [x] **F3.2c Storefront preorder purchase (D4 flip)** — `product.$id.tsx` and
   `VariantPicker` stop disabling preorder (the backend accepts it since B4.13:
   no stock gate, no decrement); preorder badge/copy («پیش‌خرید» + `available_at`)
   on product page, cart and order items; the cart's stock-check flow must
   tolerate preorder lines (the server reports no sufficiency issue for them).
+  Done (2026-09-25): the picker mirrors the backend per D4 — preorder sizes/
+  colours selectable at stock 0 while a *deactivated* variant stays blocked
+  (activity is not stock); `purchasable` = active combo on preorder, quantity
+  capped by the cart's 20 only; stock copy corrected to «پیش‌خرید؛ عرضه از
+  {availableAt}؛ پس از عرضه ارسال می‌شود.» (the old «تا …» inverted the
+  meaning — `available_at` is the release date, not a deadline); «پیش‌خرید»
+  chips on cart/checkout lines (from catalog availability) and on order items
+  in customer + admin views (from `item.is_preorder`, the frozen-at-purchase
+  flag); `stockIssueMessage` lost its false «preorder is not orderable» branch
+  (`not_available` now only ever means `coming_soon`). The cart's tolerance
+  needed no code — `/stock/check` already reports preorder lines `ok` (B4.13).
+  tsc 0, eslint 0 errors on the 8 touched files, build green (Node 22).
+  Integration tested + build verified; **browser click-through OPEN** (D10).
+  → audit: [2026-09-25-f32c-storefront-preorder.md](audit/2026-09-25-f32c-storefront-preorder.md)
   Backend audit: [2026-09-25-b413-preorder-fulfilment-flag.md](audit/2026-09-25-b413-preorder-fulfilment-flag.md)
 
 ### F3.3 Catalog listing / shop (`shop.tsx`, `ProductCard.tsx`) — DONE
