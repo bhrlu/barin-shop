@@ -2,9 +2,10 @@
 
 Per-variant (size × color) stock wins when a variant row exists; otherwise the
 product's aggregate stock applies. `availability` is a hard gate before any of
-that: a `coming_soon`/`preorder` product is never orderable. Shares
-`app.services.variants` and `app.services.availability` with checkout, so the
-pre-check and the order always agree.
+that: a `coming_soon` product is never orderable (`preorder` is, since B4.13 —
+its lines still report nominal stock here, but checkout decrements nothing for
+them). Shares `app.services.variants` and `app.services.availability` with
+checkout, so the pre-check and the order always agree.
 """
 
 from fastapi import APIRouter, HTTPException, status
@@ -12,7 +13,7 @@ from sqlalchemy import text
 
 from app.auth import DbSession
 from app.schemas import StockCheckLine, StockCheckOut, StockIssue
-from app.services.availability import availability_issue
+from app.services.availability import availability_issue, is_preorder
 from app.services.variants import load_variants, variant_price, variant_stock
 
 router = APIRouter(prefix="/stock", tags=["stock"])
@@ -75,7 +76,10 @@ async def check(body: list[StockCheckLine], session: DbSession) -> StockCheckOut
                 StockIssue(product_id=line.product_id, reason="inactive", available=0)
             )
             continue
-        if available < line.quantity:
+        # B4.13/D4: a preorder line skips the sufficiency check exactly like
+        # checkout does (the stock counter is an operational allocation, never
+        # the gate) — so the cart never blocks what checkout would accept.
+        if not is_preorder(p) and available < line.quantity:
             issues.append(
                 StockIssue(
                     product_id=line.product_id,

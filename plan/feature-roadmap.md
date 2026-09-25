@@ -121,7 +121,7 @@ Endpoints noted in `code` already exist and are verified working.
 - [x] **Search box UI** → `GET /search` (F3.1: `HeaderSearch.tsx` + `/shop?q=`, with tag matching since F3.1b)
 - [x] **Stock check before checkout** → `api.stockCheck` wired into the cart (F3.5: per-line issues, checkout blocked until the cart validates)
 - [x] **Multi-value size/colour filters** → `GET /products` takes repeatable/comma-separated `size`/`color` (B4.12) and the shop chips are multi-select (F3.3c)
-- [x] **Enforce availability in the API** → `coming_soon`/`preorder` are rejected by `stock/check` and checkout with reason `not_available` (B4.11); preorder needs an order flag to become orderable (B4.13)
+- [x] **Enforce availability in the API** → `coming_soon` is rejected by `stock/check` and checkout with reason `not_available` (B4.11); `preorder` became orderable with the `order_items.is_preorder` fulfilment flag (B4.13/D4)
 - [ ] **Admin payments list** → `GET /admin/payments`
 - [x] **Single-product fetch** → product page uses `GET /products/{id}` (F3.2)
 - [x] **Contact form persistence** → `POST /contact` stores the message and `GET/DELETE /admin/contact-messages` reads it (B3.9 + F2.1); the admin inbox screen is F2.1b; **spam guard (B3.11): 5 attempts / 10 min per IP + honeypot, PostgreSQL only**

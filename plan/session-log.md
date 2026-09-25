@@ -3284,3 +3284,37 @@ Backlog synced: counts 51 DONE / 7 TODO of 58, `agent_start_task`/START HERE
 checkbox if wanted), no locale-date parsing (ISO-8601 as the manual editor).
 
 → audit: [2026-09-25-b22a-csv-product-import.md](audit/2026-09-25-b22a-csv-product-import.md)
+
+## 2026-09-25 — Continuous backlog execution: B4.13
+
+**What was done** — third task of the continuous run (JSON index → B4.13 after
+B2.2a; the working tree already held the previous session's uncommitted draft,
+which was completed rather than rewritten). Implemented preorder fulfilment
+per D4: `order_items.is_preorder` (idempotent DDL, no new order status
+string); `availability=preorder` orderable (`availability_issue()` → None,
+new `is_preorder()` helper); checkout skips the stock-sufficiency check, the
+decrement and the `purchase` ledger row for preorder lines; `/stock/check`
+mirrors it; cancellation restores nothing for preorder lines (ledger stays a
+true mirror); order payloads expose `is_preorder` to customer and admin
+(`OrderItem` type extended, additive); `order_created_preorder` notification
+through D2 with the standard `order:<id>:…` key. The draft's core flaw was
+corrected: it still rejected preorder lines with `insufficient_stock` while
+skipping the decrement — under D4 the typical preorder has stock 0, so
+nothing could ever be bought; the stock counter is now explicitly "an
+operational allocation, never the gate". Verified: ruff clean, **pytest 377**
+(was 364; +13: 8 new DB-backed `test_preorder_fulfilment.py`, 5 `is_preorder`
+unit cases, stale `test_preorder_is_blocked` flipped), live smoke **257/0**,
+and a live acceptance probe through the real endpoints (preorder at stock 0 →
+check → checkout → customer+admin payloads → payment callback → `paid` →
+cancel; throwaway rows hard-deleted after — 0 probe products/orders/
+notifications remain). Frontend `tsc` 0. Backlog synced: JSON + prose +
+dependency trees + counts **52 DONE / 7 TODO of 59** (new F3.2c discovered:
+the storefront still disables preorder add-to-cart — backend alone can't make
+the browser buy it), `agent_start_task`/START HERE → **AB-FE-06**.
+Committed.
+
+**What was NOT done** — no storefront preorder flip (F3.2c, new task); no
+preorder badge on cart/checkout UI (same); no automatic fulfilment worker
+(D4 explicitly); browser click-through stays OPEN (D10).
+
+→ audit: [2026-09-25-b413-preorder-fulfilment-flag.md](audit/2026-09-25-b413-preorder-fulfilment-flag.md)

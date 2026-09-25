@@ -269,7 +269,8 @@ financial invariants.
 
 Notifications use the D2 notification path where applicable.
 
-**Unblocks:** `B4.13`.
+**Unblocks:** `B4.13` (fulfilled in B4.13, DONE 2026-09-25 — the preorder type
+and its `order:<id>:…` event key shipped there).
 
 ---
 
@@ -566,7 +567,7 @@ changes to the file shipped in sequence; the collision is closed.
   "source_of_truth": "plan/MASTER-BACKLOG.md",
   "execution_policy": {
     "blocked_tasks": 0,
-    "agent_start_task": "B4.13",
+    "agent_start_task": "AB-FE-06",
     "playwright_e2e_status": "DEFERRED",
     "one_task_at_a_time": true,
     "verify_before_done": true,
@@ -974,13 +975,28 @@ changes to the file shipped in sequence; the collision is closed.
       "id": "B4.13",
       "title": "Preorder fulfilment flag",
       "priority": "P3",
-      "status": "TODO",
+      "status": "DONE",
       "layer": "backend",
       "depends_on": ["B2.1"],
       "blocks": [],
       "batch": "F",
       "source": "backend-tasks.md",
-      "scope": "Allow preorder checkout, persist preorder marker, avoid physical stock decrement, expose preorder state to admin, and integrate applicable notifications."
+      "scope": "Allow preorder checkout, persist preorder marker, avoid physical stock decrement, expose preorder state to admin, and integrate applicable notifications.",
+      "audit": "plan/audit/2026-09-25-b413-preorder-fulfilment-flag.md",
+      "verification_level": "fully verified",
+      "completed": "2026-09-25"
+    },
+    {
+      "id": "F3.2c",
+      "title": "Storefront preorder purchase (D4 flip)",
+      "priority": "P3",
+      "status": "TODO",
+      "layer": "frontend",
+      "depends_on": ["B4.13"],
+      "blocks": [],
+      "batch": "F",
+      "source": "frontend-tasks.md F3.2c (discovered during B4.13)",
+      "scope": "product.$id.tsx and VariantPicker stop disabling preorder (backend now accepts it since B4.13); preorder badge/copy on product, cart and order items; cart stock-check tolerates preorder lines (no sufficiency gate server-side)."
     },
     {
       "id": "B6.8a",
@@ -3096,10 +3112,16 @@ Do not reintroduce Lovable/Supabase architecture.
 ## B4.13 — Preorder fulfilment flag
 
 * **Layer:** Backend
-* **Status:** TODO
+* **Status:** DONE (2026-09-25)
+* **Audit:** [`plan/audit/2026-09-25-b413-preorder-fulfilment-flag.md`](audit/2026-09-25-b413-preorder-fulfilment-flag.md)
+* **Verification level:** fully verified (377 pytest incl. 8 new DB-backed preorder tests + live-stack acceptance probe through the real endpoints: preorder at stock 0 → check → checkout → paid → cancel, throwaway rows removed)
+* **Delivered:** `order_items.is_preorder` (idempotent DDL; no new order status string); `availability=preorder` orderable via `availability_issue()` + new `is_preorder()` helper; checkout skips the sufficiency check, the decrement and the `purchase` ledger row for preorder lines (stock counter is an operational allocation, never the gate — the typical preorder has stock 0); `/stock/check` mirrors checkout so the cart never blocks what checkout accepts; cancellation restores nothing for preorder lines (purchase/return net to zero, ledger stays a true mirror); order payloads expose `is_preorder` to customer and admin; `order_created_preorder` notification through the D2 path with the standard `order:<id>:…` dedup key. `available_at` stays the operational fulfilment signal (no automatic worker, per D4).
+* **Open:** storefront still disables preorder add-to-cart → F3.2c (new frontend task).
+* **Priority:** P3
+* **Batch:** F
 * **Dependencies:** B2.1 (DONE)
-* **B2.1 hand-off:** add the preorder type to `TYPES` in
-  `services/notifications.py` and fire it from the preorder lifecycle point with an
+* **B2.1 hand-off (fulfilled):** the preorder type was added to `TYPES` in
+  `services/notifications.py` and fired from checkout with an
   `order:<id>:…` event key (the dedup mechanism).
 
 ### Required implementation
@@ -3782,7 +3804,7 @@ AB-BE-02
 B2.1 (DONE)
 ├──→ F2.3
 ├──→ B2.5
-├──→ B4.13
+├──→ B4.13 (DONE 2026-09-25)
 └──→ B2.1a (also needs real credentials)
 
 F3.4b
@@ -3914,7 +3936,7 @@ F2.3   (DONE 2026-09-23)
 B2.5  (DONE 2026-09-23)
 B2.5a  (needs a product decision)
 B2.2a  (DONE 2026-09-25)
-B4.13
+B4.13  (DONE 2026-09-25)
 B2.1a  (needs real credentials)
 B6.8a  (DONE 2026-09-23)
 F3.4b  (DONE 2026-09-25)
@@ -4112,14 +4134,15 @@ were freshly executed.
 ## START HERE
 
 ```text
-B4.13 — Preorder fulfilment flag (P3, backend; D2/D4 specified, B2.1 DONE)
+AB-FE-06 — Customer 360° profile (P3, full-stack frontend; no deps — see JSON index)
 ```
 
-50 of 58 executable units are DONE — each links its audit
+52 of 59 executable units are DONE (F3.2c, the storefront half of B4.13, was
+discovered and added — 59 total) — each links its audit
 and verification level in the JSON index and in its own section.
 
-(F5.19, F3.4b and B2.2a closed on 2026-09-25. Remaining: B4.13 (Batch F,
-unblocked), B2.5a (needs a product decision), AB-FE-06 (Batch F),
+(F5.19, F3.4b, B2.2a and B4.13 closed on 2026-09-25. Remaining: AB-FE-06
+(Batch F, next), B2.5a (needs a product decision),
 B2.3 / F1.9 (Batch G), B2.1a (credentials), B6.18a (trigger-gated).)
 
 `B2.1a` stays open until the user supplies real Kavenegar/SMTP credentials (§18 —
@@ -4224,11 +4247,11 @@ Reconciliation date:
 Current state:
 
 ```text
-7 remaining implementation units (B2.1a, B2.3, AB-FE-06, F1.9, B4.13, B6.18a, B2.5a)
-51 completed implementation units
+7 remaining implementation units (B2.1a, B2.3, AB-FE-06, F1.9, B6.18a, B2.5a, F3.2c)
+52 completed implementation units
 0 blocked implementation units
 2 dropped
 1 obsolete
 10 product decisions resolved
-NEXT = B4.13 (Batch F, P3 backend; B2.1a parked on credentials, B6.18a gated on a trigger, B2.5a needs a product decision)
+NEXT = AB-FE-06 (Batch F, P3 full-stack; B2.1a parked on credentials, B6.18a gated on a trigger, B2.5a needs a product decision; F3.2c is the storefront half of B4.13)
 ```

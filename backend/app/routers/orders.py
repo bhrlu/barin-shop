@@ -97,7 +97,8 @@ _ORDER_SELECT = (
     "COALESCE(json_agg(json_build_object("
     "'id', i.id, 'order_id', i.order_id, 'product_id', i.product_id, 'name', i.name, "
     "'price', i.price, 'size', i.size, 'color', i.color, 'image', i.image, "
-    "'quantity', i.quantity)) FILTER (WHERE i.id IS NOT NULL), '[]') AS items "
+    "'quantity', i.quantity, 'is_preorder', COALESCE(i.is_preorder, false))) "
+    "FILTER (WHERE i.id IS NOT NULL), '[]') AS items "
     "FROM public.orders o LEFT JOIN public.order_items i ON i.order_id = o.id"
 )
 

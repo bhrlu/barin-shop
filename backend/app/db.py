@@ -224,6 +224,12 @@ CATALOG_DDL = [
         "ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS variant_id UUID "
         "REFERENCES public.product_variants(id) ON DELETE SET NULL"
     ),
+    # B4.13 / D4: a preorder line bought before fulfilment — its money is real,
+    # its stock was never decremented, so cancellation/restock must skip it.
+    (
+        "ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS is_preorder "
+        "BOOLEAN NOT NULL DEFAULT false"
+    ),
     # reviews + ratings (+ seller reply)
     """
     CREATE TABLE IF NOT EXISTS public.product_reviews (

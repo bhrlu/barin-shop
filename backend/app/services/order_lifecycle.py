@@ -73,10 +73,14 @@ async def restore_stock(
     """
     # B6.8a: `order_items.variant_id` always exists — `startup_ddl()` adds it on every
     # boot and every seed job — so it is selected directly (no information_schema probe)
+    # B4.13/D4: a preorder line never took stock (checkout skipped the decrement
+    # and wrote no `purchase` row), so cancellation must not restore it either —
+    # the net stays zero and the ledger stays a true mirror.
     items = (
         await session.execute(
             text(
-                "SELECT product_id, variant_id, quantity "
+                "SELECT product_id, variant_id, quantity, COALESCE(is_preorder, false) "
+                "AS is_preorder "
                 "FROM public.order_items WHERE order_id = CAST(:oid AS uuid)"
             ),
             {"oid": order_id},
@@ -84,6 +88,8 @@ async def restore_stock(
     ).mappings().all()
 
     for item in items:
+        if item["is_preorder"]:
+            continue
         qty = int(item["quantity"])
         if item["variant_id"]:
             await session.execute(

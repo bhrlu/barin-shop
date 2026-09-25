@@ -61,10 +61,14 @@ class NotificationType:
 
 
 # Transactional scope of decision D2 that has a live flow today. The password
-# reset (F2.3) is email-only and goes through `queue_private_email` below;
-# preorder (B4.13) has no flow yet and adds its type with it.
+# reset (F2.3) is email-only and goes through `queue_private_email` below.
+# B4.13/D4: `order_created_preorder` joins the transactional scope — the
+# preorder flow (checkout) fires it with the standard `order:<id>:…` dedup key.
 TYPES: dict[str, NotificationType] = {
     "order_created": NotificationType("سفارش شما ثبت شد", CHANNELS),
+    "order_created_preorder": NotificationType(
+        "پیش‌خرید شما ثبت شد؛ پس از عرضه ارسال می‌شود", CHANNELS
+    ),
     "order_paid": NotificationType("پرداخت سفارش تأیید شد", CHANNELS),
     "order_shipped": NotificationType("سفارش شما ارسال شد", CHANNELS),
     "order_cancelled": NotificationType("سفارش لغو شد", CHANNELS),
@@ -76,6 +80,7 @@ TYPES: dict[str, NotificationType] = {
 
 _ORDER_EVENTS = {
     "created": "order_created",
+    "created_preorder": "order_created_preorder",
     "paid": "order_paid",
     "shipped": "order_shipped",
     "cancelled": "order_cancelled",
@@ -114,6 +119,11 @@ def order_message(event_name: str, order: Mapping[str, Any]) -> str:
         return (
             f"سفارش شماره {number} به مبلغ {toman(order['total'])} تومان ثبت شد "
             "و در انتظار پرداخت است."
+        )
+    if event_name == "created_preorder":
+        return (
+            f"پیش‌خرید شماره {number} به مبلغ {toman(order['total'])} تومان ثبت شد. "
+            "پس از عرضهٔ محصول ارسال می‌شود."
         )
     if event_name == "paid":
         return (

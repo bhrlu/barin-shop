@@ -16,7 +16,7 @@ from uuid import UUID
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.availability import availability_issue
+from app.services.availability import availability_issue, is_preorder
 from app.services.coupons import (
     CouponError,
     count_user_redemptions,
@@ -109,7 +109,10 @@ async def create_order(
                 {"product_id": line["product_id"], "reason": "inactive", "available": 0}
             )
             continue
-        if available < line["quantity"]:
+        # B4.13/D4: the fulfilment flag — it drives the stock-skip below, the
+        # stock-sufficiency skip here and the cancellation skip in the lifecycle.
+        preorder = is_preorder(p)
+        if not preorder and available < line["quantity"]:
             issues.append(
                 {
                     "product_id": line["product_id"],
@@ -122,6 +125,7 @@ async def create_order(
         line["name"] = p["name"]
         line["image"] = _line_image(p["images"])
         line["variant_id"] = variant["id"] if variant else None
+        line["preorder"] = preorder
 
     if issues:
         raise CheckoutError("stock_conflict", "برخی اقلام موجودی کافی ندارند", issues)
@@ -183,9 +187,10 @@ async def create_order(
         await session.execute(
             text(
                 "INSERT INTO public.order_items "
-                "(order_id, product_id, name, price, size, color, image, quantity, variant_id) "
+                "(order_id, product_id, name, price, size, color, image, quantity, variant_id, "
+                " is_preorder) "
                 "VALUES (:oid, :pid, :name, :price, :size, :color, :image, :qty, "
-                "        CAST(:vid AS uuid))"
+                "        CAST(:vid AS uuid), :preorder)"
             ),
             {
                 "oid": str(order_id),
@@ -200,6 +205,9 @@ async def create_order(
                 # exact variant it was taken from (NULL when the product has no
                 # matrix row for this size×color).
                 "vid": str(line["variant_id"]) if line.get("variant_id") else None,
+                # B4.13/D4: the fulfilment flag — a preorder line never took
+                # stock, so nothing is restored for it on cancellation.
+                "preorder": bool(line.get("preorder")),
             },
         )
 
@@ -209,7 +217,13 @@ async def create_order(
 
     # 7) Stock decrement — guarded so it can never go negative. Variant rows
     #    (when present) are decremented too, and the product aggregate stays in sync.
+    #    B4.13/D4: a preorder line decrements nothing and writes no `purchase`
+    #    ledger row — the physical unit does not exist yet; fulfilment happens
+    #    at the product's `available_at` operationally. (Its stock counter is an
+    #    operational allocation and is never the gate — step 2 skips it.)
     for line in lines:
+        if line.get("preorder"):
+            continue
         updated = await session.execute(
             text(
                 "UPDATE public.products SET stock = stock - :qty "
@@ -267,8 +281,13 @@ async def create_order(
         await refresh_co_purchases(session)
 
     # 9) "order created" notification (B2.1) — same transaction, so a checkout
-    #    that fails above leaves no notification behind
-    await notify_order_event(session, order_id, "created")
+    #    that fails above leaves no notification behind. B4.13/D4: an order that
+    #    contains preorder lines gets the preorder variant of the message (same
+    #    `order:<id>:…` dedup family).
+    if any(line.get("preorder") for line in lines):
+        await notify_order_event(session, order_id, "created_preorder")
+    else:
+        await notify_order_event(session, order_id, "created")
 
     return {
         "order_id": str(order_id),

@@ -444,6 +444,8 @@ export type OrderItem = {
   color: string | null;
   image: string | null;
   quantity: number;
+  /** B4.13: preorder line — money taken, physical stock never touched. */
+  is_preorder: boolean;
 };
 
 export type Order = {

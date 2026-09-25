@@ -229,8 +229,15 @@ needs new backend work except where explicitly noted.
   reading the whole catalog (`useCatalog().byId`)
 - [x] **F3.2b Availability is UI-only** — fixed in the API: `coming_soon` and
   `preorder` are rejected by `POST /stock/check` and checkout with reason
-  `not_available` (B4.11).
+  `not_available` (B4.11). Superseded for preorder by B4.13/D4: preorder is
+  orderable server-side; the storefront flip is F3.2c.
   → audit: [2026-09-21-backend-b411-b412-availability-multifacet.md](audit/2026-09-21-backend-b411-b412-availability-multifacet.md)
+- [ ] **F3.2c Storefront preorder purchase (D4 flip)** — `product.$id.tsx` and
+  `VariantPicker` stop disabling preorder (the backend accepts it since B4.13:
+  no stock gate, no decrement); preorder badge/copy («پیش‌خرید» + `available_at`)
+  on product page, cart and order items; the cart's stock-check flow must
+  tolerate preorder lines (the server reports no sufficiency issue for them).
+  Backend audit: [2026-09-25-b413-preorder-fulfilment-flag.md](audit/2026-09-25-b413-preorder-fulfilment-flag.md)
 
 ### F3.3 Catalog listing / shop (`shop.tsx`, `ProductCard.tsx`) — DONE
 

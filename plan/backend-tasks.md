@@ -236,12 +236,15 @@ Closes the backend half of `plan/feature-roadmap.md` §1. Idempotent DDL lives i
   `StockIssue.reason` is now a documented closed set including `not_available` and
   `size_invalid`.
   → audit: same as B4.12
-- [ ] **B4.13 Preorder fulfilment flag** — `preorder` products can never be
-  ordered while `orders` has no preorder marker. Add the flag + relax
-  `availability_issue()` if the store wants to take preorders (depends on the
-  fulfilment/notification story, B2.1). B2.1 is DONE: add the preorder
-  notification type to `TYPES` in `services/notifications.py` and fire it from
-  the preorder lifecycle point with an `order:<id>:…` event key.
+- [x] **B4.13 Preorder fulfilment flag** — `availability=preorder` is now
+  orderable per decision D4: `order_items.is_preorder` marker (no new order
+  status string), checkout skips the sufficiency check, the stock decrement and
+  the `purchase` ledger row for preorder lines (`/stock/check` mirrors it),
+  cancellation restores nothing for them, order payloads expose the flag to
+  customer and admin, and `order_created_preorder` fires through the D2 path
+  with the `order:<id>:…` key. `available_at` stays the operational fulfilment
+  signal (no automatic worker). Storefront flip is F3.2c.
+  → audit: [2026-09-25-b413-preorder-fulfilment-flag.md](audit/2026-09-25-b413-preorder-fulfilment-flag.md)
 - [ ] **B4.8 Product model dimension** — variants cover size × color only; add a
   model/name dimension if the catalog needs it
 - [ ] **B4.9 Stock reservation with TTL** — hold stock during checkout instead of
